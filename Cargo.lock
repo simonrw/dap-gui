@@ -622,10 +622,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "dap"
+version = "0.2.0-alpha1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85b03f0c23c75d79d10ae9e6ea850f795db0b11bb9610d55f7751d8a92272db2"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "dap-gui"
 version = "0.1.0"
 dependencies = [
+ "dap",
  "eframe",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1150,6 +1164,12 @@ dependencies = [
  "libc",
  "windows-sys 0.48.0",
 ]
+
+[[package]]
+name = "itoa"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62b02a5381cc465bd3041d84623d0fa3b66738b52b8e2fc3bab8ad63ab032f4a"
 
 [[package]]
 name = "jni"
@@ -1776,6 +1796,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ryu"
+version = "1.0.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe232bdf6be8c8de797b22184ee71118d63780ea42ac85b61d1baa6d3b782ae9"
+
+[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1827,6 +1853,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.23",
+]
+
+[[package]]
+name = "serde_json"
+version = "1.0.100"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f1e14e89be7aa4c4b78bdbdc9eb5bf8517829a600ae8eaa39a6e1d960b5185c"
+dependencies = [
+ "itoa",
+ "ryu",
+ "serde",
 ]
 
 [[package]]

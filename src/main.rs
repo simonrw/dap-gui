@@ -1,6 +1,50 @@
 use eframe::egui;
+use std::net;
+use std::io::prelude::*;
+use serde::{Deserialize, Serialize};
 
-fn main() -> Result<(), eframe::Error> {
+#[derive(Serialize)]
+#[derive(Default)]
+struct InitializeArguments {
+    adapter_id: String,
+}
+
+
+#[derive(Serialize)]
+enum Command {
+    Initialize(InitializeArguments),
+}
+
+#[derive(Deserialize)]
+struct InitializeResponse {
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Response {
+    Initialize(InitializeResponse),
+}
+
+
+fn main() {
+    let cmd = Command::Initialize(InitializeArguments {
+        adapter_id: "dap-gui".to_string(),
+        ..Default::default()
+    });
+    let msg_ser = serde_json::to_string(&cmd).unwrap();
+    let mut conn = net::TcpStream::connect("127.0.0.1:5678").unwrap();
+    write!(conn, "{}", msg_ser).unwrap();
+
+    let mut buf = [0u8; 1024];
+    let n = conn.read(&mut buf[..]).unwrap();
+    let reply_ser = &buf[..n];
+
+    let resp: 
+
+}
+
+
+fn egui_main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(320.0, 240.0)),
         ..Default::default()

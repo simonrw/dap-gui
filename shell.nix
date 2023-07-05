@@ -12,6 +12,10 @@ let
 
   apple-deps = apple-frameworks ++ apple-libs;
 
+  debugpy-server = python3.withPackages (ps: with ps; [
+    debugpy
+  ]);
+
 in
 mkShell {
   buildInputs = [
@@ -20,6 +24,7 @@ mkShell {
     clippy
     rustfmt
     rust-analyzer
+    debugpy-server
   ] ++ lib.optionals stdenv.isDarwin apple-deps;
 
   LD_LIBRARY_PATH = if stdenv.isLinux then lib.makeLibraryPath [
