@@ -25,7 +25,10 @@ mkShell {
     rustfmt
     rust-analyzer
     debugpy-server
+    gdb
   ] ++ lib.optionals stdenv.isDarwin apple-deps;
+
+  RUST_BACKTRACE = "1";
 
   LD_LIBRARY_PATH = if stdenv.isLinux then lib.makeLibraryPath [
     xorg.libX11
