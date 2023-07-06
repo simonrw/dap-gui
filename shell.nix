@@ -35,6 +35,7 @@ mkShell {
     xorg.libXcursor
     xorg.libXrandr
     xorg.libXi
+    libglvnd
     vulkan-loader # TODO: needed?
   ] else "";
 }
