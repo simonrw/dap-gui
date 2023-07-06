@@ -14,6 +14,7 @@ let
 
   debugpy-server = python3.withPackages (ps: with ps; [
     debugpy
+    black
   ]);
 
 in
