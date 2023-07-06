@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import json
+import time
 import socket
 from typing import Any, Literal, TypedDict, cast
 
@@ -80,6 +81,19 @@ class Handler:
             case "initialize":
                 self.capabilities = res["body"]
 
+                # disconnect
+                msg = {
+                    "command": "disconnect",
+                    "terminateDebuggee": True,
+                }
+                sent_message = self.client.send_request(msg)
+                self.awaiting_response[sent_message["seq"]] = sent_message
+
+            case "disconnect":
+                self.client.disconnect()
+                print("Got disconnect response -exiting")
+                raise SystemExit(0)
+
     def handle_event(self, event: ServerMessage):
         print(f"Got event: {event=}")
 
@@ -108,6 +122,9 @@ class Client:
         res = deserialise_message(m)
         self.seq = res["seq"] + 1
         return res
+
+    def disconnect(self):
+        self.sock.close()
 
 
 if __name__ == "__main__":
