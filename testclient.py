@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import os
+import time
 import json
 import socket
 from typing import Any, Literal, TypedDict, cast
@@ -57,6 +58,7 @@ class Handler:
         # state about the debug adapter
         self.capabilities = {}
         self.ready = False
+        self.current_thread = None
 
         # init message
         msg = {
@@ -99,17 +101,9 @@ class Handler:
                 print(f"Server cababilities: {json.dumps(self.capabilities, indent=2)}")
 
                 # launch the debugee
-                msg = {
-                    "command": "launch",
-                    "arguments": {
-                        "program": os.path.join(os.getcwd(), "test.py"),
-                    },
-                }
-                sent_message = self.client.send_request(msg)
-                self.awaiting_response[sent_message["seq"]] = sent_message
-
+                self.launch()
             case "setFunctionBreakpoints":
-                self.disconnect()
+                self.configuration_done()
 
             case "disconnect":
                 self.client.disconnect()
@@ -122,22 +116,55 @@ class Handler:
         match event["event"]:
             case "initialized":
                 self.initialized = True
-
-                msg = {
-                    "command": "setFunctionBreakpoints",
-                    "arguments": {
-                        "breakpoints": [
-                            {"name": "main"},
-                        ],
-                    },
-                }
-                sent_message = self.client.send_request(msg)
-                self.awaiting_response[sent_message["seq"]] = sent_message
+                self.set_function_breakpoints()
+            case "stopped":
+                self.current_thread = event["body"]["threadId"]
+                self.send_continue()
 
     def disconnect(self):
         msg = {
             "command": "disconnect",
             "terminateDebuggee": True,
+        }
+        sent_message = self.client.send_request(msg)
+        self.awaiting_response[sent_message["seq"]] = sent_message
+
+    def configuration_done(self):
+        msg = {
+            "command": "configurationDone",
+        }
+        sent_message = self.client.send_request(msg)
+        self.awaiting_response[sent_message["seq"]] = sent_message
+
+    def launch(self):
+        msg = {
+            "command": "launch",
+            "arguments": {
+                "program": os.path.join(os.getcwd(), "test.py"),
+            },
+        }
+        sent_message = self.client.send_request(msg)
+        self.awaiting_response[sent_message["seq"]] = sent_message
+
+    def send_continue(self):
+        msg = {
+            "command": "continue",
+            "arguments": {
+                "threadId": self.current_thread,
+            },
+        }
+        sent_message = self.client.send_request(msg)
+        self.awaiting_response[sent_message["seq"]] = sent_message
+        self.current_thread = None
+
+    def set_function_breakpoints(self):
+        msg = {
+            "command": "setFunctionBreakpoints",
+            "arguments": {
+                "breakpoints": [
+                    {"name": "main"},
+                ],
+            },
         }
         sent_message = self.client.send_request(msg)
         self.awaiting_response[sent_message["seq"]] = sent_message
