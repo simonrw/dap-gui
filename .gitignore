@@ -32,3 +32,6 @@ dap-gui
 # Added by cargo
 
 /target
+
+# debug file to prove the spiked client works
+out.txt

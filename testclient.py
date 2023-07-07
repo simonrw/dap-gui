@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 import os
+from dataclasses import dataclass
 import time
 import json
 import socket
-from typing import Any, Literal, TypedDict, cast
+from typing import Any, Literal, TypedDict, cast, Generator
 
 ServerMessageType = Literal["event", "response"]
 
@@ -22,6 +23,11 @@ class Response(ServerMessage):
     body: Any | None
 
 
+@dataclass
+class Header:
+    content_length: int
+
+
 def serislise_message(msg: dict) -> bytes:
     m = json.dumps(msg)
     n = len(m)
@@ -35,17 +41,6 @@ def serislise_message(msg: dict) -> bytes:
         ]
     )
     return message_str.encode("utf8")
-
-
-def deserialise_message(body: bytes) -> ServerMessage:
-    text = body.decode("utf8")
-    # TODO: read content length
-    header, _, body_str = text.split("\r\n", 2)
-    try:
-        return json.loads(body_str)
-    except json.JSONDecodeError:
-        print(f"Error decoding body {body_str}")
-        raise
 
 
 class Handler:
@@ -80,14 +75,14 @@ class Handler:
 
     def loop(self):
         while True:
-            res = self.client.receive_message()
-            match res["type"]:
-                case "response":
-                    self.handle_response(cast(Response, res))
-                case "event":
-                    self.handle_event(res)
-                case t:
-                    raise NotImplementedError(t)
+            for res in self.client.receive_message():
+                match res["type"]:
+                    case "response":
+                        self.handle_response(cast(Response, res))
+                    case "event":
+                        self.handle_event(res)
+                    case t:
+                        raise NotImplementedError(t)
 
     def handle_response(self, res: Response):
         req = self.awaiting_response.pop(res["request_seq"], None)
@@ -170,12 +165,18 @@ class Handler:
         self.awaiting_response[sent_message["seq"]] = sent_message
 
 
+def parse_header(header_text: str) -> Header:
+    key, value = header_text.split(":")
+    assert key.strip() == "Content-Length"
+    return Header(content_length=int(value.strip()))
+
+
 class Client:
     def __init__(self, host: str = "127.0.0.1", port: int = 5678):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((host, port))
         self.seq = 1
-        self.buffer = ""
+        self.buf = ""
 
     def send_request(self, msg: dict) -> dict:
         full_message = {
@@ -191,12 +192,37 @@ class Client:
         self.seq += 1
         return full_message
 
-    def receive_message(self) -> ServerMessage:
-        # TODO: proper message decoding
-        m = self.sock.recv(8196)
-        res = deserialise_message(m)
-        self.seq = res["seq"] + 1
-        return res
+    def receive_message(self) -> Generator[ServerMessage, None, None]:
+        m = self.sock.recv(8196).decode("utf8")
+        self.buf += m
+        # TODO: what if more headers are added?
+        assert self.buf.startswith("Content-Length")
+
+        while True:
+            # try to read a single message
+            try:
+                header_str, _, rest = self.buf.split("\r\n", 2)
+            except ValueError:
+                break
+
+            header = parse_header(header_str)
+            if header.content_length <= 0:
+                raise RuntimeError(f"Invalid content length read: {header=}")
+
+            if len(rest) < header.content_length:
+                # not enough data in the buffer so receive again
+                break
+
+            body_str = rest[: header.content_length]
+            self.buf = rest[header.content_length :]
+
+            try:
+                res = json.loads(body_str)
+            except json.JSONDecodeError as e:
+                raise RuntimeError("could not read message body") from e
+
+            self.seq = res["seq"] + 1
+            yield res
 
     def disconnect(self):
         self.sock.close()
