@@ -1,12 +1,22 @@
 #!/usr/bin/env python
 
 from __future__ import annotations
+
 import os
+import sys
+from enum import Enum
 from dataclasses import dataclass
-import time
 import json
 import socket
 from typing import Any, Literal, TypedDict, cast, Generator
+import logging
+
+
+logging.basicConfig(
+    level=logging.DEBUG, filename="log.log", filemode="a", format="%(asctime)s %(message)s"
+)
+
+LOG = logging.getLogger(__name__)
 
 ServerMessageType = Literal["event", "response"]
 
@@ -43,8 +53,14 @@ def serislise_message(msg: dict) -> bytes:
     return message_str.encode("utf8")
 
 
+class ThreadStatus(Enum):
+    started = "started"
+    exited = "exited"
+
+
 class Handler:
     capabilities: dict
+    thread_status: dict[int, ThreadStatus]
 
     def __init__(self, client: Client):
         self.client = client
@@ -54,6 +70,7 @@ class Handler:
         self.capabilities = {}
         self.ready = False
         self.current_thread = None
+        self.thread_status = {}
 
         # init message
         msg = {
@@ -64,6 +81,7 @@ class Handler:
                 "pathFormat": "path",
                 # TODO
                 "supportsRunInTerminalRequest": False,
+                "supportsStartDebuggingRequest": False,
             },
         }
         sent_message = self.client.send_request(msg)
@@ -88,12 +106,12 @@ class Handler:
         req = self.awaiting_response.pop(res["request_seq"], None)
         if not req:
             raise NotImplementedError(res)
-        print(f"RESPONSE: {res} replying to {req}")
+        LOG.debug(f"RESPONSE: {res} replying to {req}")
 
         match res["command"]:
             case "initialize":
                 self.capabilities = res["body"]
-                print(f"Server cababilities: {json.dumps(self.capabilities, indent=2)}")
+                LOG.debug(f"Server cababilities: {json.dumps(self.capabilities, indent=2)}")
 
                 # launch the debugee
                 self.launch()
@@ -102,11 +120,11 @@ class Handler:
 
             case "disconnect":
                 self.client.disconnect()
-                print("Got disconnect response -exiting")
+                LOG.debug("Got disconnect response -exiting")
                 raise SystemExit(0)
 
     def handle_event(self, event: ServerMessage):
-        print(f"EVENT: {event=}")
+        LOG.debug(f"EVENT: {event=}")
 
         match event["event"]:
             case "initialized":
@@ -115,6 +133,21 @@ class Handler:
             case "stopped":
                 self.current_thread = event["body"]["threadId"]
                 self.send_continue()
+            case "output":
+                body = event["body"]
+                match body["category"]:
+                    case "stdout":
+                        print(body["output"])
+                    case "stderr":
+                        print(body["output"], file=sys.stderr)
+            case "thread":
+                body = event["body"]
+                thread_id = body["threadId"]
+                status = ThreadStatus(body["reason"])
+                self.thread_status[thread_id] = status
+                LOG.debug(f"thread status: {self.thread_status}")
+            case "terminated":
+                self.disconnect()
 
     def disconnect(self):
         msg = {
@@ -186,7 +219,7 @@ class Client:
                 "type": "request",
             },
         }
-        print(f"Sending message: {full_message}")
+        LOG.debug(f"Sending message: {full_message}")
         buf = serislise_message(full_message)
         self.sock.send(buf)
         self.seq += 1
