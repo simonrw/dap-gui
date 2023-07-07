@@ -26,8 +26,9 @@ mkShell {
     rustfmt
     rust-analyzer
     debugpy-server
+  ] ++ lib.optionals stdenv.isDarwin apple-deps ++ lib.optionals stdenv.isLinux [
     gdb
-  ] ++ lib.optionals stdenv.isDarwin apple-deps;
+  ];
 
   RUST_BACKTRACE = "1";
 
