@@ -35,3 +35,6 @@ dap-gui
 
 # debug file to prove the spiked client works
 out.txt
+
+# log file
+log.log

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 import sys
 from enum import Enum
 from dataclasses import dataclass
@@ -58,9 +59,50 @@ class ThreadStatus(Enum):
     exited = "exited"
 
 
+@dataclass(frozen=True)
+class StackFrame:
+    id: int
+    name: str
+    line: int
+    column: int
+    source: StackFrameSource
+
+    @classmethod
+    def from_raw(cls, raw: dict) -> StackFrame:
+        source = StackFrameSource(path=raw["source"]["path"])
+        frame = cls(
+            id=raw["id"], name=raw["name"], line=raw["line"], column=raw["column"], source=source
+        )
+        return frame
+
+
+@dataclass(frozen=True)
+class StackFrameSource:
+    path: str
+
+
+ThreadId = int
+
+
+@dataclass(frozen=True)
+class Scope:
+    variables_reference: int
+    name: str
+
+
+@dataclass(frozen=True)
+class Variable:
+    name: str
+    value: str
+    typ: str
+
+
 class Handler:
     capabilities: dict
-    thread_status: dict[int, ThreadStatus]
+    thread_status: dict[ThreadId, ThreadStatus]
+    stack_frames: dict[ThreadId, list[StackFrame] | None]
+    scopes: dict[int, list[Scope]]
+    variables: dict[int, list[Variable]]
 
     def __init__(self, client: Client):
         self.client = client
@@ -71,6 +113,9 @@ class Handler:
         self.ready = False
         self.current_thread = None
         self.thread_status = {}
+        self.stack_frames = {}
+        self.scopes = {}
+        self.variables = {}
 
         # init message
         msg = {
@@ -103,25 +148,88 @@ class Handler:
                         raise NotImplementedError(t)
 
     def handle_response(self, res: Response):
-        req = self.awaiting_response.pop(res["request_seq"], None)
+        req = self.awaiting_response.get(res["request_seq"], None)
         if not req:
-            raise NotImplementedError(res)
+            return
         LOG.debug(f"RESPONSE: {res} replying to {req}")
+
+        if not res["success"]:
+            LOG.warning(f"failed response {res} to {req}")
+            raise RuntimeError(res)
+            return
 
         match res["command"]:
             case "initialize":
                 self.capabilities = res["body"]
                 LOG.debug(f"Server cababilities: {json.dumps(self.capabilities, indent=2)}")
+                self.clear_awaiting(res)
 
                 # launch the debugee
                 self.launch()
             case "setFunctionBreakpoints":
                 self.configuration_done()
 
+            case "threads":
+                body = res["body"]
+                self.stack_frames.clear()
+                for thread in body["threads"]:
+                    self.stack_frames[thread["id"]] = None
+                    self.send_stack_trace(thread["id"])
+
+                # TODO: wait for the results of these requests
+                # self.send_continue()
+
+            case "stackTrace":
+                body = res["body"]
+                stack_frames = body["stackFrames"]
+                frames = []
+                for raw_frame in stack_frames:
+                    frame = StackFrame.from_raw(raw_frame)
+                    self.send_scopes(frame)
+                    frames.append(frame)
+
+                thread_id = req["arguments"]["threadId"]
+                self.stack_frames[thread_id] = frames
+
+            case "scopes":
+                body = res["body"]
+                scopes = []
+                for raw_scope in body["scopes"]:
+                    scope = Scope(
+                        variables_reference=raw_scope["variablesReference"], name=raw_scope["name"]
+                    )
+                    scopes.append(scope)
+                    if scope.variables_reference > 0:
+                        self.send_variables(scope.variables_reference)
+
+                frame_id = req["arguments"]["frameId"]
+                self.scopes[frame_id] = scopes
+                self.clear_awaiting(res)
+
+            case "variables":
+                body = res["body"]
+                for variable in body["variables"]:
+                    if (ref := variable.get("variablesReference")) > 0:
+                        # TODO decode further
+                        #  self.send_variables(variable["variablesReference"])
+                        self.clear_awaiting(res)
+                        return
+                    else:
+                        v  = Variable(
+                                name=variable["name"],
+                                value=variable["value"],
+                                typ=variable["type"],
+                                )
+                        self.variables[req["arguments"]["variablesReference"]] = v
+                    self.clear_awaiting(res)
+
             case "disconnect":
                 self.client.disconnect()
                 LOG.debug("Got disconnect response -exiting")
                 raise SystemExit(0)
+
+    def clear_awaiting(self, response: Response):
+        self.awaiting_response.pop(response["request_seq"], None)
 
     def handle_event(self, event: ServerMessage):
         LOG.debug(f"EVENT: {event=}")
@@ -132,7 +240,8 @@ class Handler:
                 self.set_function_breakpoints()
             case "stopped":
                 self.current_thread = event["body"]["threadId"]
-                self.send_continue()
+                self.reset_state()
+                self.send_threads()
             case "output":
                 body = event["body"]
                 match body["category"]:
@@ -149,6 +258,10 @@ class Handler:
             case "terminated":
                 self.disconnect()
 
+    def reset_state(self):
+        self.stack_frames.clear()
+        self.scopes.clear()
+
     def disconnect(self):
         msg = {
             "command": "disconnect",
@@ -157,9 +270,44 @@ class Handler:
         sent_message = self.client.send_request(msg)
         self.awaiting_response[sent_message["seq"]] = sent_message
 
+    def send_variables(self, variables_reference: int):
+        msg = {
+            "command": "variables",
+            "arguments": {"variablesReference": variables_reference},
+        }
+        sent_message = self.client.send_request(msg)
+        self.awaiting_response[sent_message["seq"]] = sent_message
+
+    def send_stack_trace(self, thread_id: ThreadId):
+        msg = {
+            "command": "stackTrace",
+            "arguments": {
+                "threadId": thread_id,
+            },
+        }
+        sent_message = self.client.send_request(msg)
+        self.awaiting_response[sent_message["seq"]] = sent_message
+
+    def send_scopes(self, frame: StackFrame):
+        msg = {
+            "command": "scopes",
+            "arguments": {
+                "frameId": frame.id,
+            },
+        }
+        sent_message = self.client.send_request(msg)
+        self.awaiting_response[sent_message["seq"]] = sent_message
+
     def configuration_done(self):
         msg = {
             "command": "configurationDone",
+        }
+        sent_message = self.client.send_request(msg)
+        self.awaiting_response[sent_message["seq"]] = sent_message
+
+    def send_threads(self):
+        msg = {
+            "command": "threads",
         }
         sent_message = self.client.send_request(msg)
         self.awaiting_response[sent_message["seq"]] = sent_message
