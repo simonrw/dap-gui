@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import os
 import time
+from threading import Thread
 import sys
 from enum import Enum
 from dataclasses import dataclass
 import json
 import socket
 from typing import Any, Literal, TypedDict, cast, Generator
+from queue import Queue
 import logging
 
 
@@ -104,9 +106,10 @@ class Handler:
     scopes: dict[int, list[Scope]]
     variables: dict[int, list[Variable]]
 
-    def __init__(self, client: Client):
+    def __init__(self, client: Client, events: Queue):
         self.client = client
         self.awaiting_response = {}
+        self.queue = events
 
         # state about the debug adapter
         self.capabilities = {}
@@ -138,14 +141,14 @@ class Handler:
 
     def loop(self):
         while True:
-            for res in self.client.receive_message():
-                match res["type"]:
-                    case "response":
-                        self.handle_response(cast(Response, res))
-                    case "event":
-                        self.handle_event(res)
-                    case t:
-                        raise NotImplementedError(t)
+            res = self.queue.get()
+            match res["type"]:
+                case "response":
+                    self.handle_response(cast(Response, res))
+                case "event":
+                    self.handle_event(res)
+                case t:
+                    raise NotImplementedError(t)
 
     def handle_response(self, res: Response):
         req = self.awaiting_response.get(res["request_seq"], None)
@@ -215,11 +218,11 @@ class Handler:
                         self.clear_awaiting(res)
                         return
                     else:
-                        v  = Variable(
-                                name=variable["name"],
-                                value=variable["value"],
-                                typ=variable["type"],
-                                )
+                        v = Variable(
+                            name=variable["name"],
+                            value=variable["value"],
+                            typ=variable["type"],
+                        )
                         self.variables[req["arguments"]["variablesReference"]] = v
                     self.clear_awaiting(res)
 
@@ -402,11 +405,16 @@ class Client:
             except json.JSONDecodeError as e:
                 raise RuntimeError("could not read message body") from e
 
-            self.seq = res["seq"] + 1
             yield res
 
     def disconnect(self):
         self.sock.close()
+
+
+def receive_messages(client: Client, events: Queue):
+    while True:
+        for msg in client.receive_message():
+            events.put(msg)
 
 
 def main():
@@ -416,8 +424,15 @@ def main():
     except:
         pass
 
+    events = Queue()
     client = Client()
-    handler = Handler(client)
+
+    # background thread to receive messages
+    thread = Thread(target=receive_messages, kwargs={"client": client, "events": events})
+    thread.daemon = True
+    thread.start()
+
+    handler = Handler(client, events)
     handler.loop()
 
 
