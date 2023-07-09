@@ -2,6 +2,9 @@ use anyhow::{Context, Result};
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::io::{prelude::*, BufRead, BufReader};
+use std::thread;
+use std::time::Duration;
+use std::sync::{Arc, Mutex};
 use std::net;
 
 #[derive(Clone, Serialize, Default)]
@@ -183,7 +186,7 @@ where
     Ok(())
 }
 
-fn main() -> Result<()> {
+fn foo_main() -> Result<()> {
     let conn = net::TcpStream::connect("127.0.0.1:5678").context("connecting to DAP server")?;
     let receiver = BufReader::new(conn.try_clone().context("cloning read socket handle")?);
 
@@ -204,7 +207,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn egui_main() -> Result<(), eframe::Error> {
+fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(320.0, 240.0)),
         ..Default::default()
@@ -212,38 +215,42 @@ fn egui_main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "My egui App",
         options,
-        Box::new(|_cc| Box::<MyApp>::default()),
+        Box::new(|cc| Box::new(MyApp::new(cc.egui_ctx.clone())))
     )
 }
 
 struct MyApp {
-    name: String,
-    age: u32,
+    value: Arc<Mutex<u32>>,
+    handle: thread::JoinHandle<()>,
+    counter: u32,
 }
 
-impl Default for MyApp {
-    fn default() -> Self {
+impl MyApp {
+    fn new(ctx: egui::Context) -> Self {
+        let value = Arc::new(Mutex::new(0));
+        let background_value = value.clone();
+        let handle = thread::spawn(move || {
+            loop {
+                *background_value.lock().unwrap() += 1;
+                thread::sleep(Duration::from_secs(1));
+                ctx.request_repaint();
+            }
+        });
         Self {
-            name: "Arthur".to_owned(),
-            age: 42,
+            value,
+            handle,
+            counter: 0,
         }
     }
 }
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        println!("Updating {}", self.counter);
+        self.counter += 1;
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My egui Application");
-            ui.horizontal(|ui| {
-                let name_label = ui.label("Your name: ");
-                ui.text_edit_singleline(&mut self.name)
-                    .labelled_by(name_label.id);
-            });
-            ui.add(egui::Slider::new(&mut self.age, 0..=120).text("age"));
-            if ui.button("Click each year").clicked() {
-                self.age += 1;
-            }
-            ui.label(format!("Hello '{}', age {}", self.name, self.age));
+            ui.label(format!("Value: {}", self.value.lock().unwrap()));
         });
     }
 }
