@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import time
 from threading import Thread
+from collections import defaultdict
 import sys
 from enum import Enum
 from dataclasses import dataclass
@@ -16,7 +17,7 @@ import logging
 
 
 logging.basicConfig(
-    level=logging.DEBUG, filename="log.log", filemode="a", format="%(asctime)s %(message)s"
+    level=logging.DEBUG, filename="log.log", filemode="w", format="%(asctime)s %(message)s"
 )
 
 LOG = logging.getLogger(__name__)
@@ -90,6 +91,7 @@ ThreadId = int
 class Scope:
     variables_reference: int
     name: str
+    expensive: bool
 
 
 @dataclass(frozen=True)
@@ -118,7 +120,7 @@ class Handler:
         self.thread_status = {}
         self.stack_frames = {}
         self.scopes = {}
-        self.variables = {}
+        self.variables = defaultdict(list)
 
         # init message
         msg = {
@@ -199,10 +201,12 @@ class Handler:
                 scopes = []
                 for raw_scope in body["scopes"]:
                     scope = Scope(
-                        variables_reference=raw_scope["variablesReference"], name=raw_scope["name"]
+                        variables_reference=raw_scope["variablesReference"],
+                        name=raw_scope["name"],
+                        expensive=raw_scope["expensive"],
                     )
                     scopes.append(scope)
-                    if scope.variables_reference > 0:
+                    if scope.variables_reference > 0 and not scope.expensive:
                         self.send_variables(scope.variables_reference)
 
                 frame_id = req["arguments"]["frameId"]
@@ -214,16 +218,21 @@ class Handler:
                 for variable in body["variables"]:
                     if (ref := variable.get("variablesReference")) > 0:
                         # TODO decode further
-                        #  self.send_variables(variable["variablesReference"])
+                        self.send_variables(variable["variablesReference"])
                         self.clear_awaiting(res)
-                        return
                     else:
                         v = Variable(
                             name=variable["name"],
                             value=variable["value"],
                             typ=variable["type"],
                         )
-                        self.variables[req["arguments"]["variablesReference"]] = v
+                        variable_ref = req["arguments"]["variablesReference"]
+                        # if variable_ref in self.variables:
+                        #     raise ValueError(f"Already encountered variable {variable_ref}: {v}")
+                        self.variables[variable_ref].append(v)
+                        LOG.debug(
+                            f"Number of variables: {sum(len(self.variables[key]) for key in self.variables)}"
+                        )
                     self.clear_awaiting(res)
 
             case "disconnect":
