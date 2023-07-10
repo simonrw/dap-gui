@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from threading import Thread
@@ -12,7 +13,7 @@ from dataclasses import dataclass
 import json
 import socket
 from typing import Any, Literal, TypedDict, cast, Generator
-from queue import Queue
+from queue import Empty, Queue
 import logging
 
 
@@ -426,7 +427,63 @@ def receive_messages(client: Client, events: Queue):
             events.put(msg)
 
 
-def main():
+class AsyncHandler:
+    def __init__(self, client: Client, events: Queue):
+        self.client = client
+        self.events = events
+        self.responses = {}
+
+    async def loop(self):
+        while True:
+            try:
+                msg = self.events.get(block=False, timeout=0.5)
+            except Empty:
+                await asyncio.sleep(0.5)
+                continue
+
+            match msg["type"]:
+                case "response":
+                    request_seq = msg["request_seq"]
+                    self.responses[request_seq] = msg
+                case "event":
+                    print(f"Event {msg}")
+
+    async def send_initialize(self):
+        msg = {
+            "command": "initialize",
+            "arguments": {
+                "adapterID": "dap-gui",
+                "clientName": "DAP GUI",
+                "pathFormat": "path",
+                # TODO
+                "supportsRunInTerminalRequest": False,
+                "supportsStartDebuggingRequest": False,
+            },
+        }
+        return await self.send_message(msg)
+
+    async def send_message(self, payload: dict, has_response: bool = True) -> dict | None:
+        sent_message = await self._send(payload)
+
+        if not has_response:
+            return
+
+        seq = sent_message["seq"]
+
+        while True:
+            if seq in self.responses:
+                return self.responses[seq]
+
+            await asyncio.sleep(0.5)
+
+    async def _send(self, payload: dict) -> dict:
+        """
+        Low level method that wraps the blocking API in an async wrapper
+        """
+        return await asyncio.to_thread(self.client.send_request, payload)
+
+
+async def main():
     # marker file to prove the debuggee was run
     try:
         os.remove("out.txt")
@@ -437,13 +494,17 @@ def main():
     client = Client()
 
     # background thread to receive messages
+    # TODO: asyncio task
     thread = Thread(target=receive_messages, kwargs={"client": client, "events": events})
     thread.daemon = True
     thread.start()
 
-    handler = Handler(client, events)
-    handler.loop()
+    handler = AsyncHandler(client, events)
+    asyncio.create_task(handler.loop())
+    print(f"Started background task")
+    res = await handler.send_initialize()
+    print(f"Result from send_initialize: {res}")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
