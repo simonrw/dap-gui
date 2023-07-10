@@ -1,11 +1,13 @@
 use anyhow::{Context, Result};
 use eframe::egui;
 use serde::{Deserialize, Serialize};
+use std::future::{self, Future};
+use std::task::Poll;
 use std::io::{prelude::*, BufRead, BufReader};
+use std::net;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use std::sync::{Arc, Mutex};
-use std::net;
 
 #[derive(Clone, Serialize, Default)]
 struct InitializeArguments {
@@ -39,9 +41,8 @@ impl Request {
     }
 }
 
-
 #[derive(Debug, Deserialize)]
-struct InitializeResponse{
+struct InitializeResponse {
     #[serde(rename = "supportsFunctionBreakpoints")]
     supports_function_breakpoints: bool,
 }
@@ -61,7 +62,7 @@ struct Response {
     request_seq: i64,
     success: bool,
     message: Option<String>,
-    
+
     #[serde(flatten)]
     body: ResponseBody,
 }
@@ -186,6 +187,31 @@ where
     Ok(())
 }
 
+struct Foo {
+    values: Vec<i32>,
+}
+
+impl Foo {
+    fn foo(&mut self) -> impl Future<Output = i32> + '_ {
+        future::poll_fn(|_cx| -> Poll<i32> {
+            for value in &self.values {
+                if *value == 2 {
+                    return Poll::Ready(*value);
+                } 
+            }
+
+            Poll::Pending
+        })
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    let mut f = Foo { values: vec![1, 2, 3] };
+    let res = f.foo().await;
+    dbg!(res);
+}
+
 fn foo_main() -> Result<()> {
     let conn = net::TcpStream::connect("127.0.0.1:5678").context("connecting to DAP server")?;
     let receiver = BufReader::new(conn.try_clone().context("cloning read socket handle")?);
@@ -207,7 +233,7 @@ fn foo_main() -> Result<()> {
     Ok(())
 }
 
-fn main() -> Result<(), eframe::Error> {
+fn egui_main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(320.0, 240.0)),
         ..Default::default()
@@ -215,7 +241,7 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "My egui App",
         options,
-        Box::new(|cc| Box::new(MyApp::new(cc.egui_ctx.clone())))
+        Box::new(|cc| Box::new(MyApp::new(cc.egui_ctx.clone()))),
     )
 }
 
@@ -229,12 +255,10 @@ impl MyApp {
     fn new(ctx: egui::Context) -> Self {
         let value = Arc::new(Mutex::new(0));
         let background_value = value.clone();
-        let handle = thread::spawn(move || {
-            loop {
-                *background_value.lock().unwrap() += 1;
-                thread::sleep(Duration::from_secs(1));
-                ctx.request_repaint();
-            }
+        let handle = thread::spawn(move || loop {
+            *background_value.lock().unwrap() += 1;
+            thread::sleep(Duration::from_secs(1));
+            ctx.request_repaint();
         });
         Self {
             value,
