@@ -1,13 +1,16 @@
 use anyhow::{Context, Result};
+use bytes::{Buf, BytesMut};
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::future::{self, Future};
-use std::task::Poll;
-use std::io::{prelude::*, BufRead, BufReader};
+use std::io::{prelude::*, BufRead, BufReader, Cursor};
 use std::net;
 use std::sync::{Arc, Mutex};
+use std::task::Poll;
 use std::thread;
 use std::time::Duration;
+use tokio::io::AsyncReadExt;
+use tokio::net::TcpStream;
 
 #[derive(Clone, Serialize, Default)]
 struct InitializeArguments {
@@ -197,7 +200,7 @@ impl Foo {
             for value in &self.values {
                 if *value == 2 {
                     return Poll::Ready(*value);
-                } 
+                }
             }
 
             Poll::Pending
@@ -205,9 +208,84 @@ impl Foo {
     }
 }
 
+#[derive(Debug)]
+enum ParseError {
+    Incomplete,
+    Other(anyhow::Error),
+}
+
+enum Frame {
+    Event,
+    Response,
+}
+
+impl Frame {
+    fn check(buf: &mut Cursor<&[u8]>) -> std::result::Result<(), ParseError> {
+        todo!()
+    }
+
+    fn parse(buf: &mut Cursor<&[u8]>) -> std::result::Result<Frame, ParseError> {
+        todo!()
+    }
+}
+
+// Buffered IO
+// https://tokio.rs/tokio/tutorial/framing
+struct Connection {
+    stream: TcpStream,
+    buffer: BytesMut,
+}
+
+impl Connection {
+    pub fn new(stream: TcpStream) -> Self {
+        Self {
+            stream,
+            buffer: BytesMut::with_capacity(4096),
+        }
+    }
+    pub async fn read_frame(&mut self) -> Result<Option<Frame>> {
+        loop {
+            // attempt to parse a frame from the buffered data
+            if let Some(frame) = self.parse_frame()? {
+                return Ok(Some(frame));
+            }
+
+            // there is not enough data in the buffer so read from the network
+            if 0 == self.stream.read_buf(&mut self.buffer).await? {
+                if self.buffer.is_empty() {
+                    return Ok(None);
+                } else {
+                    anyhow::bail!("connection reset by peer");
+                }
+            }
+        }
+    }
+
+    pub fn parse_frame(&mut self) -> Result<Option<Frame>> {
+        let mut buf = Cursor::new(&self.buffer[..]);
+
+        match Frame::check(&mut buf) {
+            Ok(_) => {
+                let len = buf.position() as usize;
+
+                buf.set_position(0);
+                // unwrap is safe because we've checked the buffer already
+                let frame = Frame::parse(&mut buf).unwrap();
+
+                self.buffer.advance(len);
+                Ok(Some(frame))
+            }
+            Err(ParseError::Incomplete) => Ok(None),
+            Err(ParseError::Other(e)) => Err(e),
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
-    let mut f = Foo { values: vec![1, 2, 3] };
+    let mut f = Foo {
+        values: vec![1, 2, 3],
+    };
     let res = f.foo().await;
     dbg!(res);
 }

@@ -667,6 +667,7 @@ name = "dap-gui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "dap",
  "eframe",
  "serde",
