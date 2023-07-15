@@ -8,21 +8,6 @@ struct MyApp {}
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        use egui::FontFamily::*;
-        use egui::TextStyle::*;
-
-        // set style
-        let mut style = (*ctx.style()).clone();
-        style.text_styles = [
-            (Heading, egui::FontId::new(30.0, Proportional)),
-            (Body, egui::FontId::new(24.0, Proportional)),
-            (egui::TextStyle::Monospace, egui::FontId::new(18.0, Proportional)),
-            (Button, egui::FontId::new(18.0, Proportional)),
-            (Small, egui::FontId::new(14.0, Proportional)),
-        ]
-        .into();
-        ctx.set_style(style);
-
         egui::SidePanel::right("right_panel")
             .resizable(false)
             .show(ctx, |ui| {
@@ -40,9 +25,13 @@ impl eframe::App for MyApp {
         });
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.label("central panel");
+
             // code
             let example_code = include_str!("./main.rs");
-            syntax_highlighting::code_view_ui(ui, example_code);
+
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                syntax_highlighting::code_view_ui(ui, example_code);
+            });
         });
     }
 }
