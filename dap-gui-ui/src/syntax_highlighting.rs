@@ -199,7 +199,7 @@ impl CodeTheme {
 #[cfg(not(feature = "syntect"))]
 impl CodeTheme {
     pub fn dark() -> Self {
-        let font_id = egui::FontId::monospace(10.0);
+        let font_id = egui::FontId::monospace(18.0);
         use egui::{Color32, TextFormat};
         Self {
             dark_mode: true,
