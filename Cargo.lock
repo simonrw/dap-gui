@@ -680,6 +680,7 @@ name = "dap-gui-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "serde",
  "serde_json",
 ]
