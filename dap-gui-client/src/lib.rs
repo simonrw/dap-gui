@@ -1,13 +1,8 @@
-use std::{
-    io::{BufRead, BufReader, BufWriter, Cursor, Read, Write},
-    net::TcpStream,
-    sync::mpsc::{Receiver, Sender},
-};
+use std::io::{BufRead, BufReader, Read, Write, BufWriter};
 
 use serde::Deserialize;
 // TODO: use internal error type
 use anyhow::{Context, Result};
-use bytes::{Buf, BytesMut};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -139,12 +134,11 @@ where
         let resp_json = serde_json::to_string(&message).unwrap();
         write!(
             self.output_buffer,
-            "Content-Length: {}\r\n\r\n",
-            resp_json.len()
+            "Content-Length: {}\r\n\r\n{}",
+            resp_json.len(),
+            resp_json
         )
         .unwrap();
-
-        write!(self.output_buffer, "{}\r\n", resp_json).unwrap();
         self.output_buffer.flush().unwrap();
         Ok(())
     }
