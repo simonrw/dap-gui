@@ -1,12 +1,13 @@
 use std::{
-    io::{Read, Write, Cursor},
+    io::{Cursor, Read, Write},
     net::TcpStream,
     sync::mpsc::{Receiver, Sender},
 };
 
+use serde::Deserialize;
 // TODO: use internal error type
 use anyhow::Result;
-use bytes::{BytesMut, Buf};
+use bytes::{Buf, BytesMut};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -18,29 +19,24 @@ where
     body: Body,
 }
 
+#[derive(Debug, Deserialize)]
+pub enum Message {
+    #[serde(rename = "event")]
+    Event,
+    #[serde(rename = "response")]
+    Response,
+}
+
+impl Message {
+    fn parse(buf: &mut Cursor<&[u8]>) -> std::result::Result<Self, ParseError> {
+        todo!()
+    }
+}
+
 pub struct Client<W> {
     seq: i64,
     stream: W,
     events: Receiver<Message>,
-}
-
-#[derive(Debug)]
-pub enum Message {}
-
-impl Message {
-    fn check(buf: &mut Cursor<&[u8]>) -> std::result::Result<(), ParseError> {
-        if !buf.has_remaining() {
-            return Err(ParseError::Incomplete);
-        }
-        if buf.chunk()[0] != b'C' {
-            return Err(ParseError::Other(anyhow::anyhow!("invalid start character")));
-        }
-
-        todo!()
-    }
-    fn parse(buf: &mut Cursor<&[u8]>) -> std::result::Result<Self, ParseError> {
-        todo!()
-    }
 }
 
 impl<W> Client<W>
@@ -65,8 +61,7 @@ where
         self.seq += 1;
     }
 
-    pub fn send_initialize(&self) {
-    }
+    pub fn send_initialize(&self) {}
 
     pub fn mainloop(&self) {
         for msg in &self.events {
@@ -87,12 +82,18 @@ where
 #[derive(Debug)]
 enum ParseError {
     Incomplete,
+    Invalid,
     Other(anyhow::Error),
 }
 
 pub struct StreamReader {
     stream: TcpStream,
     buffer: BytesMut,
+}
+
+enum ClientState {
+    Header,
+    Content,
 }
 
 impl StreamReader {
@@ -102,7 +103,8 @@ impl StreamReader {
             buffer: BytesMut::new(),
         }
     }
-    pub fn receive_events(&mut self, events: Sender<Message>) {
+
+    pub fn receive_messages(&mut self, events: Sender<Message>) {
         loop {
             match self.read_event() {
                 Ok(Some(event)) => {
@@ -114,8 +116,11 @@ impl StreamReader {
         }
     }
 
+    // dap crate's `poll_request`
     fn read_event(&mut self) -> Result<Option<Message>> {
+        let mut state = ClientState::Header;
         loop {
+            eprintln!("{}", self.buffer.len());
             if let Some(frame) = self.parse_frame()? {
                 return Ok(Some(frame));
             }
@@ -137,21 +142,12 @@ impl StreamReader {
     fn parse_frame(&mut self) -> Result<Option<Message>> {
         let mut buf = Cursor::new(&self.buffer[..]);
 
-        match Message::check(&mut buf) {
-            Ok(_) => {
-                let len = buf.position() as usize;
-
-                buf.set_position(0);
-                // unwrap is safe because we've checked the buffer already
-                let frame = Message::parse(&mut buf).unwrap();
-
-                self.buffer.advance(len);
-                Ok(Some(frame))
-            }
-            Err(ParseError::Incomplete) => Ok(None),
+        match dbg!(Message::parse(&mut buf)) {
+            Ok(frame) => Ok(Some(frame)),
             Err(ParseError::Other(e)) => Err(e),
+            Err(ParseError::Invalid) => Err(anyhow::anyhow!("invalid input")),
+            Err(ParseError::Incomplete) => Ok(None),
         }
-
     }
 }
 
