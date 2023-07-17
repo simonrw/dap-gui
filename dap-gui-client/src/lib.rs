@@ -1,21 +1,24 @@
 use std::{
-    io::{Cursor, Read, Write},
+    io::{BufRead, BufReader, BufWriter, Cursor, Read, Write},
     net::TcpStream,
     sync::mpsc::{Receiver, Sender},
 };
 
 use serde::Deserialize;
 // TODO: use internal error type
-use anyhow::Result;
+use anyhow::{Context, Result};
 use bytes::{Buf, BytesMut};
 use serde::Serialize;
 
 #[derive(Serialize)]
-struct Request<Body>
+struct BaseMessage<Body>
 where
     Body: Serialize,
 {
     seq: i64,
+    #[serde(rename = "type")]
+    r#type: String,
+    #[serde(flatten)]
     body: Body,
 }
 
@@ -27,68 +30,124 @@ pub enum Message {
     Response,
 }
 
-impl Message {
-    fn parse(buf: &mut Cursor<&[u8]>) -> std::result::Result<Self, ParseError> {
-        todo!()
-    }
-}
-
-pub struct Client<W> {
-    seq: i64,
-    stream: W,
-    events: Receiver<Message>,
-}
-
-impl<W> Client<W>
+pub struct Client2<R, W>
 where
+    R: Read,
     W: Write,
 {
-    pub fn new(stream: W, events: Receiver<Message>) -> Self {
-        Self {
-            seq: 1,
-            stream,
-            events,
-        }
-    }
-
-    fn send_request(&mut self, w: impl Write, b: impl Serialize) {
-        let request = Request {
-            seq: self.seq,
-            body: b,
-        };
-
-        serialize_request(w, &request);
-        self.seq += 1;
-    }
-
-    pub fn send_initialize(&self) {}
-
-    pub fn mainloop(&self) {
-        for msg in &self.events {
-            dbg!(msg);
-        }
-    }
+    input_buffer: BufReader<R>,
+    output_buffer: BufWriter<W>,
+    sequence_number: i64,
 }
 
-fn serialize_request<Body>(mut w: impl Write, r: &Request<Body>)
+impl<R, W> Client2<R, W>
 where
-    Body: Serialize,
+    R: Read,
+    W: Write,
 {
-    let body = serde_json::to_string(&r).expect("serializing payload");
-    let n = body.len();
-    write!(&mut w, "Content-Length: {n}\r\n\r\n{body}").unwrap();
-}
+    pub fn new(input: BufReader<R>, output: BufWriter<W>) -> Self {
+        Self {
+            input_buffer: input,
+            output_buffer: output,
+            sequence_number: 0,
+        }
+    }
 
-#[derive(Debug)]
-enum ParseError {
-    Incomplete,
-    Invalid,
-    Other(anyhow::Error),
-}
+    pub fn send_initialize(&mut self) {
+        self.send(serde_json::json!({
+            "command": "initialize",
+            "arguments": {
+                "adapterID": "dap-gui",
+                }
 
-pub struct StreamReader {
-    stream: TcpStream,
-    buffer: BytesMut,
+        }))
+        .unwrap();
+    }
+
+    pub fn receive(&mut self) {
+        match self.poll_message() {
+            Ok(Some(msg)) => {
+                dbg!(msg);
+            }
+            Ok(None) => return,
+            Err(e) => todo!("{}", e),
+        }
+    }
+
+    pub fn poll_message(&mut self) -> Result<Option<serde_json::Value>> {
+        let mut state = ClientState::Header;
+        let mut buffer = String::new();
+        let mut content_length: usize = 0;
+
+        loop {
+            match self.input_buffer.read_line(&mut buffer) {
+                Ok(read_size) => {
+                    if read_size == 0 {
+                        return Ok(None);
+                    }
+
+                    match state {
+                        ClientState::Header => {
+                            let parts: Vec<&str> = buffer.trim_end().split(":").collect();
+                            if parts.len() == 2 {
+                                match parts[0] {
+                                    "Content-Length" => {
+                                        content_length = match parts[1].trim().parse() {
+                                            Ok(val) => val,
+                                            Err(_) => {
+                                                anyhow::bail!("failed to parse content length")
+                                            }
+                                        };
+                                        buffer.clear();
+                                        buffer.reserve(content_length);
+                                        state = ClientState::Content;
+                                    }
+                                    other => {
+                                        anyhow::bail!("header {} not implemented", other);
+                                    }
+                                }
+                            }
+                        }
+                        ClientState::Content => {
+                            buffer.clear();
+                            let mut content = vec![0; content_length];
+                            self.input_buffer
+                                .read_exact(content.as_mut_slice())
+                                .map_err(|e| anyhow::anyhow!("failed to read: {:?}", e))?;
+                            let content =
+                                std::str::from_utf8(content.as_slice()).context("invalid utf8")?;
+                            let message: serde_json::Value =
+                                serde_json::from_str(content).context("invalid JSON")?;
+                            return Ok(Some(message));
+                        }
+                    }
+                }
+                Err(e) => {
+                    return Err(anyhow::anyhow!("error reading from buffer: {e:?}"));
+                }
+            }
+        }
+    }
+
+    pub fn send(&mut self, body: serde_json::Value) -> Result<()> {
+        self.sequence_number += 1;
+        let message = BaseMessage {
+            seq: self.sequence_number,
+            r#type: "request".to_string(),
+            body,
+        };
+        let resp_json = serde_json::to_string(&message).unwrap();
+        write!(
+            self.output_buffer,
+            "Content-Length: {}\r\n\r\n",
+            resp_json.len()
+        )
+        .unwrap();
+
+        write!(self.output_buffer, "{}\r\n", resp_json).unwrap();
+        self.output_buffer.flush().unwrap();
+        Ok(())
+    }
 }
 
 enum ClientState {
@@ -96,82 +155,27 @@ enum ClientState {
     Content,
 }
 
-impl StreamReader {
-    pub fn new(stream: TcpStream) -> Self {
-        Self {
-            stream,
-            buffer: BytesMut::new(),
-        }
-    }
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
 
-    pub fn receive_messages(&mut self, events: Sender<Message>) {
-        loop {
-            match self.read_event() {
-                Ok(Some(event)) => {
-                    let _ = events.send(event);
-                }
-                Ok(None) => break, // EOF
-                Err(e) => eprintln!("Error reading message: {e:?}"),
-            }
-        }
-    }
+//     #[test]
+//     fn serialize_message() {
+//         #[derive(Serialize)]
+//         struct Body {
+//             value: i32,
+//         }
+//         let request = Request {
+//             seq: 1,
+//             body: Body { value: 15 },
+//         };
 
-    // dap crate's `poll_request`
-    fn read_event(&mut self) -> Result<Option<Message>> {
-        let mut state = ClientState::Header;
-        loop {
-            eprintln!("{}", self.buffer.len());
-            if let Some(frame) = self.parse_frame()? {
-                return Ok(Some(frame));
-            }
+//         let mut s = Vec::new();
+//         serialize_request(&mut s, &request);
 
-            let mut buf = [0u8; 4096];
-            let n = self.stream.read(&mut buf)?;
-            self.buffer.extend_from_slice(&buf);
-            if n == 0 {
-                if self.buffer.is_empty() {
-                    // EOF
-                    return Ok(None);
-                } else {
-                    anyhow::bail!("connection reset by peer");
-                }
-            }
-        }
-    }
-
-    fn parse_frame(&mut self) -> Result<Option<Message>> {
-        let mut buf = Cursor::new(&self.buffer[..]);
-
-        match dbg!(Message::parse(&mut buf)) {
-            Ok(frame) => Ok(Some(frame)),
-            Err(ParseError::Other(e)) => Err(e),
-            Err(ParseError::Invalid) => Err(anyhow::anyhow!("invalid input")),
-            Err(ParseError::Incomplete) => Ok(None),
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn serialize_message() {
-        #[derive(Serialize)]
-        struct Body {
-            value: i32,
-        }
-        let request = Request {
-            seq: 1,
-            body: Body { value: 15 },
-        };
-
-        let mut s = Vec::new();
-        serialize_request(&mut s, &request);
-
-        assert_eq!(
-            std::str::from_utf8(&s).unwrap(),
-            "Content-Length: 29\r\n\r\n{\"seq\":1,\"body\":{\"value\":15}}"
-        );
-    }
-}
+//         assert_eq!(
+//             std::str::from_utf8(&s).unwrap(),
+//             "Content-Length: 29\r\n\r\n{\"seq\":1,\"body\":{\"value\":15}}"
+//         );
+//     }
+// }
