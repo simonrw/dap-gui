@@ -1,9 +1,13 @@
-use std::io::{BufRead, BufReader, Read, Write, BufWriter};
+use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 
 use serde::Deserialize;
 // TODO: use internal error type
 use anyhow::{Context, Result};
 use serde::Serialize;
+
+mod events;
+mod responses;
+mod types;
 
 #[derive(Serialize)]
 struct BaseMessage<Body>
@@ -11,18 +15,17 @@ where
     Body: Serialize,
 {
     seq: i64,
-    #[serde(rename = "type")]
     r#type: String,
     #[serde(flatten)]
     body: Body,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+#[serde(tag = "type")]
 pub enum Message {
-    #[serde(rename = "event")]
-    Event,
-    #[serde(rename = "response")]
-    Response,
+    Event(events::Event),
+    Response(responses::Response),
 }
 
 pub struct Client2<R, W>
@@ -61,15 +64,50 @@ where
 
     pub fn receive(&mut self) {
         match self.poll_message() {
-            Ok(Some(msg)) => {
-                dbg!(msg);
-            }
-            Ok(None) => return,
+            Ok(Some(msg)) => match msg {
+                Message::Event(m) => match m {
+                    events::Event::Initialized => {
+                        eprintln!("server ready to receive breakpoint commands");
+                        self.send(serde_json::json!({
+                            "command": "setFunctionBreakpoints",
+                            "arguments": {
+                                "breakpoints": [{
+                                    "name": "main",
+                                }],
+                            },
+                        }))
+                        .unwrap();
+                    }
+                    events::Event::Output(o) => {
+                        eprintln!("{}", o.output);
+                    }
+                },
+                Message::Response(r) => {
+                    if let Some(body) = r.body {
+                        match body {
+                            responses::ResponseBody::Initialize(_init) => {
+                                // TODO: send launch event
+                                self.send(serde_json::json!({
+                                    "command": "launch",
+                                    "arguments": {
+                                        "program": "/home/simon/dev/dap-gui/test.py",
+                                    }
+                                }))
+                                .unwrap();
+                            }
+                            responses::ResponseBody::SetFunctionBreakpoints(bps) => {
+                                dbg!(bps);
+                            }
+                        }
+                    }
+                }
+            },
+            Ok(None) => (),
             Err(e) => todo!("{}", e),
         }
     }
 
-    pub fn poll_message(&mut self) -> Result<Option<serde_json::Value>> {
+    pub fn poll_message(&mut self) -> Result<Option<Message>> {
         let mut state = ClientState::Header;
         let mut buffer = String::new();
         let mut content_length: usize = 0;
@@ -83,7 +121,7 @@ where
 
                     match state {
                         ClientState::Header => {
-                            let parts: Vec<&str> = buffer.trim_end().split(":").collect();
+                            let parts: Vec<&str> = buffer.trim_end().split(':').collect();
                             if parts.len() == 2 {
                                 match parts[0] {
                                     "Content-Length" => {
@@ -111,8 +149,8 @@ where
                                 .map_err(|e| anyhow::anyhow!("failed to read: {:?}", e))?;
                             let content =
                                 std::str::from_utf8(content.as_slice()).context("invalid utf8")?;
-                            let message: serde_json::Value =
-                                serde_json::from_str(content).context("invalid JSON")?;
+                            dbg!(&content);
+                            let message = serde_json::from_str(content).context("invalid JSON")?;
                             return Ok(Some(message));
                         }
                     }
