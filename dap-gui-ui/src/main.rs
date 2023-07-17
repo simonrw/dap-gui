@@ -44,6 +44,6 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "DAP GUI",
         options,
-        Box::new(|_cc| Box::new(MyApp::default())),
+        Box::new(|_cc| Box::<MyApp>::default()),
     )
 }

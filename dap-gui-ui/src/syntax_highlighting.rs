@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use eframe::egui::{self, text::LayoutJob};
 
 /// View some code with syntax highlighting and selection.
@@ -40,20 +41,6 @@ pub fn highlight(ctx: &egui::Context, theme: &CodeTheme, code: &str, language: &
 
 // ----------------------------------------------------------------------------
 
-#[cfg(not(feature = "syntect"))]
-#[derive(Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(enum_map::Enum)]
-enum TokenType {
-    Comment,
-    Keyword,
-    Literal,
-    StringLiteral,
-    Punctuation,
-    Whitespace,
-}
-
-#[cfg(feature = "syntect")]
 #[derive(Clone, Copy, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 enum SyntectTheme {
@@ -66,7 +53,6 @@ enum SyntectTheme {
     SolarizedLight,
 }
 
-#[cfg(feature = "syntect")]
 impl SyntectTheme {
     fn all() -> impl ExactSizeIterator<Item = Self> {
         [
@@ -124,11 +110,7 @@ impl SyntectTheme {
 pub struct CodeTheme {
     dark_mode: bool,
 
-    #[cfg(feature = "syntect")]
     syntect_theme: SyntectTheme,
-
-    #[cfg(not(feature = "syntect"))]
-    formats: enum_map::EnumMap<TokenType, egui::TextFormat>,
 }
 
 impl Default for CodeTheme {
@@ -169,7 +151,6 @@ impl CodeTheme {
     }
 }
 
-#[cfg(feature = "syntect")]
 impl CodeTheme {
     pub fn dark() -> Self {
         Self {
@@ -196,114 +177,11 @@ impl CodeTheme {
     }
 }
 
-#[cfg(not(feature = "syntect"))]
-impl CodeTheme {
-    pub fn dark() -> Self {
-        let font_id = egui::FontId::monospace(18.0);
-        use egui::{Color32, TextFormat};
-        Self {
-            dark_mode: true,
-            formats: enum_map::enum_map![
-                TokenType::Comment => TextFormat::simple(font_id.clone(), Color32::from_gray(120)),
-                TokenType::Keyword => TextFormat::simple(font_id.clone(), Color32::from_rgb(255, 100, 100)),
-                TokenType::Literal => TextFormat::simple(font_id.clone(), Color32::from_rgb(87, 165, 171)),
-                TokenType::StringLiteral => TextFormat::simple(font_id.clone(), Color32::from_rgb(109, 147, 226)),
-                TokenType::Punctuation => TextFormat::simple(font_id.clone(), Color32::LIGHT_GRAY),
-                TokenType::Whitespace => TextFormat::simple(font_id.clone(), Color32::TRANSPARENT),
-            ],
-        }
-    }
-
-    pub fn light() -> Self {
-        let font_id = egui::FontId::monospace(10.0);
-        use egui::{Color32, TextFormat};
-        Self {
-            dark_mode: false,
-            #[cfg(not(feature = "syntect"))]
-            formats: enum_map::enum_map![
-                TokenType::Comment => TextFormat::simple(font_id.clone(), Color32::GRAY),
-                TokenType::Keyword => TextFormat::simple(font_id.clone(), Color32::from_rgb(235, 0, 0)),
-                TokenType::Literal => TextFormat::simple(font_id.clone(), Color32::from_rgb(153, 134, 255)),
-                TokenType::StringLiteral => TextFormat::simple(font_id.clone(), Color32::from_rgb(37, 203, 105)),
-                TokenType::Punctuation => TextFormat::simple(font_id.clone(), Color32::DARK_GRAY),
-                TokenType::Whitespace => TextFormat::simple(font_id.clone(), Color32::TRANSPARENT),
-            ],
-        }
-    }
-
-    pub fn ui(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_top(|ui| {
-            let selected_id = egui::Id::null();
-            let mut selected_tt: TokenType =
-                ui.data_mut(|d| *d.get_persisted_mut_or(selected_id, TokenType::Comment));
-
-            ui.vertical(|ui| {
-                ui.set_width(150.0);
-                egui::widgets::global_dark_light_mode_buttons(ui);
-
-                ui.add_space(8.0);
-                ui.separator();
-                ui.add_space(8.0);
-
-                ui.scope(|ui| {
-                    for (tt, tt_name) in [
-                        (TokenType::Comment, "// comment"),
-                        (TokenType::Keyword, "keyword"),
-                        (TokenType::Literal, "literal"),
-                        (TokenType::StringLiteral, "\"string literal\""),
-                        (TokenType::Punctuation, "punctuation ;"),
-                        // (TokenType::Whitespace, "whitespace"),
-                    ] {
-                        let format = &mut self.formats[tt];
-                        ui.style_mut().override_font_id = Some(format.font_id.clone());
-                        ui.visuals_mut().override_text_color = Some(format.color);
-                        ui.radio_value(&mut selected_tt, tt, tt_name);
-                    }
-                });
-
-                let reset_value = if self.dark_mode {
-                    CodeTheme::dark()
-                } else {
-                    CodeTheme::light()
-                };
-
-                if ui
-                    .add_enabled(*self != reset_value, egui::Button::new("Reset theme"))
-                    .clicked()
-                {
-                    *self = reset_value;
-                }
-            });
-
-            ui.add_space(16.0);
-
-            ui.data_mut(|d| d.insert_persisted(selected_id, selected_tt));
-
-            egui::Frame::group(ui.style())
-                .inner_margin(egui::Vec2::splat(2.0))
-                .show(ui, |ui| {
-                    // ui.group(|ui| {
-                    ui.style_mut().override_text_style = Some(egui::TextStyle::Small);
-                    ui.spacing_mut().slider_width = 128.0; // Controls color picker size
-                    egui::widgets::color_picker::color_picker_color32(
-                        ui,
-                        &mut self.formats[selected_tt].color,
-                        egui::color_picker::Alpha::Opaque,
-                    );
-                });
-        });
-    }
-}
-
-// ----------------------------------------------------------------------------
-
-#[cfg(feature = "syntect")]
 struct Highlighter {
     ps: syntect::parsing::SyntaxSet,
     ts: syntect::highlighting::ThemeSet,
 }
 
-#[cfg(feature = "syntect")]
 impl Default for Highlighter {
     fn default() -> Self {
         Self {
@@ -313,7 +191,6 @@ impl Default for Highlighter {
     }
 }
 
-#[cfg(feature = "syntect")]
 impl Highlighter {
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
     fn highlight(&self, theme: &CodeTheme, code: &str, lang: &str) -> LayoutJob {
@@ -381,7 +258,6 @@ impl Highlighter {
     }
 }
 
-#[cfg(feature = "syntect")]
 fn as_byte_range(whole: &str, range: &str) -> std::ops::Range<usize> {
     let whole_start = whole.as_ptr() as usize;
     let range_start = range.as_ptr() as usize;
@@ -389,118 +265,4 @@ fn as_byte_range(whole: &str, range: &str) -> std::ops::Range<usize> {
     assert!(range_start + range.len() <= whole_start + whole.len());
     let offset = range_start - whole_start;
     offset..(offset + range.len())
-}
-
-// ----------------------------------------------------------------------------
-
-#[cfg(not(feature = "syntect"))]
-#[derive(Default)]
-struct Highlighter {}
-
-#[cfg(not(feature = "syntect"))]
-impl Highlighter {
-    #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
-    fn highlight(&self, theme: &CodeTheme, mut text: &str, _language: &str) -> LayoutJob {
-        // Extremely simple syntax highlighter for when we compile without syntect
-
-        let mut job = LayoutJob::default();
-
-        while !text.is_empty() {
-            if text.starts_with("//") {
-                let end = text.find('\n').unwrap_or(text.len());
-                job.append(&text[..end], 0.0, theme.formats[TokenType::Comment].clone());
-                text = &text[end..];
-            } else if text.starts_with('"') {
-                let end = text[1..]
-                    .find('"')
-                    .map(|i| i + 2)
-                    .or_else(|| text.find('\n'))
-                    .unwrap_or(text.len());
-                job.append(
-                    &text[..end],
-                    0.0,
-                    theme.formats[TokenType::StringLiteral].clone(),
-                );
-                text = &text[end..];
-            } else if text.starts_with(|c: char| c.is_ascii_alphanumeric()) {
-                let end = text[1..]
-                    .find(|c: char| !c.is_ascii_alphanumeric())
-                    .map_or_else(|| text.len(), |i| i + 1);
-                let word = &text[..end];
-                let tt = if is_keyword(word) {
-                    TokenType::Keyword
-                } else {
-                    TokenType::Literal
-                };
-                job.append(word, 0.0, theme.formats[tt].clone());
-                text = &text[end..];
-            } else if text.starts_with(|c: char| c.is_ascii_whitespace()) {
-                let end = text[1..]
-                    .find(|c: char| !c.is_ascii_whitespace())
-                    .map_or_else(|| text.len(), |i| i + 1);
-                job.append(
-                    &text[..end],
-                    0.0,
-                    theme.formats[TokenType::Whitespace].clone(),
-                );
-                text = &text[end..];
-            } else {
-                let mut it = text.char_indices();
-                it.next();
-                let end = it.next().map_or(text.len(), |(idx, _chr)| idx);
-                job.append(
-                    &text[..end],
-                    0.0,
-                    theme.formats[TokenType::Punctuation].clone(),
-                );
-                text = &text[end..];
-            }
-        }
-
-        job
-    }
-}
-
-#[cfg(not(feature = "syntect"))]
-fn is_keyword(word: &str) -> bool {
-    matches!(
-        word,
-        "as" | "async"
-            | "await"
-            | "break"
-            | "const"
-            | "continue"
-            | "crate"
-            | "dyn"
-            | "else"
-            | "enum"
-            | "extern"
-            | "false"
-            | "fn"
-            | "for"
-            | "if"
-            | "impl"
-            | "in"
-            | "let"
-            | "loop"
-            | "match"
-            | "mod"
-            | "move"
-            | "mut"
-            | "pub"
-            | "ref"
-            | "return"
-            | "self"
-            | "Self"
-            | "static"
-            | "struct"
-            | "super"
-            | "trait"
-            | "true"
-            | "type"
-            | "unsafe"
-            | "use"
-            | "where"
-            | "while"
-    )
 }
