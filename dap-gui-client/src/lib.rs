@@ -90,7 +90,7 @@ where
                                 self.send(serde_json::json!({
                                     "command": "launch",
                                     "arguments": {
-                                        "program": "/home/simon/dev/dap-gui/test.py",
+                                        "program": concat!(env!("HOME"), "/dev/dap-gui/test.py"),
                                     }
                                 }))
                                 .unwrap();
