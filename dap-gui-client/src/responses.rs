@@ -16,7 +16,7 @@ pub struct Response {
 pub enum ResponseBody {
     Initialize(Capabilities),
     SetFunctionBreakpoints(SetFunctionBreakpointsResponse),
-    Continue,
+    Continue(ContinueResponse),
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,4 +68,11 @@ pub struct Capabilities {
 #[serde(rename_all = "camelCase")]
 pub struct SetFunctionBreakpointsResponse {
     pub breakpoints: Vec<types::Breakpoint>,
+}
+
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContinueResponse {
+    pub all_threads_continued: Option<bool>,
 }

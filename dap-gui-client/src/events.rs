@@ -26,9 +26,19 @@ pub struct OutputEventBody {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum StoppedReason {
+    #[serde(rename = "step")]
+    Step,
+    #[serde(rename = "function breakpoint")]
+    FunctionBreakpoint,
+    Other(String),
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StoppedEventBody {
-    pub reason: String,
+    pub reason: StoppedReason,
     pub thread_id: i64,
 }
 
@@ -42,4 +52,8 @@ pub struct ProcessEventBody {}
 pub struct ExitedEventBody {}
 
 #[derive(Debug, Deserialize)]
-pub struct ContinuedEventBody {}
+#[serde(rename_all = "camelCase")]
+pub struct ContinuedEventBody {
+    pub thread_id: i64,
+    pub all_threads_continued: Option<bool>,
+}

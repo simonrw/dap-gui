@@ -89,8 +89,8 @@ impl MyApp {
                             let mut state = self.state.lock().unwrap();
                             state.sender.send_configuration_done();
                         }
-                        Continue => {
-                            log::debug!("received continue response");
+                        Continue(body) => {
+                            log::debug!("received continue response {body:?}");
                             self.state.lock().unwrap().status = AppStatus::Started;
                         }
                     }
@@ -118,8 +118,8 @@ impl MyApp {
                     state.current_thread_id = Some(body.thread_id);
                     state.status = AppStatus::Paused;
                 }
-                Continued(_body) => {
-                    log::debug!("received continued event");
+                Continued(body) => {
+                    log::debug!("received continued event {body:?}");
                 }
                 Thread(_thread_info) => {
                     log::debug!("received thread event");
