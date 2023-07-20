@@ -1,12 +1,13 @@
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 
 use serde::Deserialize;
+use std::sync::mpsc::Sender;
 // TODO: use internal error type
 use anyhow::{Context, Result};
 use serde::Serialize;
 
-mod events;
-mod responses;
+pub mod events;
+pub mod responses;
 mod types;
 
 #[derive(Serialize)]
@@ -28,27 +29,42 @@ pub enum Message {
     Response(responses::Response),
 }
 
-pub struct Client2<R, W>
+pub struct Writer<W>
 where
-    R: Read,
     W: Write,
 {
-    input_buffer: BufReader<R>,
     output_buffer: BufWriter<W>,
     sequence_number: i64,
 }
 
-impl<R, W> Client2<R, W>
+impl<W> Writer<W>
 where
-    R: Read,
     W: Write,
 {
-    pub fn new(input: BufReader<R>, output: BufWriter<W>) -> Self {
+    pub fn new(output_buffer: BufWriter<W>) -> Self {
         Self {
-            input_buffer: input,
-            output_buffer: output,
+            output_buffer,
             sequence_number: 0,
         }
+    }
+
+    fn send(&mut self, body: serde_json::Value) -> Result<()> {
+        self.sequence_number += 1;
+        let message = BaseMessage {
+            seq: self.sequence_number,
+            r#type: "request".to_string(),
+            body,
+        };
+        let resp_json = serde_json::to_string(&message).unwrap();
+        write!(
+            self.output_buffer,
+            "Content-Length: {}\r\n\r\n{}",
+            resp_json.len(),
+            resp_json
+        )
+        .unwrap();
+        self.output_buffer.flush().unwrap();
+        Ok(())
     }
 
     pub fn send_initialize(&mut self) {
@@ -62,46 +78,82 @@ where
         .unwrap();
     }
 
-    pub fn receive(&mut self) {
-        match self.poll_message() {
-            Ok(Some(msg)) => match msg {
-                Message::Event(m) => match m {
-                    events::Event::Initialized => {
-                        eprintln!("server ready to receive breakpoint commands");
-                        self.send(serde_json::json!({
-                            "command": "setFunctionBreakpoints",
-                            "arguments": {
-                                "breakpoints": [{
-                                    "name": "main",
-                                }],
-                            },
-                        }))
-                        .unwrap();
-                    }
-                    events::Event::Output(o) => {
-                        eprintln!("{}", o.output);
-                    }
-                },
-                Message::Response(r) => {
-                    if let Some(body) = r.body {
-                        match body {
-                            responses::ResponseBody::Initialize(_init) => {
-                                // TODO: send launch event
-                                self.send(serde_json::json!({
-                                    "command": "launch",
-                                    "arguments": {
-                                        "program": concat!(env!("HOME"), "/dev/dap-gui/test.py"),
-                                    }
-                                }))
-                                .unwrap();
-                            }
-                            responses::ResponseBody::SetFunctionBreakpoints(bps) => {
-                                dbg!(bps);
-                            }
-                        }
-                    }
-                }
+    pub fn send_set_function_breakpoints(&mut self) {
+        self.send(serde_json::json!({
+            "command": "setFunctionBreakpoints",
+            "arguments": {
+                "breakpoints": [{
+                    "name": "main",
+                }],
             },
+        }))
+        .unwrap();
+    }
+
+    pub fn send_launch(&mut self) {
+        self.send(serde_json::json!({
+            "command": "launch",
+            "arguments": {
+                "program": concat!(env!("HOME"), "/dev/dap-gui/test.py"),
+            }
+        }))
+        .unwrap();
+    }
+}
+
+pub struct Reader<R>
+where
+    R: Read,
+{
+    input_buffer: BufReader<R>,
+    dest: Sender<Message>,
+}
+
+impl<R> Reader<R>
+where
+    R: Read,
+{
+    pub fn new(input: BufReader<R>, dest: Sender<Message>) -> Self {
+        Self {
+            input_buffer: input,
+            dest,
+        }
+    }
+
+    pub fn poll_loop(&mut self) {
+        loop {
+            self.receive();
+        }
+    }
+
+    fn receive(&mut self) {
+        match self.poll_message() {
+            Ok(Some(msg)) => {
+                let _ = self.dest.send(msg);
+            }
+            // match msg {
+            // Message::Event(m) => match m {
+            //     events::Event::Initialized => {
+            //         eprintln!("server ready to receive breakpoint commands");
+            //         self.send_set_function_breakpoints();
+            //     }
+            //     events::Event::Output(o) => {
+            //         eprintln!("{}", o.output);
+            //     }
+            // },
+            // Message::Response(r) => {
+            //     if let Some(body) = r.body {
+            //         match body {
+            //             responses::ResponseBody::Initialize(_init) => {
+            //                 self.send_launch();
+            //             }
+            //             responses::ResponseBody::SetFunctionBreakpoints(bps) => {
+            //                 dbg!(bps);
+            //             }
+            //         }
+            //     }
+            // }
+            // },
             Ok(None) => (),
             Err(e) => todo!("{}", e),
         }
@@ -160,25 +212,6 @@ where
                 }
             }
         }
-    }
-
-    pub fn send(&mut self, body: serde_json::Value) -> Result<()> {
-        self.sequence_number += 1;
-        let message = BaseMessage {
-            seq: self.sequence_number,
-            r#type: "request".to_string(),
-            body,
-        };
-        let resp_json = serde_json::to_string(&message).unwrap();
-        write!(
-            self.output_buffer,
-            "Content-Length: {}\r\n\r\n{}",
-            resp_json.len(),
-            resp_json
-        )
-        .unwrap();
-        self.output_buffer.flush().unwrap();
-        Ok(())
     }
 }
 

@@ -10,5 +10,6 @@ anyhow = "1.0.71"
 eframe = "0.22.0"
 enum-map = "2.6.0"
 syntect = "5.0.0"
+dap-gui-client = { path = "../dap-gui-client" }
 
 [features]
