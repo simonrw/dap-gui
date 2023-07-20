@@ -5,8 +5,12 @@ use serde::Deserialize;
 pub enum Event {
     Initialized,
     Output(OutputEventBody),
-    Process,
+    Process(ProcessEventBody),
     Stopped(StoppedEventBody),
+    Continued(ContinuedEventBody),
+    Thread(ThreadEventBody),
+    Exited(ExitedEventBody),
+    Terminated,
 }
 
 #[derive(Debug, Deserialize)]
@@ -22,6 +26,20 @@ pub struct OutputEventBody {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StoppedEventBody {
     pub reason: String,
+    pub thread_id: i64,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct ThreadEventBody {}
+
+#[derive(Debug, Deserialize)]
+pub struct ProcessEventBody {}
+
+#[derive(Debug, Deserialize)]
+pub struct ExitedEventBody {}
+
+#[derive(Debug, Deserialize)]
+pub struct ContinuedEventBody {}

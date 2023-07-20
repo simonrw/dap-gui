@@ -1,6 +1,4 @@
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
-use std::time::Duration;
-use std::thread;
 
 use serde::Deserialize;
 use std::sync::mpsc::Sender;
@@ -59,6 +57,7 @@ where
             body,
         };
         let resp_json = serde_json::to_string(&message).unwrap();
+        log::trace!("sending message {resp_json}");
         write!(
             self.output_buffer,
             "Content-Length: {}\r\n\r\n{}",
@@ -89,12 +88,12 @@ where
         .unwrap();
     }
 
-    pub fn send_continue(&mut self) {
+    pub fn send_continue(&mut self, thread_id: i64) {
         log::debug!("sending continue");
         self.send(serde_json::json!({
             "command": "continue",
             "arguments": {
-                "threadId": 0,  // TODO
+                "threadId": thread_id,  // TODO
                 "singleThread": false,
             },
         }))

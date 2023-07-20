@@ -16,6 +16,7 @@ pub struct Response {
 pub enum ResponseBody {
     Initialize(Capabilities),
     SetFunctionBreakpoints(SetFunctionBreakpointsResponse),
+    Continue,
 }
 
 #[derive(Debug, Deserialize)]

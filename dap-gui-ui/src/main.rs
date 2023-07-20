@@ -1,6 +1,6 @@
 use anyhow::Result;
 use eframe::{
-    egui::{self, Style, TextStyle, Visuals},
+    egui::{self, Style, Visuals},
     epaint::FontId,
 };
 use std::{
@@ -12,7 +12,7 @@ use std::{
 
 mod syntax_highlighting;
 
-use dap_gui_client::{events, responses, Message, Reader, Writer};
+use dap_gui_client::{responses, Message, Reader, Writer};
 
 enum AppStatus {
     Starting,
@@ -24,6 +24,7 @@ enum AppStatus {
 struct MyAppState {
     sender: Writer<TcpStream>,
     status: AppStatus,
+    current_thread_id: Option<i64>,
 }
 
 impl MyAppState {
@@ -31,6 +32,7 @@ impl MyAppState {
         Self {
             sender,
             status: AppStatus::Starting,
+            current_thread_id: None,
         }
     }
 }
@@ -73,17 +75,23 @@ impl MyApp {
         use dap_gui_client::events::Event::*;
         match message {
             Message::Response(r) => {
+                use responses::ResponseBody::*;
+
                 if let Some(body) = r.body {
                     match body {
-                        responses::ResponseBody::Initialize(_init) => {
+                        Initialize(_init) => {
                             log::debug!("received initialize response");
                             let mut state = self.state.lock().unwrap();
                             state.status = AppStatus::Started;
                         }
-                        responses::ResponseBody::SetFunctionBreakpoints(_bps) => {
+                        SetFunctionBreakpoints(_bps) => {
                             log::debug!("received set function breakpoints response");
                             let mut state = self.state.lock().unwrap();
                             state.sender.send_configuration_done();
+                        }
+                        Continue => {
+                            log::debug!("received continue response");
+                            self.state.lock().unwrap().status = AppStatus::Started;
                         }
                     }
                 }
@@ -101,12 +109,28 @@ impl MyApp {
                 Output(o) => {
                     log::debug!("received output event: {}", o.output);
                 }
-                Process => {
+                Process(_body) => {
                     log::debug!("received process event");
                 }
-                Stopped(_body) => {
-                    log::debug!("received stopped event");
-                    self.state.lock().unwrap().status = AppStatus::Paused;
+                Stopped(body) => {
+                    log::debug!("received stopped event, body: {:?}", body);
+                    let mut state = self.state.lock().unwrap();
+                    state.current_thread_id = Some(body.thread_id);
+                    state.status = AppStatus::Paused;
+                }
+                Continued(_body) => {
+                    log::debug!("received continued event");
+                }
+                Thread(_thread_info) => {
+                    log::debug!("received thread event");
+                }
+                Exited(_body) => {
+                    log::debug!("received exited event");
+                    self.state.lock().unwrap().status = AppStatus::Finished;
+                }
+                Terminated => {
+                    log::debug!("received terminated event");
+                    self.state.lock().unwrap().status = AppStatus::Finished;
                 }
             },
         }
@@ -133,7 +157,9 @@ impl eframe::App for MyApp {
                         // TODO: move this into response handler
                         // state.status = AppStatus::Started;
 
-                        state.sender.send_continue();
+                        if let Some(thread_id) = state.current_thread_id {
+                            state.sender.send_continue(thread_id);
+                        };
                     }
                 }
                 AppStatus::Starting => {
@@ -145,7 +171,7 @@ impl eframe::App for MyApp {
             }
         });
 
-        return;
+        /*
         egui::SidePanel::right("right_panel")
             .resizable(false)
             .show(ctx, |ui| {
@@ -171,6 +197,7 @@ impl eframe::App for MyApp {
                 syntax_highlighting::code_view_ui(ui, example_code);
             });
         });
+        */
     }
 }
 
