@@ -1,5 +1,5 @@
 use anyhow::Result;
-use eframe::egui;
+use eframe::egui::{self, Style, Visuals};
 use std::{
     io::{BufReader, BufWriter},
     net::TcpStream,
@@ -120,6 +120,13 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "DAP GUI",
         options,
-        Box::new(|cc| Box::new(MyApp::new(cc.egui_ctx.clone()))),
+        Box::new(|cc| {
+            let style = Style {
+                visuals: Visuals::dark(),
+                ..Style::default()
+            };
+            cc.egui_ctx.set_style(style);
+            Box::new(MyApp::new(cc.egui_ctx.clone()))
+        }),
     )
 }
