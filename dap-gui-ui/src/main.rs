@@ -1,5 +1,8 @@
 use anyhow::Result;
-use eframe::egui::{self, Style, Visuals};
+use eframe::{
+    egui::{self, Style, TextStyle, Visuals},
+    epaint::FontId,
+};
 use std::{
     io::{BufReader, BufWriter},
     net::TcpStream,
@@ -11,8 +14,25 @@ mod syntax_highlighting;
 
 use dap_gui_client::{events, responses, Message, Reader, Writer};
 
+enum AppStatus {
+    Starting,
+    Started,
+    Paused,
+    Finished,
+}
+
 struct MyAppState {
     sender: Writer<TcpStream>,
+    status: AppStatus,
+}
+
+impl MyAppState {
+    pub fn new(sender: Writer<TcpStream>) -> Self {
+        Self {
+            sender,
+            status: AppStatus::Starting,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -34,7 +54,7 @@ impl MyApp {
         sender.send_initialize();
 
         let app = Self {
-            state: Arc::new(Mutex::new(MyAppState { sender })),
+            state: Arc::new(Mutex::new(MyAppState::new(sender))),
             context: ctx,
         };
         thread::spawn(move || {
@@ -50,10 +70,27 @@ impl MyApp {
         app
     }
     fn handle_message(&mut self, message: Message) {
+        use dap_gui_client::events::Event::*;
         match message {
+            Message::Response(r) => {
+                if let Some(body) = r.body {
+                    match body {
+                        responses::ResponseBody::Initialize(_init) => {
+                            log::debug!("received initialize response");
+                            let mut state = self.state.lock().unwrap();
+                            state.status = AppStatus::Started;
+                        }
+                        responses::ResponseBody::SetFunctionBreakpoints(_bps) => {
+                            log::debug!("received set function breakpoints response");
+                            let mut state = self.state.lock().unwrap();
+                            state.sender.send_configuration_done();
+                        }
+                    }
+                }
+            }
             Message::Event(m) => match m {
-                events::Event::Initialized => {
-                    eprintln!("server ready to receive breakpoint commands");
+                Initialized => {
+                    log::debug!("received initialize event");
 
                     self.state
                         .lock()
@@ -61,22 +98,17 @@ impl MyApp {
                         .sender
                         .send_set_function_breakpoints();
                 }
-                events::Event::Output(o) => {
-                    eprintln!("{}", o.output);
+                Output(o) => {
+                    log::debug!("received output event: {}", o.output);
+                }
+                Process => {
+                    log::debug!("received process event");
+                }
+                Stopped(_body) => {
+                    log::debug!("received stopped event");
+                    self.state.lock().unwrap().status = AppStatus::Paused;
                 }
             },
-            Message::Response(r) => {
-                if let Some(body) = r.body {
-                    match body {
-                        responses::ResponseBody::Initialize(_init) => {
-                            self.state.lock().unwrap().sender.send_launch();
-                        }
-                        responses::ResponseBody::SetFunctionBreakpoints(bps) => {
-                            dbg!(bps);
-                        }
-                    }
-                }
-            }
         }
         self.context.request_repaint();
     }
@@ -84,6 +116,36 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let mut state = self.state.lock().unwrap();
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.label("dap-gui");
+
+            match state.status {
+                AppStatus::Started => {
+                    ui.horizontal(|ui| {
+                        if ui.button("Launch").clicked() {
+                            state.sender.send_launch();
+                        }
+                    });
+                }
+                AppStatus::Paused => {
+                    if ui.button("Continue").clicked() {
+                        // TODO: move this into response handler
+                        // state.status = AppStatus::Started;
+
+                        state.sender.send_continue();
+                    }
+                }
+                AppStatus::Starting => {
+                    ui.label("STARTING");
+                }
+                AppStatus::Finished => {
+                    ui.label("FINISHED");
+                }
+            }
+        });
+
+        return;
         egui::SidePanel::right("right_panel")
             .resizable(false)
             .show(ctx, |ui| {
@@ -113,6 +175,7 @@ impl eframe::App for MyApp {
 }
 
 fn main() -> Result<(), eframe::Error> {
+    env_logger::init();
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(1024.0, 768.0)),
         ..Default::default()
@@ -123,6 +186,8 @@ fn main() -> Result<(), eframe::Error> {
         Box::new(|cc| {
             let style = Style {
                 visuals: Visuals::dark(),
+                // temporarily increase font size
+                override_font_id: Some(FontId::monospace(24.0)),
                 ..Style::default()
             };
             cc.egui_ctx.set_style(style);

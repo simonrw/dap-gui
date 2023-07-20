@@ -5,6 +5,8 @@ use serde::Deserialize;
 pub enum Event {
     Initialized,
     Output(OutputEventBody),
+    Process,
+    Stopped(StoppedEventBody),
 }
 
 #[derive(Debug, Deserialize)]
@@ -17,4 +19,9 @@ pub struct OutputEventBody {
     pub line: Option<i64>,
     pub column: Option<i64>,
     // pub data: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StoppedEventBody {
+    pub reason: String,
 }

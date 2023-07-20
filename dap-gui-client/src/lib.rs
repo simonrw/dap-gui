@@ -1,4 +1,6 @@
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
+use std::time::Duration;
+use std::thread;
 
 use serde::Deserialize;
 use std::sync::mpsc::Sender;
@@ -49,6 +51,7 @@ where
     }
 
     fn send(&mut self, body: serde_json::Value) -> Result<()> {
+        // thread::sleep(Duration::from_secs(1));
         self.sequence_number += 1;
         let message = BaseMessage {
             seq: self.sequence_number,
@@ -66,8 +69,16 @@ where
         self.output_buffer.flush().unwrap();
         Ok(())
     }
+    pub fn send_configuration_done(&mut self) {
+        log::debug!("sending configuration done");
+        self.send(serde_json::json!({
+            "command": "configurationDone",
+        }))
+        .unwrap();
+    }
 
     pub fn send_initialize(&mut self) {
+        log::debug!("sending initialize");
         self.send(serde_json::json!({
             "command": "initialize",
             "arguments": {
@@ -78,7 +89,20 @@ where
         .unwrap();
     }
 
+    pub fn send_continue(&mut self) {
+        log::debug!("sending continue");
+        self.send(serde_json::json!({
+            "command": "continue",
+            "arguments": {
+                "threadId": 0,  // TODO
+                "singleThread": false,
+            },
+        }))
+        .unwrap();
+    }
+
     pub fn send_set_function_breakpoints(&mut self) {
+        log::debug!("sending set function breakpoints");
         self.send(serde_json::json!({
             "command": "setFunctionBreakpoints",
             "arguments": {
@@ -91,6 +115,7 @@ where
     }
 
     pub fn send_launch(&mut self) {
+        log::debug!("sending launch");
         self.send(serde_json::json!({
             "command": "launch",
             "arguments": {
@@ -155,7 +180,7 @@ where
             // }
             // },
             Ok(None) => (),
-            Err(e) => todo!("{}", e),
+            Err(e) => log::warn!("error parsing response: {}", e),
         }
     }
 
@@ -201,8 +226,7 @@ where
                                 .map_err(|e| anyhow::anyhow!("failed to read: {:?}", e))?;
                             let content =
                                 std::str::from_utf8(content.as_slice()).context("invalid utf8")?;
-                            dbg!(&content);
-                            let message = serde_json::from_str(content).context("invalid JSON")?;
+                            let message = serde_json::from_str(content).with_context(|| format!("could not construct message from: {content:?}"))?;
                             return Ok(Some(message));
                         }
                     }
