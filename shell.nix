@@ -12,9 +12,10 @@ let
 
   apple-deps = apple-frameworks ++ apple-libs;
 
-  debugpy-server = python3.withPackages (ps: with ps; [
+  custom-python = python3.withPackages (ps: with ps; [
     debugpy
     black
+    scapy
   ]);
 
 in
@@ -25,7 +26,7 @@ mkShell {
     clippy
     rustfmt
     rust-analyzer
-    debugpy-server
+    custom-python
   ] ++ lib.optionals stdenv.isDarwin apple-deps ++ lib.optionals stdenv.isLinux [
     gdb
   ];
