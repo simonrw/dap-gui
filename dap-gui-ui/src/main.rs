@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use eframe::{
     egui::{self, Style, Visuals},
     epaint::FontId,
@@ -44,8 +44,9 @@ struct MyApp {
 }
 
 impl MyApp {
-    fn new(ctx: egui::Context) -> MyApp {
-        let input_stream = TcpStream::connect("127.0.0.1:5678").unwrap();
+    fn new(ctx: egui::Context) -> Result<MyApp> {
+        let input_stream =
+            TcpStream::connect("127.0.0.1:5678").context("connecting to DAP server")?;
         let output_stream = input_stream.try_clone().unwrap();
 
         let (tx, rx) = mpsc::channel();
@@ -69,7 +70,7 @@ impl MyApp {
                 background_app.handle_message(msg);
             }
         });
-        app
+        Ok(app)
     }
     fn handle_message(&mut self, message: Message) {
         use dap_gui_client::events::Event::*;
@@ -218,7 +219,7 @@ fn main() -> Result<(), eframe::Error> {
                 ..Style::default()
             };
             cc.egui_ctx.set_style(style);
-            Box::new(MyApp::new(cc.egui_ctx.clone()))
+            Box::new(MyApp::new(cc.egui_ctx.clone()).unwrap())
         }),
     )
 }
