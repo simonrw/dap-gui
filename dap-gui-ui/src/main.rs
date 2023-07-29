@@ -14,6 +14,7 @@ mod syntax_highlighting;
 
 use dap_gui_client::{responses, Message, Reader, Writer};
 
+#[derive(Debug, Clone, Copy)]
 enum AppStatus {
     Starting,
     Started,
@@ -34,6 +35,11 @@ impl MyAppState {
             status: AppStatus::Starting,
             current_thread_id: None,
         }
+    }
+
+    fn set_state(&mut self, state: AppStatus) {
+        log::debug!("changing state to {:?}", state);
+        self.status = state;
     }
 }
 
@@ -72,6 +78,11 @@ impl MyApp {
         });
         Ok(app)
     }
+
+    fn set_state(&mut self, state: AppStatus) {
+        self.state.lock().unwrap().set_state(state);
+    }
+
     fn handle_message(&mut self, message: Message) {
         use dap_gui_client::events::Event::*;
         match message {
@@ -82,8 +93,7 @@ impl MyApp {
                     match body {
                         Initialize(_init) => {
                             log::debug!("received initialize response");
-                            let mut state = self.state.lock().unwrap();
-                            state.status = AppStatus::Started;
+                            self.set_state(AppStatus::Started)
                         }
                         SetFunctionBreakpoints(_bps) => {
                             log::debug!("received set function breakpoints response");
@@ -92,7 +102,7 @@ impl MyApp {
                         }
                         Continue(body) => {
                             log::debug!("received continue response {body:?}");
-                            self.state.lock().unwrap().status = AppStatus::Started;
+                            self.set_state(AppStatus::Started);
                         }
                     }
                 }
@@ -115,9 +125,11 @@ impl MyApp {
                 }
                 Stopped(body) => {
                     log::debug!("received stopped event, body: {:?}", body);
-                    let mut state = self.state.lock().unwrap();
-                    state.current_thread_id = Some(body.thread_id);
-                    state.status = AppStatus::Paused;
+                    {
+                        let mut state = self.state.lock().unwrap();
+                        state.current_thread_id = Some(body.thread_id);
+                    }
+                    self.set_state(AppStatus::Paused);
                 }
                 Continued(body) => {
                     log::debug!("received continued event {body:?}");
@@ -127,11 +139,11 @@ impl MyApp {
                 }
                 Exited(_body) => {
                     log::debug!("received exited event");
-                    self.state.lock().unwrap().status = AppStatus::Finished;
+                    self.set_state(AppStatus::Finished);
                 }
                 Terminated => {
                     log::debug!("received terminated event");
-                    self.state.lock().unwrap().status = AppStatus::Finished;
+                    self.set_state(AppStatus::Finished);
                 }
             },
         }
