@@ -8,7 +8,7 @@ use serde::Serialize;
 
 pub mod events;
 pub mod responses;
-mod types;
+pub mod types;
 
 #[derive(Serialize)]
 struct BaseMessage<Body>
@@ -68,6 +68,25 @@ where
         self.output_buffer.flush().unwrap();
         Ok(())
     }
+
+    pub fn send_stacktrace_request(&mut self, thread_id: u64) {
+        log::debug!("sending stacktrace request");
+        self.send(serde_json::json!({
+            "command": "stackTrace",
+            "arguments": {
+                "threadId": thread_id,
+            },
+        })).unwrap();
+    }
+
+    pub fn send_threads_request(&mut self) {
+        log::debug!("sending configuration done");
+        self.send(serde_json::json!({
+            "command": "threads",
+        }))
+        .unwrap();
+    }
+
     pub fn send_configuration_done(&mut self) {
         log::debug!("sending configuration done");
         self.send(serde_json::json!({

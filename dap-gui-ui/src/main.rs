@@ -4,6 +4,7 @@ use eframe::{
     epaint::FontId,
 };
 use std::{
+    collections::HashMap,
     io::{BufReader, BufWriter},
     net::TcpStream,
     sync::{mpsc, Arc, Mutex},
@@ -12,13 +13,19 @@ use std::{
 
 mod syntax_highlighting;
 
-use dap_gui_client::{responses, Message, Reader, Writer};
+use dap_gui_client::{responses, types, Message, Reader, Writer};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone)]
+struct PausedState {
+    threads: Vec<types::Thread>,
+    stack_frames: HashMap<u64, types::StackFrame>,
+}
+
+#[derive(Debug, Clone)]
 enum AppStatus {
     Starting,
     Started,
-    Paused,
+    Paused(PausedState),
     Finished,
 }
 
@@ -104,6 +111,42 @@ impl MyApp {
                             log::debug!("received continue response {body:?}");
                             self.set_state(AppStatus::Started);
                         }
+                        Threads(body) => {
+                            log::debug!("received threads response {body:?}");
+                            let mut state = self.state.lock().unwrap();
+                            match state.status {
+                                AppStatus::Paused(PausedState {
+                                    ref mut threads, ..
+                                }) => {
+                                    let mut thread_ids = Vec::new();
+                                    for thread in body.threads {
+                                        thread_ids.push(thread.id);
+                                        threads.push(thread);
+                                    }
+
+                                    for thread_id in thread_ids {
+                                        state.sender.send_stacktrace_request(thread_id);
+                                    }
+                                }
+                                _ => unreachable!("invalid state"),
+                            }
+                        }
+                        StackTrace(body) => {
+                            log::debug!("received threads response {body:?}");
+                            let mut state = self.state.lock().unwrap();
+                            match state.status {
+                                AppStatus::Paused(PausedState {
+                                    ref mut stack_frames,
+                                    ..
+                                }) => {
+                                    // TODO: associate with request to get thread id
+                                    for frame in body.stack_frames {
+                                        // 
+                                    }
+                                }
+                                _ => unreachable!("invalid state"),
+                            }
+                        }
                     }
                 }
             }
@@ -129,7 +172,10 @@ impl MyApp {
                         let mut state = self.state.lock().unwrap();
                         state.current_thread_id = Some(body.thread_id);
                     }
-                    self.set_state(AppStatus::Paused);
+
+                    self.state.lock().unwrap().sender.send_threads_request();
+
+                    self.set_state(AppStatus::Paused(Default::default()));
                 }
                 Continued(body) => {
                     log::debug!("received continued event {body:?}");
@@ -165,7 +211,8 @@ impl eframe::App for MyApp {
                         }
                     });
                 }
-                AppStatus::Paused => {
+                AppStatus::Paused(ref paused_state) => {
+                    log::debug!("app state: {paused_state:?}");
                     if ui.button("Continue").clicked() {
                         // TODO: move this into response handler
                         // state.status = AppStatus::Started;

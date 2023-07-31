@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use crate::types;
+use crate::types::{self, Thread, StackFrame};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,6 +17,8 @@ pub enum ResponseBody {
     Initialize(Capabilities),
     SetFunctionBreakpoints(SetFunctionBreakpointsResponse),
     Continue(ContinueResponse),
+    Threads(ThreadsResponse),
+    StackTrace(StackTraceResponse),
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,4 +77,18 @@ pub struct SetFunctionBreakpointsResponse {
 #[serde(rename_all = "camelCase")]
 pub struct ContinueResponse {
     pub all_threads_continued: Option<bool>,
+}
+
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadsResponse {
+    pub threads: Vec<Thread>,
+}
+
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StackTraceResponse {
+    pub stack_frames: Vec<StackFrame>,
 }
