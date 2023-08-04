@@ -1,7 +1,7 @@
+use std::collections::HashMap;
 use std::io::{BufReader, BufWriter};
 use std::net::TcpStream;
-use std::sync::{Arc, Mutex, mpsc};
-use std::collections::HashMap;
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
 use dap_gui_client::{Reader, Writer};

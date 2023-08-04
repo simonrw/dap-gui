@@ -21,9 +21,7 @@ impl eframe::App for Content {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.space_previously_pressed {
-
                 ui.heading("Command mode: press space to exit");
-
 
                 if ctx.input(|i| i.key_released(Key::Space)) {
                     // cancel command mode

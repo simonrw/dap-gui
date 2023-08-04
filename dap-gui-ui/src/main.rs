@@ -14,7 +14,7 @@ use std::{
 mod syntax_highlighting;
 
 use dap_gui_client::{
-    requests::{RequestBody, self},
+    requests::{self, RequestBody},
     responses, types, Message, Reader, Reply, Writer,
 };
 

@@ -7,7 +7,7 @@ use std::sync::{mpsc::Sender, Arc, Mutex};
 use anyhow::{Context, Result};
 
 use crate::requests::{
-    Breakpoint, Continue, Initialize, RequestBody, SetFunctionBreakpoints, StackTrace, Launch,
+    Breakpoint, Continue, Initialize, Launch, RequestBody, SetFunctionBreakpoints, StackTrace,
 };
 
 pub mod events;

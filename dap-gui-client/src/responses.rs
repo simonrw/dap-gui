@@ -1,5 +1,5 @@
+use crate::types::{self, StackFrame, Thread};
 use serde::Deserialize;
-use crate::types::{self, Thread, StackFrame};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,13 +65,11 @@ pub struct Capabilities {
     pub supports_single_thread_execution_requests: Option<bool>,
 }
 
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetFunctionBreakpointsResponse {
     pub breakpoints: Vec<types::Breakpoint>,
 }
-
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -79,13 +77,11 @@ pub struct ContinueResponse {
     pub all_threads_continued: Option<bool>,
 }
 
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadsResponse {
     pub threads: Vec<Thread>,
 }
-
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

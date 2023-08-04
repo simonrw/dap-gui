@@ -32,4 +32,3 @@ pub struct StackFrame {
     pub id: u64,
     pub name: String,
 }
-

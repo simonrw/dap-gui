@@ -21,13 +21,11 @@ pub enum RequestBody {
     Launch(Launch),
 }
 
-
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct StackTrace {
     pub thread_id: i64,
 }
-
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -36,14 +34,12 @@ pub struct Initialize {
     pub adapter_id: String,
 }
 
-
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Continue {
     pub thread_id: i64,
     pub single_thread: bool,
 }
-
 
 #[derive(Debug, Serialize, Clone)]
 pub struct Breakpoint {
