@@ -221,9 +221,6 @@ impl eframe::App for MyApp {
                 AppStatus::Paused(ref paused_state) => {
                     log::debug!("app state: {paused_state:?}");
                     if ui.button("Continue").clicked() {
-                        // TODO: move this into response handler
-                        // state.status = AppStatus::Started;
-
                         if let Some(thread_id) = state.current_thread_id {
                             state.sender.send_continue(thread_id);
                         };

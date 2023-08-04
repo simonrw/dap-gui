@@ -177,29 +177,6 @@ where
                     }
                 }
             },
-            // match msg {
-            // Message::Event(m) => match m {
-            //     events::Event::Initialized => {
-            //         eprintln!("server ready to receive breakpoint commands");
-            //         self.send_set_function_breakpoints();
-            //     }
-            //     events::Event::Output(o) => {
-            //         eprintln!("{}", o.output);
-            //     }
-            // },
-            // Message::Response(r) => {
-            //     if let Some(body) = r.body {
-            //         match body {
-            //             responses::ResponseBody::Initialize(_init) => {
-            //                 self.send_launch();
-            //             }
-            //             responses::ResponseBody::SetFunctionBreakpoints(bps) => {
-            //                 dbg!(bps);
-            //             }
-            //         }
-            //     }
-            // }
-            // },
             Ok(None) => (),
             Err(e) => log::warn!("error parsing response: {}", e),
         }
