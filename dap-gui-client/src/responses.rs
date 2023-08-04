@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use crate::types::{self, Thread, StackFrame};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Response {
     #[serde(rename = "request_seq")]
@@ -11,7 +11,7 @@ pub struct Response {
     pub body: Option<ResponseBody>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "command", content = "body", rename_all = "camelCase")]
 pub enum ResponseBody {
     Initialize(Capabilities),
@@ -21,7 +21,7 @@ pub enum ResponseBody {
     StackTrace(StackTraceResponse),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Capabilities {
     pub supports_configuration_done_request: Option<bool>,
@@ -66,28 +66,28 @@ pub struct Capabilities {
 }
 
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetFunctionBreakpointsResponse {
     pub breakpoints: Vec<types::Breakpoint>,
 }
 
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContinueResponse {
     pub all_threads_continued: Option<bool>,
 }
 
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadsResponse {
     pub threads: Vec<Thread>,
 }
 
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StackTraceResponse {
     pub stack_frames: Vec<StackFrame>,

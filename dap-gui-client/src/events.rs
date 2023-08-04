@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "event", content = "body", rename_all = "camelCase")]
 pub enum Event {
     Initialized,
@@ -13,7 +13,7 @@ pub enum Event {
     Terminated,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct OutputEventBody {
     // pub category: Option<OutputEventCategory>,
     pub output: String,
@@ -25,7 +25,7 @@ pub struct OutputEventBody {
     // pub data: Option<Value>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum StoppedReason {
     #[serde(rename = "step")]
@@ -35,23 +35,23 @@ pub enum StoppedReason {
     Other(String),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StoppedEventBody {
     pub reason: StoppedReason,
     pub thread_id: i64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ThreadEventBody {}
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ProcessEventBody {}
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ExitedEventBody {}
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContinuedEventBody {
     pub thread_id: i64,

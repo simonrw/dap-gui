@@ -3,6 +3,7 @@ use eframe::{
     egui::{self, Style, Visuals},
     epaint::FontId,
 };
+use serde::Deserialize;
 use std::{
     collections::HashMap,
     io::{BufReader, BufWriter},
@@ -13,12 +14,12 @@ use std::{
 
 mod syntax_highlighting;
 
-use dap_gui_client::{responses, types, Message, Reader, Writer};
+use dap_gui_client::{responses, types, Message, Reader, Writer, Reply};
 
 #[derive(Default, Debug, Clone)]
 struct PausedState {
     threads: Vec<types::Thread>,
-    stack_frames: HashMap<u64, types::StackFrame>,
+    stack_frames: HashMap<u64, Vec<types::StackFrame>>,
 }
 
 #[derive(Debug, Clone)]
@@ -91,9 +92,9 @@ impl MyApp {
         self.state.lock().unwrap().set_state(state);
     }
 
-    fn handle_message(&mut self, message: Message) {
+    fn handle_message(&mut self, reply: Reply) {
         use dap_gui_client::events::Event::*;
-        match message {
+        match reply.message {
             Message::Response(r) => {
                 use responses::ResponseBody::*;
 
@@ -133,17 +134,28 @@ impl MyApp {
                             }
                         }
                         StackTrace(body) => {
-                            log::debug!("received threads response {body:?}");
+                            let request = &reply.request.expect("no request found");
+                            log::debug!("received threads response {body:?} with request {request:?}");
                             let mut state = self.state.lock().unwrap();
                             match state.status {
                                 AppStatus::Paused(PausedState {
                                     ref mut stack_frames,
                                     ..
                                 }) => {
-                                    // TODO: associate with request to get thread id
-                                    for frame in body.stack_frames {
-                                        //
+                                    #[derive(Deserialize)]
+                                    struct RequestArguments {
+                                        #[serde(rename = "threadId")]
+                                        thread_id: u64,
                                     }
+
+                                    #[derive(Deserialize)]
+                                    struct RequestBody {
+                                        arguments: RequestArguments,
+                                    }
+
+                                    let request_body: RequestBody = serde_json::from_value(request.body.clone()).unwrap();
+
+                                    stack_frames.insert(request_body.arguments.thread_id, body.stack_frames.clone());
                                 }
                                 _ => unreachable!("invalid state"),
                             }

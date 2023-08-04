@@ -13,7 +13,13 @@ pub mod types;
 
 pub type RequestStore = Arc<Mutex<HashMap<i64, requests::Request>>>;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
+pub struct Reply {
+    pub message: Message,
+    pub request: Option<requests::Request>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub enum Message {
@@ -60,6 +66,8 @@ where
         )
         .unwrap();
         self.output_buffer.flush().unwrap();
+        let mut store = self.store.lock().unwrap();
+        store.insert(message.seq, message);
         Ok(())
     }
 
@@ -144,7 +152,7 @@ where
     R: Read,
 {
     input_buffer: BufReader<R>,
-    dest: Sender<Message>,
+    dest: Sender<Reply>,
     store: RequestStore,
 }
 
@@ -152,7 +160,7 @@ impl<R> Reader<R>
 where
     R: Read,
 {
-    pub fn new(input: BufReader<R>, dest: Sender<Message>, store: RequestStore) -> Self {
+    pub fn new(input: BufReader<R>, dest: Sender<Reply>, store: RequestStore) -> Self {
         Self {
             input_buffer: input,
             dest,
@@ -169,7 +177,23 @@ where
     fn receive(&mut self) {
         match self.poll_message() {
             Ok(Some(msg)) => {
-                let _ = self.dest.send(msg);
+                match msg {
+                    Message::Event(_) => {
+                        let _ = self.dest.send(Reply {
+                            message: msg,
+                            request: None,
+                        });
+                    }
+                    Message::Response(ref r) => {
+                        let store = self.store.lock().unwrap();
+                        let request = store.get(&r.request_seq);
+                        let _ = self.dest.send(Reply {
+                            message: msg.clone(),
+                            request: request.cloned(),
+                        });
+                    }
+
+                }
             }
             // match msg {
             // Message::Event(m) => match m {
