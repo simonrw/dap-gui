@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Thread {
-    pub id: u64,
+    pub id: i64,
     pub name: String,
 }
 

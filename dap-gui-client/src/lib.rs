@@ -2,9 +2,13 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 
 use serde::Deserialize;
-use std::sync::{Arc, Mutex, mpsc::Sender};
+use std::sync::{mpsc::Sender, Arc, Mutex};
 // TODO: use internal error type
 use anyhow::{Context, Result};
+
+use crate::requests::{
+    Breakpoint, Continue, Initialize, RequestBody, SetFunctionBreakpoints, StackTrace, Launch,
+};
 
 pub mod events;
 pub mod requests;
@@ -48,7 +52,7 @@ where
         }
     }
 
-    fn send(&mut self, body: serde_json::Value) -> Result<()> {
+    fn send(&mut self, body: RequestBody) -> Result<()> {
         // thread::sleep(Duration::from_secs(1));
         self.sequence_number += 1;
         let message = requests::Request {
@@ -71,77 +75,55 @@ where
         Ok(())
     }
 
-    pub fn send_stacktrace_request(&mut self, thread_id: u64) {
+    pub fn send_stacktrace_request(&mut self, thread_id: i64) {
         log::debug!("sending stacktrace request");
-        self.send(serde_json::json!({
-            "command": "stackTrace",
-            "arguments": {
-                "threadId": thread_id,
-            },
-        }))
-        .unwrap();
+        self.send(RequestBody::StackTrace(StackTrace { thread_id }))
+            .unwrap();
     }
 
     pub fn send_threads_request(&mut self) {
         log::debug!("sending configuration done");
-        self.send(serde_json::json!({
-            "command": "threads",
-        }))
-        .unwrap();
+        self.send(RequestBody::Threads).unwrap();
     }
 
     pub fn send_configuration_done(&mut self) {
         log::debug!("sending configuration done");
-        self.send(serde_json::json!({
-            "command": "configurationDone",
-        }))
-        .unwrap();
+        self.send(RequestBody::ConfigurationDone).unwrap();
     }
 
     pub fn send_initialize(&mut self) {
         log::debug!("sending initialize");
-        self.send(serde_json::json!({
-            "command": "initialize",
-            "arguments": {
-                "adapterID": "dap-gui",
-                }
-
+        self.send(RequestBody::Initialize(Initialize {
+            adapter_id: "dap-gui".to_string(),
         }))
         .unwrap();
     }
 
     pub fn send_continue(&mut self, thread_id: i64) {
         log::debug!("sending continue");
-        self.send(serde_json::json!({
-            "command": "continue",
-            "arguments": {
-                "threadId": thread_id,  // TODO
-                "singleThread": false,
-            },
+        self.send(RequestBody::Continue(Continue {
+            thread_id,
+            single_thread: false,
         }))
         .unwrap();
     }
 
     pub fn send_set_function_breakpoints(&mut self) {
         log::debug!("sending set function breakpoints");
-        self.send(serde_json::json!({
-            "command": "setFunctionBreakpoints",
-            "arguments": {
-                "breakpoints": [{
-                    "name": "main",
+        self.send(RequestBody::SetFunctionBreakpoints(
+            SetFunctionBreakpoints {
+                breakpoints: vec![Breakpoint {
+                    name: "main".to_string(),
                 }],
             },
-        }))
+        ))
         .unwrap();
     }
 
     pub fn send_launch(&mut self) {
         log::debug!("sending launch");
-        self.send(serde_json::json!({
-            "command": "launch",
-            "arguments": {
-                "program": concat!(env!("HOME"), "/dev/dap-gui/test.py"),
-            }
+        self.send(RequestBody::Launch(Launch {
+            program: concat!(env!("HOME"), "/dev/dap-gui/test.py").to_string(),
         }))
         .unwrap();
     }
@@ -176,25 +158,22 @@ where
 
     fn receive(&mut self) {
         match self.poll_message() {
-            Ok(Some(msg)) => {
-                match msg {
-                    Message::Event(_) => {
-                        let _ = self.dest.send(Reply {
-                            message: msg,
-                            request: None,
-                        });
-                    }
-                    Message::Response(ref r) => {
-                        let store = self.store.lock().unwrap();
-                        let request = store.get(&r.request_seq);
-                        let _ = self.dest.send(Reply {
-                            message: msg.clone(),
-                            request: request.cloned(),
-                        });
-                    }
-
+            Ok(Some(msg)) => match msg {
+                Message::Event(_) => {
+                    let _ = self.dest.send(Reply {
+                        message: msg,
+                        request: None,
+                    });
                 }
-            }
+                Message::Response(ref r) => {
+                    let store = self.store.lock().unwrap();
+                    let request = store.get(&r.request_seq);
+                    let _ = self.dest.send(Reply {
+                        message: msg.clone(),
+                        request: request.cloned(),
+                    });
+                }
+            },
             // match msg {
             // Message::Event(m) => match m {
             //     events::Event::Initialized => {
