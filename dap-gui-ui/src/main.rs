@@ -285,15 +285,6 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "DAP GUI",
         options,
-        Box::new(|cc| {
-            let style = Style {
-                visuals: Visuals::dark(),
-                // temporarily increase font size
-                override_font_id: Some(FontId::monospace(24.0)),
-                ..Style::default()
-            };
-            cc.egui_ctx.set_style(style);
-            Box::new(MyApp::new(cc.egui_ctx.clone()).unwrap())
-        }),
+        Box::new(|cc| Box::new(MyApp::new(cc.egui_ctx.clone()).unwrap())),
     )
 }
