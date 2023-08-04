@@ -166,12 +166,15 @@ where
                     });
                 }
                 Message::Response(ref r) => {
-                    let store = self.store.lock().unwrap();
+                    let mut store = self.store.lock().unwrap();
                     let request = store.get(&r.request_seq);
                     let _ = self.dest.send(Reply {
                         message: msg.clone(),
                         request: request.cloned(),
                     });
+                    if request.is_some() {
+                        store.remove(&r.request_seq);
+                    }
                 }
             },
             // match msg {
