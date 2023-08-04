@@ -4,22 +4,11 @@ use serde::Deserialize;
 use std::sync::mpsc::Sender;
 // TODO: use internal error type
 use anyhow::{Context, Result};
-use serde::Serialize;
 
 pub mod events;
 pub mod responses;
+pub mod requests;
 pub mod types;
-
-#[derive(Serialize)]
-struct BaseMessage<Body>
-where
-    Body: Serialize,
-{
-    seq: i64,
-    r#type: String,
-    #[serde(flatten)]
-    body: Body,
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -51,7 +40,7 @@ where
     fn send(&mut self, body: serde_json::Value) -> Result<()> {
         // thread::sleep(Duration::from_secs(1));
         self.sequence_number += 1;
-        let message = BaseMessage {
+        let message = requests::Request {
             seq: self.sequence_number,
             r#type: "request".to_string(),
             body,
