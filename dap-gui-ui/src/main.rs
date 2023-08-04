@@ -220,6 +220,17 @@ impl eframe::App for MyApp {
                 }
                 AppStatus::Paused(ref paused_state) => {
                     log::debug!("app state: {paused_state:?}");
+
+                    for thread in &paused_state.threads {
+                        ui.label(format!("thread {}", thread.name));
+                        ui.separator();
+                        if let Some(frames) = paused_state.stack_frames.get(&thread.id) {
+                            for frame in frames {
+                                ui.label(format!("\t{}", frame.name));
+                            }
+                        }
+                    }
+
                     if ui.button("Continue").clicked() {
                         if let Some(thread_id) = state.current_thread_id {
                             state.sender.send_continue(thread_id);
