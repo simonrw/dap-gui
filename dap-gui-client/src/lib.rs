@@ -1,14 +1,17 @@
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 
 use serde::Deserialize;
-use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex, mpsc::Sender};
 // TODO: use internal error type
 use anyhow::{Context, Result};
 
 pub mod events;
-pub mod responses;
 pub mod requests;
+pub mod responses;
 pub mod types;
+
+pub type RequestStore = Arc<Mutex<HashMap<i64, requests::Request>>>;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -24,16 +27,18 @@ where
 {
     output_buffer: BufWriter<W>,
     sequence_number: i64,
+    store: RequestStore,
 }
 
 impl<W> Writer<W>
 where
     W: Write,
 {
-    pub fn new(output_buffer: BufWriter<W>) -> Self {
+    pub fn new(output_buffer: BufWriter<W>, store: RequestStore) -> Self {
         Self {
             output_buffer,
             sequence_number: 0,
+            store,
         }
     }
 
@@ -65,7 +70,8 @@ where
             "arguments": {
                 "threadId": thread_id,
             },
-        })).unwrap();
+        }))
+        .unwrap();
     }
 
     pub fn send_threads_request(&mut self) {
@@ -139,16 +145,18 @@ where
 {
     input_buffer: BufReader<R>,
     dest: Sender<Message>,
+    store: RequestStore,
 }
 
 impl<R> Reader<R>
 where
     R: Read,
 {
-    pub fn new(input: BufReader<R>, dest: Sender<Message>) -> Self {
+    pub fn new(input: BufReader<R>, dest: Sender<Message>, store: RequestStore) -> Self {
         Self {
             input_buffer: input,
             dest,
+            store,
         }
     }
 
@@ -233,7 +241,9 @@ where
                                 .map_err(|e| anyhow::anyhow!("failed to read: {:?}", e))?;
                             let content =
                                 std::str::from_utf8(content.as_slice()).context("invalid utf8")?;
-                            let message = serde_json::from_str(content).with_context(|| format!("could not construct message from: {content:?}"))?;
+                            let message = serde_json::from_str(content).with_context(|| {
+                                format!("could not construct message from: {content:?}")
+                            })?;
                             return Ok(Some(message));
                         }
                     }

@@ -64,8 +64,9 @@ impl MyApp {
 
         let (tx, rx) = mpsc::channel();
 
-        let mut reader = Reader::new(BufReader::new(input_stream), tx);
-        let mut sender = Writer::new(BufWriter::new(output_stream));
+        let store = Arc::new(Mutex::new(HashMap::new()));
+        let mut reader = Reader::new(BufReader::new(input_stream), tx, Arc::clone(&store));
+        let mut sender = Writer::new(BufWriter::new(output_stream), Arc::clone(&store));
 
         sender.send_initialize();
 
@@ -141,7 +142,7 @@ impl MyApp {
                                 }) => {
                                     // TODO: associate with request to get thread id
                                     for frame in body.stack_frames {
-                                        // 
+                                        //
                                     }
                                 }
                                 _ => unreachable!("invalid state"),
