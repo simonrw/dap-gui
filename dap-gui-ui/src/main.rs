@@ -255,20 +255,30 @@ impl eframe::App for MyApp {
                         ui.separator();
                         if let Some(frames) = paused_state.stack_frames.get(&thread.id) {
                             for frame in frames {
-                                let response = ui.collapsing(format!("\t{}", frame.name), |ui| {
-                                    if let Some(ref scopes) = paused_state.scopes {
-                                        if let Some(scopes) = scopes.get(&frame.id) {
-                                            for scope in scopes {
-                                                ui.label(format!("{}", scope.name));
+                                if ui
+                                    .collapsing(format!("\t{}", frame.name), |ui| {
+                                        if let Some(ref scopes) = paused_state.scopes {
+                                            if let Some(scopes) = scopes.get(&frame.id) {
+                                                for scope in scopes {
+                                                    if ui
+                                                        .collapsing(
+                                                            format!("{}", scope.name),
+                                                            |ui| {},
+                                                        )
+                                                        .header_response
+                                                        .clicked()
+                                                    {
+                                                        log::debug!("uncollapsed");
+                                                        state.sender.send_variables(scope.variables_reference);
+                                                    };
+                                                }
                                             }
                                         }
-                                    }
-                                });
-
-                                if response.header_response.clicked()
-                                    && paused_state.scopes.is_none()
-                                // Only the first time
+                                    })
+                                    .header_response
+                                    .clicked()
                                 {
+                                    // TODO: only first time
                                     log::debug!("uncollapsed");
                                     state.sender.send_scopes(frame.id);
                                 }

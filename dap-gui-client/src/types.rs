@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 pub type ThreadId = i64;
 pub type StackFrameId = i64;
+pub type VariablesReference = i64;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Thread {
@@ -13,7 +14,7 @@ pub struct Thread {
 pub struct Scope {
     pub name: String,
     #[serde(rename = "variablesReference")]
-    pub variables_reference: u64,
+    pub variables_reference: i64,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -34,4 +35,13 @@ pub struct Breakpoint {
 pub struct StackFrame {
     pub id: StackFrameId,
     pub name: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct Variable {
+    pub name: String,
+    pub value: String,
+    pub r#type: Option<String>,
+    #[serde(rename = "variablesReference")]
+    pub variables_reference: VariablesReference,
 }
