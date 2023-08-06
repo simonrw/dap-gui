@@ -12,7 +12,8 @@ mod syntax_highlighting;
 
 use dap_gui_client::{
     requests::{self, RequestBody},
-    responses, types, Message, Reader, Reply, Writer,
+    responses::{self},
+    types, Message, Reader, Reply, Writer,
 };
 
 #[derive(Default, Debug, Clone)]
@@ -21,6 +22,7 @@ struct PausedState {
     threads: Vec<types::Thread>,
     stack_frames: HashMap<i64, Vec<types::StackFrame>>,
     scopes: Option<HashMap<types::StackFrameId, Vec<types::Scope>>>,
+    variables: Option<HashMap<types::VariablesReference, Vec<types::Variable>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -177,6 +179,37 @@ impl MyApp {
                                 _ => unreachable!("invalid state"),
                             }
                         }
+                        Variables(body) => {
+                            let request = &reply.request.expect("no request found");
+                            log::debug!(
+                                "received variables response {body:?} with request {request:?}"
+                            );
+                            let mut state = self.state.lock().unwrap();
+                            match state.status {
+                                AppStatus::Paused(PausedState {
+                                    ref mut variables, ..
+                                }) => match request.body {
+                                    RequestBody::Variables(requests::Variables {
+                                        variables_reference,
+                                    }) => match variables {
+                                        Some(variables) => {
+                                            if variables.contains_key(&variables_reference) {
+                                                log::warn!("already found variables reference {variables_reference}");
+                                                // TODO
+                                            }
+                                            variables.insert(variables_reference, body.variables);
+                                        }
+                                        None => {
+                                            let mut hm = HashMap::new();
+                                            hm.insert(variables_reference, body.variables);
+                                            *variables = Some(hm);
+                                        }
+                                    },
+                                    _ => unreachable!("invalid request type"),
+                                },
+                                _ => unreachable!("invalid state"),
+                            }
+                        }
                         b => log::warn!("unhandled response: {b:?}"),
                     }
                 }
@@ -263,13 +296,33 @@ impl eframe::App for MyApp {
                                                     if ui
                                                         .collapsing(
                                                             format!("{}", scope.name),
-                                                            |ui| {},
+                                                            |ui| {
+                                                                if let Some(ref variables) = paused_state.variables {
+                                                                    if let Some(variables) = variables.get(&scope.variables_reference) {
+                                                                        for variable in variables {
+                                                                        if let Some(variable_type) = variable.r#type.clone() {
+                                                                            if !variable_type.is_empty() {
+                                                                            ui.label(format!("{} ({}) = {}", variable.name, variable_type, variable.value));
+                                                                            ui.label(format!("{} {}", variable.name, variable.value));
+                                                                            }
+                                                                            else {
+                                                                            ui.label(format!("{} = {}", variable.name, variable.value));
+                                                                            }
+                                                                        } else {
+                                                                            ui.label(format!("{} = {}", variable.name, variable.value));
+                                                                        }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
                                                         )
                                                         .header_response
                                                         .clicked()
                                                     {
                                                         log::debug!("uncollapsed");
-                                                        state.sender.send_variables(scope.variables_reference);
+                                                        state.sender.send_variables(
+                                                            scope.variables_reference,
+                                                        );
                                                     };
                                                 }
                                             }

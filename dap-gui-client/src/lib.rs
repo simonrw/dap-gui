@@ -2,13 +2,14 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 
 use serde::Deserialize;
-use types::{ThreadId, StackFrameId, VariablesReference};
 use std::sync::{mpsc::Sender, Arc, Mutex};
+use types::{StackFrameId, ThreadId, VariablesReference};
 // TODO: use internal error type
 use anyhow::{Context, Result};
 
 use crate::requests::{
-    Breakpoint, Continue, Initialize, Launch, RequestBody, SetFunctionBreakpoints, StackTrace, Scopes, Variables,
+    Breakpoint, Continue, Initialize, Launch, RequestBody, Scopes, SetFunctionBreakpoints,
+    StackTrace, Variables,
 };
 
 pub mod events;
@@ -114,11 +115,12 @@ where
         self.send(RequestBody::SetFunctionBreakpoints(
             SetFunctionBreakpoints {
                 breakpoints: vec![Breakpoint {
-                    name: "main".to_string(),
+                    name: "foo".to_string(),
                 }],
             },
         ))
         .unwrap();
+        // TOOD: how to set multiple breakpoints
     }
 
     pub fn send_launch(&mut self) {
@@ -131,10 +133,8 @@ where
 
     pub fn send_scopes(&mut self, id: StackFrameId) {
         log::debug!("sending scopes for stack frame {id}");
-        self.send(RequestBody::Scopes(Scopes {
-            frame_id: id,
-        }))
-        .unwrap();
+        self.send(RequestBody::Scopes(Scopes { frame_id: id }))
+            .unwrap();
     }
 
     pub fn send_variables(&mut self, vref: VariablesReference) {

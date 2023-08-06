@@ -1,4 +1,4 @@
-use crate::types::{self, StackFrame, Thread, Scope, Variable};
+use crate::types::{self, Scope, StackFrame, Thread, Variable};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]

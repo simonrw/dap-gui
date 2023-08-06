@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::types::{ThreadId, StackFrameId, VariablesReference};
+use crate::types::{StackFrameId, ThreadId, VariablesReference};
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -70,6 +70,6 @@ pub struct Scopes {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct Variables{
+pub struct Variables {
     pub variables_reference: VariablesReference,
 }
