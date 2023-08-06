@@ -1,8 +1,5 @@
 use anyhow::{Context, Result};
-use eframe::{
-    egui::{self, Style, Visuals},
-    epaint::FontId,
-};
+use eframe::egui;
 use std::{
     collections::HashMap,
     io::{BufReader, BufWriter},
@@ -20,6 +17,7 @@ use dap_gui_client::{
 
 #[derive(Default, Debug, Clone)]
 struct PausedState {
+    current_thread_id: types::ThreadId,
     threads: Vec<types::Thread>,
     stack_frames: HashMap<i64, Vec<types::StackFrame>>,
 }
@@ -35,7 +33,6 @@ enum AppStatus {
 struct MyAppState {
     sender: Writer<TcpStream>,
     status: AppStatus,
-    current_thread_id: Option<i64>,
 }
 
 impl MyAppState {
@@ -43,7 +40,6 @@ impl MyAppState {
         Self {
             sender,
             status: AppStatus::Starting,
-            current_thread_id: None,
         }
     }
 
@@ -120,17 +116,16 @@ impl MyApp {
                             let mut state = self.state.lock().unwrap();
                             match state.status {
                                 AppStatus::Paused(PausedState {
-                                    ref mut threads, ..
+                                    ref mut threads,
+                                    current_thread_id,
+                                    ..
                                 }) => {
                                     let mut thread_ids = Vec::new();
                                     for thread in body.threads {
                                         thread_ids.push(thread.id);
                                         threads.push(thread);
                                     }
-
-                                    for thread_id in thread_ids {
-                                        state.sender.send_stacktrace_request(thread_id);
-                                    }
+                                    state.sender.send_stacktrace_request(current_thread_id);
                                 }
                                 _ => unreachable!("invalid state"),
                             }
@@ -147,7 +142,7 @@ impl MyApp {
                                     ..
                                 }) => match request.body {
                                     RequestBody::StackTrace(requests::StackTrace { thread_id }) => {
-                                        stack_frames.insert(thread_id, body.stack_frames.clone());
+                                        stack_frames.insert(thread_id, body.stack_frames);
                                     }
                                     _ => unreachable!("invalid request type"),
                                 },
@@ -177,12 +172,14 @@ impl MyApp {
                     log::debug!("received stopped event, body: {:?}", body);
                     {
                         let mut state = self.state.lock().unwrap();
-                        state.current_thread_id = Some(body.thread_id);
+                        state.sender.send_threads_request();
+                        state.sender.send_stacktrace_request(body.thread_id);
                     }
 
-                    self.state.lock().unwrap().sender.send_threads_request();
-
-                    self.set_state(AppStatus::Paused(Default::default()));
+                    self.set_state(AppStatus::Paused(PausedState {
+                        current_thread_id: body.thread_id,
+                        ..Default::default()
+                    }));
                 }
                 Continued(body) => {
                     log::debug!("received continued event {body:?}");
@@ -206,11 +203,13 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let mut state = self.state.lock().unwrap();
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.label("dap-gui");
 
-            match state.status {
+            let mut state = self.state.lock().unwrap();
+            // TODO: clone here is to work around duplicate borrow, we should not need to clone in
+            // this case.
+            match state.status.clone() {
                 AppStatus::Started => {
                     ui.horizontal(|ui| {
                         if ui.button("Launch").clicked() {
@@ -232,9 +231,7 @@ impl eframe::App for MyApp {
                     }
 
                     if ui.button("Continue").clicked() {
-                        if let Some(thread_id) = state.current_thread_id {
-                            state.sender.send_continue(thread_id);
-                        };
+                        state.sender.send_continue(paused_state.current_thread_id);
                     }
                 }
                 AppStatus::Starting => {

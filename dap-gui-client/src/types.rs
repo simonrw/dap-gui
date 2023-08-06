@@ -1,8 +1,10 @@
 use serde::Deserialize;
 
+pub type ThreadId = i64;
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct Thread {
-    pub id: i64,
+    pub id: ThreadId,
     pub name: String,
 }
 

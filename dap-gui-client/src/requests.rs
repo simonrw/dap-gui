@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::types::ThreadId;
+
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Request {
@@ -24,7 +26,7 @@ pub enum RequestBody {
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct StackTrace {
-    pub thread_id: i64,
+    pub thread_id: ThreadId,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -37,7 +39,7 @@ pub struct Initialize {
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Continue {
-    pub thread_id: i64,
+    pub thread_id: ThreadId,
     pub single_thread: bool,
 }
 

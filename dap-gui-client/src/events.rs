@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+use crate::types::ThreadId;
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "event", content = "body", rename_all = "camelCase")]
 pub enum Event {
@@ -39,7 +41,7 @@ pub enum StoppedReason {
 #[serde(rename_all = "camelCase")]
 pub struct StoppedEventBody {
     pub reason: StoppedReason,
-    pub thread_id: i64,
+    pub thread_id: ThreadId,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -54,6 +56,6 @@ pub struct ExitedEventBody {}
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContinuedEventBody {
-    pub thread_id: i64,
+    pub thread_id: ThreadId,
     pub all_threads_continued: Option<bool>,
 }

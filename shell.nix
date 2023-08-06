@@ -33,12 +33,17 @@ mkShell {
 
   RUST_BACKTRACE = "1";
 
-  LD_LIBRARY_PATH = if stdenv.isLinux then lib.makeLibraryPath [
-    xorg.libX11
-    xorg.libXcursor
-    xorg.libXrandr
-    xorg.libXi
-    libglvnd
-    vulkan-loader # TODO: needed?
-  ] else "";
+  RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
+
+
+  LD_LIBRARY_PATH =
+    if stdenv.isLinux then
+      lib.makeLibraryPath [
+        xorg.libX11
+        xorg.libXcursor
+        xorg.libXrandr
+        xorg.libXi
+        libglvnd
+        vulkan-loader # TODO: needed?
+      ] else "";
 }

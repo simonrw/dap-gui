@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 
 use serde::Deserialize;
+use types::ThreadId;
 use std::sync::{mpsc::Sender, Arc, Mutex};
 // TODO: use internal error type
 use anyhow::{Context, Result};
@@ -75,7 +76,7 @@ where
         Ok(())
     }
 
-    pub fn send_stacktrace_request(&mut self, thread_id: i64) {
+    pub fn send_stacktrace_request(&mut self, thread_id: ThreadId) {
         log::debug!("sending stacktrace request");
         self.send(RequestBody::StackTrace(StackTrace { thread_id }))
             .unwrap();
