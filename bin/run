@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+env RUST_LOG=dap_gui_ui=debug,dap_gui_client=debug cargo r --bin dap-gui-ui
