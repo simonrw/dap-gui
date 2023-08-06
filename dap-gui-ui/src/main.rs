@@ -1,9 +1,12 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use eframe::{egui::{self, Style, Visuals}, epaint::FontId};
+use eframe::{
+    egui::{self, Style},
+    epaint::FontId,
+};
 use std::{
     collections::HashMap,
-    io::{BufReader, BufWriter},
+    io::BufReader,
     net::TcpStream,
     sync::{mpsc, Arc, Mutex},
     thread,
@@ -42,12 +45,12 @@ enum AppStatus {
 }
 
 struct MyAppState {
-    sender: Writer<TcpStream>,
+    sender: Writer,
     status: AppStatus,
 }
 
 impl MyAppState {
-    pub fn new(sender: Writer<TcpStream>) -> Self {
+    pub fn new(sender: Writer) -> Self {
         Self {
             sender,
             status: AppStatus::Starting,
@@ -76,7 +79,7 @@ impl MyApp {
 
         let store = Arc::new(Mutex::new(HashMap::new()));
         let mut reader = Reader::new(BufReader::new(input_stream), tx, Arc::clone(&store));
-        let mut sender = Writer::new(BufWriter::new(output_stream), Arc::clone(&store));
+        let mut sender = Writer::new(output_stream, Arc::clone(&store));
 
         sender.send_initialize();
 
@@ -205,7 +208,10 @@ impl MyApp {
                                                 log::warn!("already found variables reference {variables_reference}");
                                                 // TODO
                                             }
-                                            variables.insert(variables_reference, body.variables);
+                                            variables.insert(
+                                                variables_reference,
+                                                body.variables.clone(),
+                                            );
                                         }
                                         None => {
                                             let mut hm = HashMap::new();

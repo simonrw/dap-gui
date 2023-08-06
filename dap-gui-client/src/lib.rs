@@ -1,5 +1,7 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, BufWriter, Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
+use std::sync::atomic::{AtomicI64, Ordering};
 
 use serde::Deserialize;
 use std::sync::{mpsc::Sender, Arc, Mutex};
@@ -33,32 +35,36 @@ pub enum Message {
     Response(responses::Response),
 }
 
-pub struct Writer<W>
-where
-    W: Write,
-{
-    output_buffer: BufWriter<W>,
-    sequence_number: i64,
+pub struct Writer {
+    output_buffer: TcpStream,
+    sequence_number: Arc<AtomicI64>,
     store: RequestStore,
 }
 
-impl<W> Writer<W>
-where
-    W: Write,
-{
-    pub fn new(output_buffer: BufWriter<W>, store: RequestStore) -> Self {
+impl Clone for Writer {
+    fn clone(&self) -> Self {
+        Self {
+            output_buffer: self.output_buffer.try_clone().unwrap(),
+            sequence_number: Arc::clone(&self.sequence_number),
+            store: self.store.clone(),
+        }
+    }
+}
+
+impl Writer {
+    pub fn new(output_buffer: TcpStream, store: RequestStore) -> Self {
         Self {
             output_buffer,
-            sequence_number: 0,
+            sequence_number: Arc::new(AtomicI64::new(0)),
             store,
         }
     }
 
     fn send(&mut self, body: RequestBody) -> Result<()> {
         // thread::sleep(Duration::from_secs(1));
-        self.sequence_number += 1;
+        self.sequence_number.fetch_add(1, Ordering::SeqCst);
         let message = requests::Request {
-            seq: self.sequence_number,
+            seq: self.sequence_number.load(Ordering::SeqCst),
             r#type: "request".to_string(),
             body,
         };

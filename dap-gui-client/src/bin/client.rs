@@ -14,7 +14,7 @@ fn main() {
 
     let store = Arc::new(Mutex::new(HashMap::new()));
     let mut reader = Reader::new(BufReader::new(input_stream), tx, Arc::clone(&store));
-    let mut sender = Writer::new(BufWriter::new(output_stream), Arc::clone(&store));
+    let mut sender = Writer::new(output_stream, Arc::clone(&store));
 
     thread::spawn(move || {
         reader.poll_loop();
