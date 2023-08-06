@@ -8,7 +8,7 @@ use std::{
     collections::HashMap,
     io::BufReader,
     net::TcpStream,
-    sync::{mpsc, Arc, Mutex},
+    sync::{mpsc, Arc, Mutex, MutexGuard},
     thread,
 };
 
@@ -17,7 +17,8 @@ mod syntax_highlighting;
 use dap_gui_client::{
     requests::{self, RequestBody},
     responses::{self},
-    types, Message, Reader, Reply, Writer,
+    types::{self, Breakpoint},
+    Message, Reader, Reply, Writer,
 };
 
 // argument parsing
@@ -44,16 +45,22 @@ enum AppStatus {
     Finished,
 }
 
+#[derive(Debug)]
 struct MyAppState {
     sender: Writer,
     status: AppStatus,
+    breakpoints: Vec<Breakpoint>,
+    source: String,
 }
 
 impl MyAppState {
     pub fn new(sender: Writer) -> Self {
+        let source = include_str!("../../test.py");
         Self {
             sender,
             status: AppStatus::Starting,
+            breakpoints: Vec::new(),
+            source: source.to_string(),
         }
     }
 
@@ -63,7 +70,7 @@ impl MyAppState {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct MyApp {
     state: Arc<Mutex<MyAppState>>,
     context: egui::Context,
@@ -116,9 +123,12 @@ impl MyApp {
                             log::debug!("received initialize response");
                             self.set_state(AppStatus::Started)
                         }
-                        SetFunctionBreakpoints(_bps) => {
-                            log::debug!("received set function breakpoints response");
+                        SetFunctionBreakpoints(body) => {
+                            log::debug!("received set function breakpoints response: {body:?}");
                             let mut state = self.state.lock().unwrap();
+
+                            state.breakpoints = body.breakpoints;
+
                             state.sender.send_configuration_done();
                         }
                         Continue(body) => {
@@ -232,11 +242,15 @@ impl MyApp {
                 Initialized => {
                     log::debug!("received initialize event");
 
+                    let breakpoints = vec![requests::Breakpoint {
+                        name: "foo".to_string(),
+                    }];
+
                     self.state
                         .lock()
                         .unwrap()
                         .sender
-                        .send_set_function_breakpoints();
+                        .send_set_function_breakpoints(breakpoints);
                 }
                 Output(o) => {
                     log::debug!("received output event: {}", o.output);
@@ -276,94 +290,138 @@ impl MyApp {
         }
         self.context.request_repaint();
     }
+
+    fn render_central_panel(&self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        ui.label("dap-gui");
+
+        let mut state = self.state.lock().unwrap();
+        // TODO: clone here is to work around duplicate borrow, we should not need to clone in
+        // this case.
+        match state.status.clone() {
+            AppStatus::Started => {
+                self.render_started_state(ui, state);
+            }
+            AppStatus::Paused(ref paused_state) => {
+                self.render_paused_state(ui, ctx, state, paused_state);
+            }
+            AppStatus::Starting => {
+                ui.label("STARTING");
+            }
+            AppStatus::Finished => {
+                ui.label("FINISHED");
+            }
+        }
+    }
+
+    fn render_started_state(&self, ui: &mut egui::Ui, mut state: MutexGuard<'_, MyAppState>) {
+        ui.horizontal(|ui| {
+            if ui.button("Launch").clicked() {
+                state.sender.send_launch();
+            }
+        });
+    }
+
+    fn render_paused_state(
+        &self,
+        ui: &mut egui::Ui,
+        ctx: &egui::Context,
+        mut state: MutexGuard<'_, MyAppState>,
+        paused_state: &PausedState,
+    ) {
+        log::trace!("app state: {paused_state:?}");
+
+        egui::SidePanel::left("sidebar").show(ctx, |ui| {
+            for thread in &paused_state.threads {
+                ui.label(format!("thread {}", thread.name));
+                ui.separator();
+                if let Some(frames) = paused_state.stack_frames.get(&thread.id) {
+                    for frame in frames {
+                        if ui
+                            .collapsing(format!("\t{}", frame.name), |ui| {
+                                if let Some(ref scopes) = paused_state.scopes {
+                                    if let Some(scopes) = scopes.get(&frame.id) {
+                                        for scope in scopes {
+                                            if ui
+                                                .collapsing(format!("{}", scope.name), |ui| {
+                                                    if let Some(ref variables) =
+                                                        paused_state.variables
+                                                    {
+                                                        if let Some(variables) = variables
+                                                            .get(&scope.variables_reference)
+                                                        {
+                                                            for variable in variables {
+                                                                if let Some(variable_type) =
+                                                                    variable.r#type.clone()
+                                                                {
+                                                                    if !variable_type.is_empty() {
+                                                                        ui.label(format!(
+                                                                            "{} ({}) = {}",
+                                                                            variable.name,
+                                                                            variable_type,
+                                                                            variable.value
+                                                                        ));
+                                                                        ui.label(format!(
+                                                                            "{} {}",
+                                                                            variable.name,
+                                                                            variable.value
+                                                                        ));
+                                                                    } else {
+                                                                        ui.label(format!(
+                                                                            "{} = {}",
+                                                                            variable.name,
+                                                                            variable.value
+                                                                        ));
+                                                                    }
+                                                                } else {
+                                                                    ui.label(format!(
+                                                                        "{} = {}",
+                                                                        variable.name,
+                                                                        variable.value
+                                                                    ));
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                })
+                                                .header_response
+                                                .clicked()
+                                            {
+                                                log::debug!("uncollapsed");
+                                                state
+                                                    .sender
+                                                    .send_variables(scope.variables_reference);
+                                            };
+                                        }
+                                    }
+                                }
+                            })
+                            .header_response
+                            .clicked()
+                        {
+                            // TODO: only first time
+                            log::debug!("uncollapsed");
+                            state.sender.send_scopes(frame.id);
+                        }
+                    }
+                }
+            }
+
+            if ui.button("Continue").clicked() {
+                state.sender.send_continue(paused_state.current_thread_id);
+            }
+        });
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.label("Hello world");
+            log::info!("{self:?}");
+        });
+    }
 }
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.label("dap-gui");
-
-            let mut state = self.state.lock().unwrap();
-            // TODO: clone here is to work around duplicate borrow, we should not need to clone in
-            // this case.
-            match state.status.clone() {
-                AppStatus::Started => {
-                    ui.horizontal(|ui| {
-                        if ui.button("Launch").clicked() {
-                            state.sender.send_launch();
-                        }
-                    });
-                }
-                AppStatus::Paused(ref paused_state) => {
-                    log::trace!("app state: {paused_state:?}");
-
-                    for thread in &paused_state.threads {
-                        ui.label(format!("thread {}", thread.name));
-                        ui.separator();
-                        if let Some(frames) = paused_state.stack_frames.get(&thread.id) {
-                            for frame in frames {
-                                if ui
-                                    .collapsing(format!("\t{}", frame.name), |ui| {
-                                        if let Some(ref scopes) = paused_state.scopes {
-                                            if let Some(scopes) = scopes.get(&frame.id) {
-                                                for scope in scopes {
-                                                    if ui
-                                                        .collapsing(
-                                                            format!("{}", scope.name),
-                                                            |ui| {
-                                                                if let Some(ref variables) = paused_state.variables {
-                                                                    if let Some(variables) = variables.get(&scope.variables_reference) {
-                                                                        for variable in variables {
-                                                                        if let Some(variable_type) = variable.r#type.clone() {
-                                                                            if !variable_type.is_empty() {
-                                                                            ui.label(format!("{} ({}) = {}", variable.name, variable_type, variable.value));
-                                                                            ui.label(format!("{} {}", variable.name, variable.value));
-                                                                            }
-                                                                            else {
-                                                                            ui.label(format!("{} = {}", variable.name, variable.value));
-                                                                            }
-                                                                        } else {
-                                                                            ui.label(format!("{} = {}", variable.name, variable.value));
-                                                                        }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            },
-                                                        )
-                                                        .header_response
-                                                        .clicked()
-                                                    {
-                                                        log::debug!("uncollapsed");
-                                                        state.sender.send_variables(
-                                                            scope.variables_reference,
-                                                        );
-                                                    };
-                                                }
-                                            }
-                                        }
-                                    })
-                                    .header_response
-                                    .clicked()
-                                {
-                                    // TODO: only first time
-                                    log::debug!("uncollapsed");
-                                    state.sender.send_scopes(frame.id);
-                                }
-                            }
-                        }
-                    }
-
-                    if ui.button("Continue").clicked() {
-                        state.sender.send_continue(paused_state.current_thread_id);
-                    }
-                }
-                AppStatus::Starting => {
-                    ui.label("STARTING");
-                }
-                AppStatus::Finished => {
-                    ui.label("FINISHED");
-                }
-            }
+            self.render_central_panel(ui, ctx);
         });
 
         /*

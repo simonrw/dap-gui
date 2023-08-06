@@ -3,6 +3,7 @@ use serde::Deserialize;
 pub type ThreadId = i64;
 pub type StackFrameId = i64;
 pub type VariablesReference = i64;
+pub type SourceReference = i64;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Thread {
@@ -18,11 +19,23 @@ pub struct Scope {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+pub struct Source {
+    pub name: Option<String>,
+    pub path: Option<String>,
+    #[serde(rename = "sourceReference")]
+    pub source_reference: Option<SourceReference>,
+    #[serde(rename = "presentationHint")]
+    pub presentation_hint: Option<String>,
+    pub origin: Option<String>,
+    pub sources: Option<Vec<Source>>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
 pub struct Breakpoint {
     pub id: Option<i64>,
     pub verified: bool,
     pub message: Option<String>,
-    // pub source: Option<Source>,
+    pub source: Option<Source>,
     pub line: Option<i64>,
     pub column: Option<i64>,
     pub end_line: Option<i64>,

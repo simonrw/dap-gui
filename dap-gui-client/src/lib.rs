@@ -35,6 +35,7 @@ pub enum Message {
     Response(responses::Response),
 }
 
+#[derive(Debug)]
 pub struct Writer {
     output_buffer: TcpStream,
     sequence_number: Arc<AtomicI64>,
@@ -116,13 +117,14 @@ impl Writer {
         .unwrap();
     }
 
-    pub fn send_set_function_breakpoints(&mut self) {
+    pub fn send_set_function_breakpoints(&mut self, breakpoints: Vec<Breakpoint>) {
         log::debug!("sending set function breakpoints");
         self.send(RequestBody::SetFunctionBreakpoints(
             SetFunctionBreakpoints {
-                breakpoints: vec![Breakpoint {
-                    name: "foo".to_string(),
-                }],
+                breakpoints,
+                // breakpoints: vec![Breakpoint {
+                //     name: "foo".to_string(),
+                // }],
             },
         ))
         .unwrap();

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::{BufReader, BufWriter};
+use std::io::BufReader;
 use std::net::TcpStream;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
