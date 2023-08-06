@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
-use eframe::egui;
+use clap::Parser;
+use eframe::{egui::{self, Style, Visuals}, epaint::FontId};
 use std::{
     collections::HashMap,
     io::{BufReader, BufWriter},
@@ -15,6 +16,13 @@ use dap_gui_client::{
     responses::{self},
     types, Message, Reader, Reply, Writer,
 };
+
+// argument parsing
+#[derive(Debug, Parser)]
+struct Args {
+    #[clap(short, long, default_value = "false")]
+    large: bool,
+}
 
 #[derive(Default, Debug, Clone)]
 struct PausedState {
@@ -384,6 +392,8 @@ impl eframe::App for MyApp {
 
 fn main() -> Result<(), eframe::Error> {
     env_logger::init();
+
+    let args = Args::parse();
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(1024.0, 768.0)),
         ..Default::default()
@@ -391,6 +401,16 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "DAP GUI",
         options,
-        Box::new(|cc| Box::new(MyApp::new(cc.egui_ctx.clone()).unwrap())),
+        Box::new(move |cc| {
+            if args.large {
+                let style = Style {
+                    // temporarily increase font size
+                    override_font_id: Some(FontId::monospace(24.0)),
+                    ..Style::default()
+                };
+                cc.egui_ctx.set_style(style);
+            }
+            Box::new(MyApp::new(cc.egui_ctx.clone()).unwrap())
+        }),
     )
 }
