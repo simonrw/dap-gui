@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 
 use serde::Deserialize;
-use types::ThreadId;
+use types::{ThreadId, StackFrameId};
 use std::sync::{mpsc::Sender, Arc, Mutex};
 // TODO: use internal error type
 use anyhow::{Context, Result};
 
 use crate::requests::{
-    Breakpoint, Continue, Initialize, Launch, RequestBody, SetFunctionBreakpoints, StackTrace,
+    Breakpoint, Continue, Initialize, Launch, RequestBody, SetFunctionBreakpoints, StackTrace, Scopes,
 };
 
 pub mod events;
@@ -125,6 +125,14 @@ where
         log::debug!("sending launch");
         self.send(RequestBody::Launch(Launch {
             program: concat!(env!("HOME"), "/dev/dap-gui/test.py").to_string(),
+        }))
+        .unwrap();
+    }
+
+    pub fn send_scopes(&mut self, id: StackFrameId) {
+        log::debug!("sending scopes for stack frame {id}");
+        self.send(RequestBody::Scopes(Scopes {
+            frame_id: id,
         }))
         .unwrap();
     }

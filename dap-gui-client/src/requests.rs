@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::types::ThreadId;
+use crate::types::{ThreadId, StackFrameId};
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -21,6 +21,7 @@ pub enum RequestBody {
     Continue(Continue),
     SetFunctionBreakpoints(SetFunctionBreakpoints),
     Launch(Launch),
+    Scopes(Scopes),
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -58,4 +59,10 @@ pub struct SetFunctionBreakpoints {
 #[serde(rename_all = "camelCase")]
 pub struct Launch {
     pub program: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Scopes {
+    pub frame_id: StackFrameId,
 }

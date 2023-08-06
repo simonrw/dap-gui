@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
 pub type ThreadId = i64;
+pub type StackFrameId = i64;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Thread {
@@ -31,6 +32,6 @@ pub struct Breakpoint {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct StackFrame {
-    pub id: u64,
+    pub id: StackFrameId,
     pub name: String,
 }

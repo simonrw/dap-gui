@@ -1,4 +1,4 @@
-use crate::types::{self, StackFrame, Thread};
+use crate::types::{self, StackFrame, Thread, Scope};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -13,12 +13,14 @@ pub struct Response {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "command", content = "body", rename_all = "camelCase")]
+#[non_exhaustive]
 pub enum ResponseBody {
     Initialize(Capabilities),
     SetFunctionBreakpoints(SetFunctionBreakpointsResponse),
     Continue(ContinueResponse),
     Threads(ThreadsResponse),
     StackTrace(StackTraceResponse),
+    Scopes(ScopesResponse),
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -87,4 +89,10 @@ pub struct ThreadsResponse {
 #[serde(rename_all = "camelCase")]
 pub struct StackTraceResponse {
     pub stack_frames: Vec<StackFrame>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScopesResponse {
+    pub scopes: Vec<Scope>,
 }

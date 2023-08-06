@@ -20,6 +20,7 @@ struct PausedState {
     current_thread_id: types::ThreadId,
     threads: Vec<types::Thread>,
     stack_frames: HashMap<i64, Vec<types::StackFrame>>,
+    scopes: Option<HashMap<types::StackFrameId, Vec<types::Scope>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -149,6 +150,34 @@ impl MyApp {
                                 _ => unreachable!("invalid state"),
                             }
                         }
+                        Scopes(body) => {
+                            let request = &reply.request.expect("no request found");
+                            log::debug!(
+                                "received scopes response {body:?} with request {request:?}"
+                            );
+                            let mut state = self.state.lock().unwrap();
+                            match state.status {
+                                AppStatus::Paused(PausedState { ref mut scopes, .. }) => {
+                                    match request.body {
+                                        RequestBody::Scopes(requests::Scopes { frame_id }) => {
+                                            match scopes {
+                                                Some(scopes) => {
+                                                    scopes.insert(frame_id, body.scopes);
+                                                }
+                                                None => {
+                                                    let mut hm = HashMap::new();
+                                                    hm.insert(frame_id, body.scopes);
+                                                    *scopes = Some(hm);
+                                                }
+                                            }
+                                        }
+                                        _ => unreachable!("invalid request type"),
+                                    }
+                                }
+                                _ => unreachable!("invalid state"),
+                            }
+                        }
+                        b => log::warn!("unhandled response: {b:?}"),
                     }
                 }
             }
@@ -195,6 +224,7 @@ impl MyApp {
                     log::debug!("received terminated event");
                     self.set_state(AppStatus::Finished);
                 }
+                e => log::warn!("unhandled event {e:?}"),
             },
         }
         self.context.request_repaint();
@@ -218,14 +248,30 @@ impl eframe::App for MyApp {
                     });
                 }
                 AppStatus::Paused(ref paused_state) => {
-                    log::debug!("app state: {paused_state:?}");
+                    log::trace!("app state: {paused_state:?}");
 
                     for thread in &paused_state.threads {
                         ui.label(format!("thread {}", thread.name));
                         ui.separator();
                         if let Some(frames) = paused_state.stack_frames.get(&thread.id) {
                             for frame in frames {
-                                ui.label(format!("\t{}", frame.name));
+                                let response = ui.collapsing(format!("\t{}", frame.name), |ui| {
+                                    if let Some(ref scopes) = paused_state.scopes {
+                                        if let Some(scopes) = scopes.get(&frame.id) {
+                                            for scope in scopes {
+                                                ui.label(format!("{}", scope.name));
+                                            }
+                                        }
+                                    }
+                                });
+
+                                if response.header_response.clicked()
+                                    && paused_state.scopes.is_none()
+                                // Only the first time
+                                {
+                                    log::debug!("uncollapsed");
+                                    state.sender.send_scopes(frame.id);
+                                }
                             }
                         }
                     }
