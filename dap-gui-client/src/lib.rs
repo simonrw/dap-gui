@@ -91,7 +91,7 @@ impl Writer {
     }
 
     pub fn send_threads_request(&mut self) {
-        log::debug!("sending configuration done");
+        log::debug!("sending threads request");
         self.send(RequestBody::Threads).unwrap();
     }
 

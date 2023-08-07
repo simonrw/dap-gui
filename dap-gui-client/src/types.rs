@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
 pub type ThreadId = i64;
+pub type BreakpointId = i64;
 pub type StackFrameId = i64;
 pub type VariablesReference = i64;
 pub type SourceReference = i64;
@@ -32,7 +33,7 @@ pub struct Source {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Breakpoint {
-    pub id: Option<i64>,
+    pub id: Option<BreakpointId>,
     pub verified: bool,
     pub message: Option<String>,
     pub source: Option<Source>,
@@ -57,4 +58,17 @@ pub struct Variable {
     pub r#type: Option<String>,
     #[serde(rename = "variablesReference")]
     pub variables_reference: VariablesReference,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub enum ModuleId {
+    Number(i64),
+    String(String),
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct Module {
+    pub id: ModuleId,
+    pub name: String,
+    pub path: Option<String>,
 }

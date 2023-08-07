@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::types::ThreadId;
+use crate::types::{BreakpointId, Module, ThreadId};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "event", content = "body", rename_all = "camelCase")]
@@ -13,6 +13,7 @@ pub enum Event {
     Continued(ContinuedEventBody),
     Thread(ThreadEventBody),
     Exited(ExitedEventBody),
+    Module(ModuleEventBody),
     Terminated,
 }
 
@@ -43,6 +44,8 @@ pub enum StoppedReason {
 pub struct StoppedEventBody {
     pub reason: StoppedReason,
     pub thread_id: ThreadId,
+    #[serde(rename = "hitBreakpointIds")]
+    pub hit_breakpoint_ids: Option<Vec<BreakpointId>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -59,4 +62,12 @@ pub struct ExitedEventBody {}
 pub struct ContinuedEventBody {
     pub thread_id: ThreadId,
     pub all_threads_continued: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModuleEventBody {
+    // TODO: enum
+    pub reason: String,
+    pub module: Module,
 }

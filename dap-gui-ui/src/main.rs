@@ -28,13 +28,20 @@ struct Args {
     large: bool,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
+struct Position {
+    _x: usize,
+    _y: usize,
+}
+
+#[derive(Debug, Clone)]
 struct PausedState {
     current_thread_id: types::ThreadId,
     threads: Vec<types::Thread>,
     stack_frames: HashMap<i64, Vec<types::StackFrame>>,
     scopes: Option<HashMap<types::StackFrameId, Vec<types::Scope>>>,
     variables: Option<HashMap<types::VariablesReference, Vec<types::Variable>>>,
+    _current_position: Position,
 }
 
 #[derive(Debug, Clone)]
@@ -218,10 +225,7 @@ impl MyApp {
                                                 log::warn!("already found variables reference {variables_reference}");
                                                 // TODO
                                             }
-                                            variables.insert(
-                                                variables_reference,
-                                                body.variables,
-                                            );
+                                            variables.insert(variables_reference, body.variables);
                                         }
                                         None => {
                                             let mut hm = HashMap::new();
@@ -268,7 +272,11 @@ impl MyApp {
 
                     self.set_state(AppStatus::Paused(PausedState {
                         current_thread_id: body.thread_id,
-                        ..Default::default()
+                        threads: Vec::new(),
+                        stack_frames: HashMap::new(),
+                        scopes: None,
+                        variables: None,
+                        _current_position: Position { _x: 0, _y: 0 },
                     }));
                 }
                 Continued(body) => {
