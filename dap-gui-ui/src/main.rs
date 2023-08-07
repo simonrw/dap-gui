@@ -420,7 +420,6 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        panic!("running update");
         egui::CentralPanel::default().show(ctx, |ui| {
             self.render_central_panel(ui, ctx);
         });
