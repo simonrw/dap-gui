@@ -413,7 +413,6 @@ impl MyApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.label("Hello world");
-            log::info!("{self:?}");
         });
     }
 }
