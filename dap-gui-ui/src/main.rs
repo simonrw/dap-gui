@@ -50,7 +50,7 @@ struct MyAppState {
     sender: Writer,
     status: AppStatus,
     breakpoints: Vec<Breakpoint>,
-    _source: String,
+    source: String,
 }
 
 impl MyAppState {
@@ -60,7 +60,7 @@ impl MyAppState {
             sender,
             status: AppStatus::Starting,
             breakpoints: Vec::new(),
-            _source: source.to_string(),
+            source: source.to_string(),
         }
     }
 
@@ -411,8 +411,9 @@ impl MyApp {
             }
         });
 
+        // source code
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.label("Hello world");
+            crate::syntax_highlighting::code_view_ui(ui, &state.source);
         });
     }
 }
