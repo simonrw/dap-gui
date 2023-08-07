@@ -420,6 +420,7 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        panic!("running update");
         egui::CentralPanel::default().show(ctx, |ui| {
             self.render_central_panel(ui, ctx);
         });
@@ -454,8 +455,28 @@ impl eframe::App for MyApp {
     }
 }
 
+#[cfg(feature = "sentry")]
+macro_rules! setup_sentry {
+    () => {
+        log::info!("setting up sentry for crash reporting");
+        let _guard = sentry::init((
+            "https://f08b65bc9944ecbb855f1ebb2cadcb92@o366030.ingest.sentry.io/4505663159926784",
+            sentry::ClientOptions {
+                release: sentry::release_name!(),
+                ..Default::default()
+            },
+        ));
+    };
+}
+
+#[cfg(not(feature = "sentry"))]
+macro_rules! setup_sentry { () => {};
+}
+
 fn main() -> Result<(), eframe::Error> {
     env_logger::init();
+
+    setup_sentry!();
 
     let args = Args::parse();
     let options = eframe::NativeOptions {

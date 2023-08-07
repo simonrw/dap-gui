@@ -35,6 +35,7 @@ mkShell {
 
   RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
 
+  RUST_LOG = "dap_gui_ui=debug,dap_gui_client=debug";
 
   LD_LIBRARY_PATH =
     if stdenv.isLinux then
