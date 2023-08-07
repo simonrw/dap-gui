@@ -13,5 +13,7 @@ dap-gui-client = { path = "../dap-gui-client" }
 env_logger = "0.10.0"
 log = "0.4.19"
 clap = { version = "4.3.19", features = ["derive"] }
+sentry = { version = "0.31.5", optional = true }
 
 [features]
+sentry = ["dep:sentry"]
