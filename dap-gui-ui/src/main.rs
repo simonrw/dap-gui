@@ -50,7 +50,7 @@ struct MyAppState {
     sender: Writer,
     status: AppStatus,
     breakpoints: Vec<Breakpoint>,
-    source: String,
+    _source: String,
 }
 
 impl MyAppState {
@@ -60,7 +60,7 @@ impl MyAppState {
             sender,
             status: AppStatus::Starting,
             breakpoints: Vec::new(),
-            source: source.to_string(),
+            _source: source.to_string(),
         }
     }
 
@@ -220,7 +220,7 @@ impl MyApp {
                                             }
                                             variables.insert(
                                                 variables_reference,
-                                                body.variables.clone(),
+                                                body.variables,
                                             );
                                         }
                                         None => {
@@ -294,7 +294,7 @@ impl MyApp {
     fn render_central_panel(&self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.label("dap-gui");
 
-        let mut state = self.state.lock().unwrap();
+        let state = self.state.lock().unwrap();
         // TODO: clone here is to work around duplicate borrow, we should not need to clone in
         // this case.
         match state.status.clone() {
@@ -323,7 +323,7 @@ impl MyApp {
 
     fn render_paused_state(
         &self,
-        ui: &mut egui::Ui,
+        _ui: &mut egui::Ui,
         ctx: &egui::Context,
         mut state: MutexGuard<'_, MyAppState>,
         paused_state: &PausedState,
@@ -342,7 +342,7 @@ impl MyApp {
                                     if let Some(scopes) = scopes.get(&frame.id) {
                                         for scope in scopes {
                                             if ui
-                                                .collapsing(format!("{}", scope.name), |ui| {
+                                                .collapsing(scope.name.to_string(), |ui| {
                                                     if let Some(ref variables) =
                                                         paused_state.variables
                                                     {
@@ -468,7 +468,8 @@ macro_rules! setup_sentry {
 }
 
 #[cfg(not(feature = "sentry"))]
-macro_rules! setup_sentry { () => {};
+macro_rules! setup_sentry {
+    () => {};
 }
 
 fn main() -> Result<(), eframe::Error> {
