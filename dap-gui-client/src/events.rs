@@ -52,7 +52,11 @@ pub struct StoppedEventBody {
 pub struct ThreadEventBody {}
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct ProcessEventBody {}
+#[serde(rename_all = "camelCase")]
+pub struct ProcessEventBody {
+    pub name: String,
+    pub start_method: Option<String>,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ExitedEventBody {}

@@ -49,6 +49,7 @@ enum AppStatus {
     Starting,
     Started,
     Paused(PausedState),
+    Running,
     Finished,
 }
 
@@ -140,7 +141,7 @@ impl MyApp {
                         }
                         Continue(body) => {
                             log::debug!("received continue response {body:?}");
-                            self.set_state(AppStatus::Started);
+                            self.set_state(AppStatus::Running);
                         }
                         Threads(body) => {
                             log::debug!("received threads response {body:?}");
@@ -259,8 +260,9 @@ impl MyApp {
                 Output(o) => {
                     log::debug!("received output event: {}", o.output);
                 }
-                Process(_body) => {
-                    log::debug!("received process event");
+                Process(body) => {
+                    log::debug!("received process event: {:?}", body);
+                    self.set_state(AppStatus::Running);
                 }
                 Stopped(body) => {
                     log::debug!("received stopped event, body: {:?}", body);
@@ -303,6 +305,7 @@ impl MyApp {
         ui.label("dap-gui");
 
         let state = self.state.lock().unwrap();
+        log::trace!("{:?}", state.status);
         // TODO: clone here is to work around duplicate borrow, we should not need to clone in
         // this case.
         match state.status.clone() {
@@ -317,6 +320,9 @@ impl MyApp {
             }
             AppStatus::Finished => {
                 ui.label("FINISHED");
+            }
+            AppStatus::Running => {
+                ui.label("Running...");
             }
         }
     }
