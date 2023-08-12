@@ -352,60 +352,53 @@ impl MyApp {
                     for frame in frames {
                         if ui
                             .collapsing(format!("\t{}", frame.name), |ui| {
-                                if let Some(ref scopes) = paused_state.scopes {
-                                    if let Some(scopes) = scopes.get(&frame.id) {
-                                        for scope in scopes {
-                                            if ui
-                                                .collapsing(scope.name.to_string(), |ui| {
-                                                    if let Some(ref variables) =
-                                                        paused_state.variables
-                                                    {
-                                                        if let Some(variables) = variables
-                                                            .get(&scope.variables_reference)
+                                if let Some(scopes) =
+                                    paused_state.scopes.as_ref().and_then(|s| s.get(&frame.id))
+                                {
+                                    for scope in scopes {
+                                        if ui
+                                            .collapsing(scope.name.to_string(), |ui| {
+                                                if let Some(variables) = paused_state
+                                                    .variables
+                                                    .as_ref()
+                                                    .and_then(|v| v.get(&scope.variables_reference))
+                                                {
+                                                    for variable in variables {
+                                                        if let Some(variable_type) =
+                                                            variable.r#type.clone()
                                                         {
-                                                            for variable in variables {
-                                                                if let Some(variable_type) =
-                                                                    variable.r#type.clone()
-                                                                {
-                                                                    if !variable_type.is_empty() {
-                                                                        ui.label(format!(
-                                                                            "{} ({}) = {}",
-                                                                            variable.name,
-                                                                            variable_type,
-                                                                            variable.value
-                                                                        ));
-                                                                        ui.label(format!(
-                                                                            "{} {}",
-                                                                            variable.name,
-                                                                            variable.value
-                                                                        ));
-                                                                    } else {
-                                                                        ui.label(format!(
-                                                                            "{} = {}",
-                                                                            variable.name,
-                                                                            variable.value
-                                                                        ));
-                                                                    }
-                                                                } else {
-                                                                    ui.label(format!(
-                                                                        "{} = {}",
-                                                                        variable.name,
-                                                                        variable.value
-                                                                    ));
-                                                                }
+                                                            if !variable_type.is_empty() {
+                                                                ui.label(format!(
+                                                                    "{} ({}) = {}",
+                                                                    variable.name,
+                                                                    variable_type,
+                                                                    variable.value
+                                                                ));
+                                                                ui.label(format!(
+                                                                    "{} {}",
+                                                                    variable.name, variable.value
+                                                                ));
+                                                            } else {
+                                                                ui.label(format!(
+                                                                    "{} = {}",
+                                                                    variable.name, variable.value
+                                                                ));
                                                             }
+                                                        } else {
+                                                            ui.label(format!(
+                                                                "{} = {}",
+                                                                variable.name, variable.value
+                                                            ));
                                                         }
                                                     }
-                                                })
-                                                .header_response
-                                                .clicked()
-                                            {
-                                                log::debug!("uncollapsed");
-                                                state
-                                                    .sender
-                                                    .send_variables(scope.variables_reference);
-                                            };
-                                        }
+                                                }
+                                            })
+                                            .header_response
+                                            .clicked()
+                                        {
+                                            log::debug!("uncollapsed");
+                                            state.sender.send_variables(scope.variables_reference);
+                                        };
                                     }
                                 }
                             })
