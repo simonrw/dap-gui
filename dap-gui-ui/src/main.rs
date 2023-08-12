@@ -12,8 +12,6 @@ use std::{
     thread,
 };
 
-mod syntax_highlighting;
-
 use dap_gui_client::{
     requests::{self, RequestBody},
     responses::{self},
@@ -406,7 +404,7 @@ impl MyApp {
 
         // source code
         egui::CentralPanel::default().show(ctx, |ui| {
-            crate::syntax_highlighting::code_view_ui(ui, &state.source);
+            dap_gui_ui::syntax_highlighting::code_view_ui(ui, &state.source);
         });
     }
 }
