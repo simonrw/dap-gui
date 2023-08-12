@@ -17,7 +17,7 @@ mod syntax_highlighting;
 use dap_gui_client::{
     requests::{self, RequestBody},
     responses::{self},
-    types::{self, Breakpoint},
+    types::{self, Breakpoint, Variable},
     Message, Reader, Reply, Writer,
 };
 
@@ -364,32 +364,7 @@ impl MyApp {
                                                     .and_then(|v| v.get(&scope.variables_reference))
                                                 {
                                                     for variable in variables {
-                                                        if let Some(variable_type) =
-                                                            variable.r#type.clone()
-                                                        {
-                                                            if !variable_type.is_empty() {
-                                                                ui.label(format!(
-                                                                    "{} ({}) = {}",
-                                                                    variable.name,
-                                                                    variable_type,
-                                                                    variable.value
-                                                                ));
-                                                                ui.label(format!(
-                                                                    "{} {}",
-                                                                    variable.name, variable.value
-                                                                ));
-                                                            } else {
-                                                                ui.label(format!(
-                                                                    "{} = {}",
-                                                                    variable.name, variable.value
-                                                                ));
-                                                            }
-                                                        } else {
-                                                            ui.label(format!(
-                                                                "{} = {}",
-                                                                variable.name, variable.value
-                                                            ));
-                                                        }
+                                                        present_variable(variable, ui);
                                                     }
                                                 }
                                             })
@@ -422,6 +397,22 @@ impl MyApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             crate::syntax_highlighting::code_view_ui(ui, &state.source);
         });
+    }
+}
+
+fn present_variable(variable: &Variable, ui: &mut egui::Ui) {
+    if let Some(variable_type) = variable.r#type.clone() {
+        if !variable_type.is_empty() {
+            ui.label(format!(
+                "{} ({}) = {}",
+                variable.name, variable_type, variable.value
+            ));
+            ui.label(format!("{} {}", variable.name, variable.value));
+        } else {
+            ui.label(format!("{} = {}", variable.name, variable.value));
+        }
+    } else {
+        ui.label(format!("{} = {}", variable.name, variable.value));
     }
 }
 
