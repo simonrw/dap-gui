@@ -18,7 +18,7 @@ use dap_gui_client::{
     requests::{self, RequestBody},
     responses::{self},
     types::{self, Breakpoint, Variable},
-    Message, Reader, Reply, Writer,
+    Message, Reader, Reply, Writer, WriterProxy,
 };
 
 // argument parsing
@@ -55,14 +55,14 @@ enum AppStatus {
 
 #[derive(Debug)]
 struct MyAppState {
-    sender: Writer,
+    sender: WriterProxy,
     status: AppStatus,
     breakpoints: Vec<Breakpoint>,
     source: String,
 }
 
 impl MyAppState {
-    pub fn new(sender: Writer) -> Self {
+    pub fn new(sender: WriterProxy) -> Self {
         let source = include_str!("../../test.py");
         Self {
             sender,
@@ -95,11 +95,22 @@ impl MyApp {
         let store = Arc::new(Mutex::new(HashMap::new()));
         let mut reader = Reader::new(BufReader::new(input_stream), tx, Arc::clone(&store));
         let mut sender = Writer::new(output_stream, Arc::clone(&store));
+        let (wtx, wrx) = mpsc::channel();
+        let writer_proxy = WriterProxy::new(wtx);
 
-        sender.send_initialize();
+        thread::spawn(move || {
+            for msg in wrx {
+                match sender.send(msg) {
+                    Ok(_) => {}
+                    Err(e) => log::warn!("sending message to writer: {e}"),
+                }
+            }
+        });
+
+        writer_proxy.send_initialize();
 
         let app = Self {
-            state: Arc::new(Mutex::new(MyAppState::new(sender))),
+            state: Arc::new(Mutex::new(MyAppState::new(writer_proxy))),
             context: ctx,
         };
         thread::spawn(move || {
@@ -267,7 +278,7 @@ impl MyApp {
                 Stopped(body) => {
                     log::debug!("received stopped event, body: {:?}", body);
                     {
-                        let mut state = self.state.lock().unwrap();
+                        let state = self.state.lock().unwrap();
                         state.sender.send_threads_request();
                         state.sender.send_stacktrace_request(body.thread_id);
                     }
@@ -327,7 +338,7 @@ impl MyApp {
         }
     }
 
-    fn render_started_state(&self, ui: &mut egui::Ui, mut state: MutexGuard<'_, MyAppState>) {
+    fn render_started_state(&self, ui: &mut egui::Ui, state: MutexGuard<'_, MyAppState>) {
         ui.horizontal(|ui| {
             if ui.button("Launch").clicked() {
                 state.sender.send_launch();
@@ -339,7 +350,7 @@ impl MyApp {
         &self,
         _ui: &mut egui::Ui,
         ctx: &egui::Context,
-        mut state: MutexGuard<'_, MyAppState>,
+        state: MutexGuard<'_, MyAppState>,
         paused_state: &PausedState,
     ) {
         log::trace!("app state: {paused_state:?}");

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::mpsc::Receiver;
 
 use serde::Deserialize;
 use std::sync::{mpsc::Sender, Arc, Mutex};
@@ -42,6 +43,105 @@ pub struct Writer {
     store: RequestStore,
 }
 
+trait DapSender {
+    fn send(&mut self, body: RequestBody) -> Result<()>;
+}
+
+#[derive(Debug)]
+pub struct WriterProxy {
+    sender: Sender<RequestBody>,
+}
+
+impl WriterProxy {
+    pub fn new(sender: Sender<RequestBody>) -> Self {
+        Self { sender }
+    }
+
+    pub fn send(&self, body: RequestBody) -> Result<()> {
+        let _ = self.sender.send(body);
+        Ok(())
+    }
+
+    pub fn send_stacktrace_request(&self, thread_id: ThreadId) {
+        log::debug!("sending stacktrace request");
+        self.send(RequestBody::StackTrace(StackTrace { thread_id }))
+            .unwrap();
+    }
+
+    pub fn send_threads_request(&self) {
+        log::debug!("sending threads request");
+        self.send(RequestBody::Threads).unwrap();
+    }
+
+    pub fn send_configuration_done(&self) {
+        log::debug!("sending configuration done");
+        self.send(RequestBody::ConfigurationDone).unwrap();
+    }
+
+    pub fn send_initialize(&self) {
+        log::debug!("sending initialize");
+        self.send(RequestBody::Initialize(Initialize {
+            adapter_id: "dap-gui".to_string(),
+        }))
+        .unwrap();
+    }
+
+    pub fn send_continue(&self, thread_id: i64) {
+        log::debug!("sending continue");
+        self.send(RequestBody::Continue(Continue {
+            thread_id,
+            single_thread: false,
+        }))
+        .unwrap();
+    }
+
+    pub fn send_set_function_breakpoints(&self, breakpoints: Vec<Breakpoint>) {
+        log::debug!("sending set function breakpoints");
+        self.send(RequestBody::SetFunctionBreakpoints(
+            SetFunctionBreakpoints {
+                breakpoints,
+                // breakpoints: vec![Breakpoint {
+                //     name: "foo".to_string(),
+                // }],
+            },
+        ))
+        .unwrap();
+        // TOOD: how to set multiple breakpoints
+    }
+
+    pub fn send_launch(&self) {
+        log::debug!("sending launch");
+        self.send(RequestBody::Launch(Launch {
+            program: concat!(env!("HOME"), "/dev/dap-gui/test.py").to_string(),
+        }))
+        .unwrap();
+    }
+
+    pub fn send_scopes(&self, id: StackFrameId) {
+        log::debug!("sending scopes for stack frame {id}");
+        self.send(RequestBody::Scopes(Scopes { frame_id: id }))
+            .unwrap();
+    }
+
+    pub fn send_variables(&self, vref: VariablesReference) {
+        log::debug!("sending variables for reference {vref}");
+        self.send(RequestBody::Variables(Variables {
+            variables_reference: vref,
+        }))
+        .unwrap();
+    }
+}
+
+// To be spawned in a background thread
+pub fn background_writer(queue: Receiver<RequestBody>, mut writer: Writer) {
+    for msg in queue {
+        match writer.send(msg) {
+            Ok(_) => {}
+            Err(e) => log::warn!("sending message to writer: {e}"),
+        }
+    }
+}
+
 impl Clone for Writer {
     fn clone(&self) -> Self {
         Self {
@@ -61,7 +161,7 @@ impl Writer {
         }
     }
 
-    fn send(&mut self, body: RequestBody) -> Result<()> {
+    pub fn send(&mut self, body: RequestBody) -> Result<()> {
         // thread::sleep(Duration::from_secs(1));
         self.sequence_number.fetch_add(1, Ordering::SeqCst);
         let message = requests::Request {
@@ -82,75 +182,6 @@ impl Writer {
         let mut store = self.store.lock().unwrap();
         store.insert(message.seq, message);
         Ok(())
-    }
-
-    pub fn send_stacktrace_request(&mut self, thread_id: ThreadId) {
-        log::debug!("sending stacktrace request");
-        self.send(RequestBody::StackTrace(StackTrace { thread_id }))
-            .unwrap();
-    }
-
-    pub fn send_threads_request(&mut self) {
-        log::debug!("sending threads request");
-        self.send(RequestBody::Threads).unwrap();
-    }
-
-    pub fn send_configuration_done(&mut self) {
-        log::debug!("sending configuration done");
-        self.send(RequestBody::ConfigurationDone).unwrap();
-    }
-
-    pub fn send_initialize(&mut self) {
-        log::debug!("sending initialize");
-        self.send(RequestBody::Initialize(Initialize {
-            adapter_id: "dap-gui".to_string(),
-        }))
-        .unwrap();
-    }
-
-    pub fn send_continue(&mut self, thread_id: i64) {
-        log::debug!("sending continue");
-        self.send(RequestBody::Continue(Continue {
-            thread_id,
-            single_thread: false,
-        }))
-        .unwrap();
-    }
-
-    pub fn send_set_function_breakpoints(&mut self, breakpoints: Vec<Breakpoint>) {
-        log::debug!("sending set function breakpoints");
-        self.send(RequestBody::SetFunctionBreakpoints(
-            SetFunctionBreakpoints {
-                breakpoints,
-                // breakpoints: vec![Breakpoint {
-                //     name: "foo".to_string(),
-                // }],
-            },
-        ))
-        .unwrap();
-        // TOOD: how to set multiple breakpoints
-    }
-
-    pub fn send_launch(&mut self) {
-        log::debug!("sending launch");
-        self.send(RequestBody::Launch(Launch {
-            program: concat!(env!("HOME"), "/dev/dap-gui/test.py").to_string(),
-        }))
-        .unwrap();
-    }
-
-    pub fn send_scopes(&mut self, id: StackFrameId) {
-        log::debug!("sending scopes for stack frame {id}");
-        self.send(RequestBody::Scopes(Scopes { frame_id: id }))
-            .unwrap();
-    }
-
-    pub fn send_variables(&mut self, vref: VariablesReference) {
-        log::debug!("sending variables for reference {vref}");
-        self.send(RequestBody::Variables(Variables {
-            variables_reference: vref,
-        }))
-        .unwrap();
     }
 }
 
