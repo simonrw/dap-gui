@@ -20,20 +20,20 @@ impl Default for App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-
             // use dap_gui_ui::syntax_highlighting;
             // syntax_highlighting::code_view_ui(ui, &self.src);
 
-            ui.add(
-                egui::TextEdit::multiline(&mut self.src)
-                    .font(egui::TextStyle::Monospace) // for cursor height
-                    .code_editor()
-                    .desired_rows(1)
-                    .lock_focus(true)
-                    .interactive(false),
-                // .layouter(&mut layouter),
-            );
-
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.add(
+                    egui::TextEdit::multiline(&mut self.src)
+                        .font(egui::TextStyle::Monospace) // for cursor height
+                        .code_editor()
+                        .desired_rows(1)
+                        .lock_focus(true)
+                        .interactive(false),
+                    // .layouter(&mut layouter),
+                );
+            });
         });
     }
 }
