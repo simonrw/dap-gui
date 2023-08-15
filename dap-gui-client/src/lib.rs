@@ -63,23 +63,23 @@ impl WriterProxy {
     }
 
     pub fn send_stacktrace_request(&self, thread_id: ThreadId) {
-        log::debug!("sending stacktrace request");
+        tracing::debug!("sending stacktrace request");
         self.send(RequestBody::StackTrace(StackTrace { thread_id }))
             .unwrap();
     }
 
     pub fn send_threads_request(&self) {
-        log::debug!("sending threads request");
+        tracing::debug!("sending threads request");
         self.send(RequestBody::Threads).unwrap();
     }
 
     pub fn send_configuration_done(&self) {
-        log::debug!("sending configuration done");
+        tracing::debug!("sending configuration done");
         self.send(RequestBody::ConfigurationDone).unwrap();
     }
 
     pub fn send_initialize(&self) {
-        log::debug!("sending initialize");
+        tracing::debug!("sending initialize");
         self.send(RequestBody::Initialize(Initialize {
             adapter_id: "dap-gui".to_string(),
         }))
@@ -87,7 +87,7 @@ impl WriterProxy {
     }
 
     pub fn send_continue(&self, thread_id: i64) {
-        log::debug!("sending continue");
+        tracing::debug!("sending continue");
         self.send(RequestBody::Continue(Continue {
             thread_id,
             single_thread: false,
@@ -96,7 +96,7 @@ impl WriterProxy {
     }
 
     pub fn send_set_function_breakpoints(&self, breakpoints: Vec<Breakpoint>) {
-        log::debug!("sending set function breakpoints");
+        tracing::debug!("sending set function breakpoints");
         self.send(RequestBody::SetFunctionBreakpoints(
             SetFunctionBreakpoints {
                 breakpoints,
@@ -110,7 +110,7 @@ impl WriterProxy {
     }
 
     pub fn send_launch(&self) {
-        log::debug!("sending launch");
+        tracing::debug!("sending launch");
         self.send(RequestBody::Launch(Launch {
             program: concat!(env!("HOME"), "/dev/dap-gui/test.py").to_string(),
         }))
@@ -118,13 +118,13 @@ impl WriterProxy {
     }
 
     pub fn send_scopes(&self, id: StackFrameId) {
-        log::debug!("sending scopes for stack frame {id}");
+        tracing::debug!("sending scopes for stack frame {id}");
         self.send(RequestBody::Scopes(Scopes { frame_id: id }))
             .unwrap();
     }
 
     pub fn send_variables(&self, vref: VariablesReference) {
-        log::debug!("sending variables for reference {vref}");
+        tracing::debug!("sending variables for reference {vref}");
         self.send(RequestBody::Variables(Variables {
             variables_reference: vref,
         }))
@@ -137,7 +137,7 @@ pub fn background_writer(queue: Receiver<RequestBody>, mut writer: Writer) {
     for msg in queue {
         match writer.send(msg) {
             Ok(_) => {}
-            Err(e) => log::warn!("sending message to writer: {e}"),
+            Err(e) => tracing::warn!("sending message to writer: {e}"),
         }
     }
 }
@@ -170,7 +170,7 @@ impl Writer {
             body,
         };
         let resp_json = serde_json::to_string(&message).unwrap();
-        log::trace!("sending message {resp_json}");
+        tracing::trace!("sending message {resp_json}");
         write!(
             self.output_buffer,
             "Content-Length: {}\r\n\r\n{}",
@@ -234,7 +234,7 @@ where
                 }
             },
             Ok(None) => (),
-            Err(e) => log::warn!("error parsing response: {}", e),
+            Err(e) => tracing::warn!("error parsing response: {}", e),
         }
     }
 

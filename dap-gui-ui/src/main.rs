@@ -64,7 +64,7 @@ impl MyAppState {
     pub fn new(sender: WriterProxy) -> Self {
         let source = include_str!("../../test.py");
 
-        log::debug!("creating initial state");
+        tracing::debug!("creating initial state");
         Self {
             sender,
             status: AppStatus::WaitingForConnection,
@@ -74,7 +74,7 @@ impl MyAppState {
     }
 
     fn set_state(&mut self, state: AppStatus) {
-        log::debug!("changing state to {:?}", state);
+        tracing::debug!("changing state to {:?}", state);
         self.status = state;
     }
 }
@@ -103,7 +103,7 @@ impl MyApp {
             for msg in wrx {
                 match sender.send(msg) {
                     Ok(_) => {}
-                    Err(e) => log::warn!("sending message to writer: {e}"),
+                    Err(e) => tracing::warn!("sending message to writer: {e}"),
                 }
             }
         });
@@ -117,9 +117,9 @@ impl MyApp {
         let control_app = app.clone();
         let listener = TcpListener::bind("127.0.0.1:7777").expect("cannot bind to control socket");
         thread::spawn(move || {
-            log::debug!("waiting for control events");
+            tracing::debug!("waiting for control events");
             if let Some(_stream) = listener.incoming().next() {
-                log::debug!("got control event");
+                tracing::debug!("got control event");
                 let mut state = control_app.state.lock().unwrap();
                 if let AppStatus::WaitingForConnection = state.status {
                     // launch app
@@ -154,11 +154,11 @@ impl MyApp {
                 if let Some(body) = r.body {
                     match body {
                         Initialize(_init) => {
-                            log::debug!("received initialize response");
+                            tracing::debug!("received initialize response");
                             self.set_state(AppStatus::Started)
                         }
                         SetFunctionBreakpoints(body) => {
-                            log::debug!("received set function breakpoints response: {body:?}");
+                            tracing::debug!("received set function breakpoints response: {body:?}");
                             let mut state = self.state.lock().unwrap();
 
                             state.breakpoints = body.breakpoints;
@@ -166,11 +166,11 @@ impl MyApp {
                             state.sender.send_configuration_done();
                         }
                         Continue(body) => {
-                            log::debug!("received continue response {body:?}");
+                            tracing::debug!("received continue response {body:?}");
                             self.set_state(AppStatus::Running);
                         }
                         Threads(body) => {
-                            log::debug!("received threads response {body:?}");
+                            tracing::debug!("received threads response {body:?}");
                             let mut state = self.state.lock().unwrap();
                             match state.status {
                                 AppStatus::Paused(PausedState {
@@ -190,7 +190,7 @@ impl MyApp {
                         }
                         StackTrace(body) => {
                             let request = &reply.request.expect("no request found");
-                            log::debug!(
+                            tracing::debug!(
                                 "received threads response {body:?} with request {request:?}"
                             );
                             let mut state = self.state.lock().unwrap();
@@ -209,7 +209,7 @@ impl MyApp {
                         }
                         Scopes(body) => {
                             let request = &reply.request.expect("no request found");
-                            log::debug!(
+                            tracing::debug!(
                                 "received scopes response {body:?} with request {request:?}"
                             );
                             let mut state = self.state.lock().unwrap();
@@ -236,7 +236,7 @@ impl MyApp {
                         }
                         Variables(body) => {
                             let request = &reply.request.expect("no request found");
-                            log::debug!(
+                            tracing::debug!(
                                 "received variables response {body:?} with request {request:?}"
                             );
                             let mut state = self.state.lock().unwrap();
@@ -249,7 +249,7 @@ impl MyApp {
                                     }) => match variables {
                                         Some(variables) => {
                                             if variables.contains_key(&variables_reference) {
-                                                log::warn!("already found variables reference {variables_reference}");
+                                                tracing::warn!("already found variables reference {variables_reference}");
                                                 // TODO
                                             }
                                             variables.insert(variables_reference, body.variables);
@@ -265,13 +265,13 @@ impl MyApp {
                                 _ => unreachable!("invalid state"),
                             }
                         }
-                        b => log::warn!("unhandled response: {b:?}"),
+                        b => tracing::warn!("unhandled response: {b:?}"),
                     }
                 }
             }
             Message::Event(m) => match m {
                 Initialized => {
-                    log::debug!("received initialize event");
+                    tracing::debug!("received initialize event");
 
                     let breakpoints = vec![requests::Breakpoint {
                         name: "foo".to_string(),
@@ -284,14 +284,14 @@ impl MyApp {
                         .send_set_function_breakpoints(breakpoints);
                 }
                 Output(o) => {
-                    log::debug!("received output event: {}", o.output);
+                    tracing::debug!("received output event: {}", o.output);
                 }
                 Process(body) => {
-                    log::debug!("received process event: {:?}", body);
+                    tracing::debug!("received process event: {:?}", body);
                     self.set_state(AppStatus::Running);
                 }
                 Stopped(body) => {
-                    log::debug!("received stopped event, body: {:?}", body);
+                    tracing::debug!("received stopped event, body: {:?}", body);
                     {
                         let state = self.state.lock().unwrap();
                         state.sender.send_threads_request();
@@ -308,20 +308,20 @@ impl MyApp {
                     }));
                 }
                 Continued(body) => {
-                    log::debug!("received continued event {body:?}");
+                    tracing::debug!("received continued event {body:?}");
                 }
                 Thread(_thread_info) => {
-                    log::debug!("received thread event");
+                    tracing::debug!("received thread event");
                 }
                 Exited(_body) => {
-                    log::debug!("received exited event");
+                    tracing::debug!("received exited event");
                     self.set_state(AppStatus::Finished);
                 }
                 Terminated => {
-                    log::debug!("received terminated event");
+                    tracing::debug!("received terminated event");
                     self.set_state(AppStatus::Finished);
                 }
-                e => log::warn!("unhandled event {e:?}"),
+                e => tracing::warn!("unhandled event {e:?}"),
             },
         }
         self.context.request_repaint();
@@ -331,7 +331,7 @@ impl MyApp {
         ui.label("dap-gui");
 
         let state = self.state.lock().unwrap();
-        log::trace!("{:?}", state.status);
+        tracing::trace!("{:?}", state.status);
         // TODO: clone here is to work around duplicate borrow, we should not need to clone in
         // this case.
         match state.status.clone() {
@@ -371,7 +371,7 @@ impl MyApp {
         state: MutexGuard<'_, MyAppState>,
         paused_state: &PausedState,
     ) {
-        log::trace!("app state: {paused_state:?}");
+        tracing::trace!("app state: {paused_state:?}");
 
         egui::SidePanel::left("sidebar").show(ctx, |ui| {
             for thread in &paused_state.threads {
@@ -400,7 +400,7 @@ impl MyApp {
                                             .header_response
                                             .clicked()
                                         {
-                                            log::debug!("uncollapsed");
+                                            tracing::debug!("uncollapsed");
                                             state.sender.send_variables(scope.variables_reference);
                                         };
                                     }
@@ -410,7 +410,7 @@ impl MyApp {
                             .clicked()
                         {
                             // TODO: only first time
-                            log::debug!("uncollapsed");
+                            tracing::debug!("uncollapsed");
                             state.sender.send_scopes(frame.id);
                         }
                     }
@@ -484,7 +484,7 @@ impl eframe::App for MyApp {
 #[cfg(feature = "sentry")]
 macro_rules! setup_sentry {
     () => {
-        log::info!("setting up sentry for crash reporting");
+        tracing::info!("setting up sentry for crash reporting");
         let _guard = sentry::init((
             "https://f08b65bc9944ecbb855f1ebb2cadcb92@o366030.ingest.sentry.io/4505663159926784",
             sentry::ClientOptions {
@@ -501,7 +501,7 @@ macro_rules! setup_sentry {
 }
 
 fn main() -> Result<(), eframe::Error> {
-    env_logger::init();
+    tracing_subscriber::fmt::init();
 
     setup_sentry!();
 
