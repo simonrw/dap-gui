@@ -7,7 +7,7 @@ use eframe::{
 use std::{
     collections::HashMap,
     io::BufReader,
-    net::TcpStream,
+    net::{TcpListener, TcpStream},
     sync::{mpsc, Arc, Mutex, MutexGuard},
     thread,
 };
@@ -44,6 +44,7 @@ struct PausedState {
 
 #[derive(Debug, Clone)]
 enum AppStatus {
+    WaitingForConnection,
     Starting,
     Started,
     Paused(PausedState),
@@ -62,9 +63,11 @@ struct MyAppState {
 impl MyAppState {
     pub fn new(sender: WriterProxy) -> Self {
         let source = include_str!("../../test.py");
+
+        log::debug!("creating initial state");
         Self {
             sender,
-            status: AppStatus::Starting,
+            status: AppStatus::WaitingForConnection,
             breakpoints: Vec::new(),
             source: source.to_string(),
         }
@@ -105,12 +108,26 @@ impl MyApp {
             }
         });
 
-        writer_proxy.send_initialize();
-
         let app = Self {
             state: Arc::new(Mutex::new(MyAppState::new(writer_proxy))),
             context: ctx,
         };
+
+        // wait for control events
+        let control_app = app.clone();
+        let listener = TcpListener::bind("127.0.0.1:7777").expect("cannot bind to control socket");
+        thread::spawn(move || {
+            log::debug!("waiting for control events");
+            if let Some(_stream) = listener.incoming().next() {
+                log::debug!("got control event");
+                let mut state = control_app.state.lock().unwrap();
+                if let AppStatus::WaitingForConnection = state.status {
+                    // launch app
+                    state.set_state(AppStatus::Starting);
+                }
+            }
+        });
+
         thread::spawn(move || {
             reader.poll_loop();
         });
@@ -332,6 +349,9 @@ impl MyApp {
             }
             AppStatus::Running => {
                 ui.label("Running...");
+            }
+            AppStatus::WaitingForConnection => {
+                ui.label("Waiting for connection");
             }
         }
     }
