@@ -4,9 +4,10 @@ use eframe::{
     egui::{self, Style},
     epaint::FontId,
 };
+use serde::Deserialize;
 use std::{
     collections::HashMap,
-    io::BufReader,
+    io::{BufReader, Read},
     net::{TcpListener, TcpStream},
     sync::{mpsc, Arc, Mutex, MutexGuard},
     thread,
@@ -85,6 +86,11 @@ struct MyApp {
     context: egui::Context,
 }
 
+#[derive(Debug, Deserialize)]
+struct ControlMessage {
+    a: usize,
+}
+
 impl MyApp {
     fn new(ctx: egui::Context) -> Result<MyApp> {
         let input_stream =
@@ -118,12 +124,28 @@ impl MyApp {
         let listener = TcpListener::bind("127.0.0.1:7777").expect("cannot bind to control socket");
         thread::spawn(move || {
             tracing::debug!("waiting for control events");
-            if let Some(_stream) = listener.incoming().next() {
+            for stream in listener.incoming() {
+                let mut stream = stream.expect("loading stream");
                 tracing::debug!("got control event");
-                let mut state = control_app.state.lock().unwrap();
-                if let AppStatus::WaitingForConnection = state.status {
-                    // launch app
-                    state.set_state(AppStatus::Starting);
+
+                let mut buf = Vec::new();
+                let _ = stream.read_to_end(&mut buf).unwrap();
+                let message_s = std::str::from_utf8(&buf).unwrap();
+
+                match serde_json::from_str::<ControlMessage>(message_s) {
+                    Ok(message) => {
+                        tracing::info!(?message, "received message");
+
+                        let mut state = control_app.state.lock().unwrap();
+                        if let AppStatus::WaitingForConnection = state.status {
+                            // launch app
+                            state.set_state(AppStatus::Starting);
+                        }
+                        break;
+                    }
+                    Err(e) => {
+                        tracing::warn!(?e, "invalid message, skipping");
+                    }
                 }
             }
         });
