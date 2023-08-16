@@ -769,6 +769,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dap-debugger"
+version = "0.1.0"
+
+[[package]]
 name = "dap-gui-client"
 version = "0.1.0"
 dependencies = [
