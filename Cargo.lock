@@ -771,6 +771,11 @@ dependencies = [
 [[package]]
 name = "dap-debugger"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dap-gui-client",
+ "tracing",
+]
 
 [[package]]
 name = "dap-gui-client"
