@@ -16,6 +16,8 @@ let
     debugpy
     black
     scapy
+    prompt-toolkit
+    pygments
   ]);
 
 in
