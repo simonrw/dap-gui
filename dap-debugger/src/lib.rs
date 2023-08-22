@@ -10,9 +10,10 @@ use anyhow::{Context, Result};
 
 use dap_gui_client::{Reader, Reply, Writer, WriterProxy};
 
+pub mod types;
+
 pub struct Debugger {
     sender: WriterProxy,
-    // internal: DebuggerInternal,
 }
 
 impl Debugger {
@@ -53,10 +54,24 @@ impl Debugger {
             }
         });
 
+        writer_proxy.send_initialize();
+        // TODO: wait for initialize response
+
         Ok(Self {
             sender: writer_proxy,
         })
     }
-}
 
-enum DebuggerInternal {}
+    pub fn set_function_breakpoint(&mut self, defn: types::FunctionBreakpoint) -> Result<()> {
+        self.sender.send_set_function_breakpoints(vec![defn.into()]);
+        Ok(())
+    }
+
+    pub fn launch(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn continue_execution(&mut self) -> Result<()> {
+        Ok(())
+    }
+}

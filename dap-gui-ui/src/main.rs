@@ -88,7 +88,6 @@ struct MyApp {
 
 #[derive(Debug, Deserialize)]
 struct ControlMessage {
-    a: usize,
 }
 
 impl MyApp {
@@ -295,7 +294,7 @@ impl MyApp {
                 Initialized => {
                     tracing::debug!("received initialize event");
 
-                    let breakpoints = vec![requests::Breakpoint {
+                    let breakpoints = vec![requests::FunctionBreakpoint {
                         name: "foo".to_string(),
                     }];
 

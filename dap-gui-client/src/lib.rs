@@ -11,7 +11,7 @@ use types::{StackFrameId, ThreadId, VariablesReference};
 use anyhow::{Context, Result};
 
 use crate::requests::{
-    Breakpoint, Continue, Initialize, Launch, RequestBody, Scopes, SetFunctionBreakpoints,
+    FunctionBreakpoint, Continue, Initialize, Launch, RequestBody, Scopes, SetFunctionBreakpoints,
     StackTrace, Variables,
 };
 
@@ -95,7 +95,7 @@ impl WriterProxy {
         .unwrap();
     }
 
-    pub fn send_set_function_breakpoints(&self, breakpoints: Vec<Breakpoint>) {
+    pub fn send_set_function_breakpoints(&self, breakpoints: Vec<FunctionBreakpoint>) {
         tracing::debug!("sending set function breakpoints");
         self.send(RequestBody::SetFunctionBreakpoints(
             SetFunctionBreakpoints {

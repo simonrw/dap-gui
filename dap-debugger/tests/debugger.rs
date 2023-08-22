@@ -1,9 +1,9 @@
 use anyhow::Result;
-use dap_debugger::Debugger;
+use dap_debugger::{types, Debugger};
 use std::{
     net::TcpListener,
     process::{Child, Command},
-    thread,
+    thread, time::Duration,
 };
 
 // run a background server on a random port, and return the port used
@@ -33,10 +33,12 @@ fn get_random_tcp_port() -> Result<u16> {
 
 fn run_server() -> Result<Server> {
     let port = get_random_tcp_port()?;
+    let port_env = format!("PORT={port}");
     let child = Command::new("make")
-        .env("PORT", format!("{port}"))
-        .args(["-C", "..", "run-server"])
+        .args(["-C", "..", "run-server", &port_env])
         .spawn()?;
+    // wait for server to start
+    thread::sleep(Duration::from_secs(1));
     Ok(Server { port, child })
 }
 
@@ -53,7 +55,15 @@ fn end_to_end() {
             messages.push(reply);
         };
 
-        let _debugger = Debugger::new(s, format!("127.0.0.1:{}", server.port), callback);
+        let mut debugger = Debugger::new(s, format!("127.0.0.1:{}", server.port), callback).unwrap();
+        debugger
+            .set_function_breakpoint(types::FunctionBreakpoint {
+                name: "main".to_string(),
+            })
+            .unwrap();
+        debugger.launch().unwrap();
+        // blocks until breakpoint hit
+        debugger.continue_execution().unwrap();
     });
 
     server.kill().unwrap();

@@ -46,14 +46,14 @@ pub struct Continue {
 }
 
 #[derive(Debug, Serialize, Clone)]
-pub struct Breakpoint {
+pub struct FunctionBreakpoint {
     pub name: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SetFunctionBreakpoints {
-    pub breakpoints: Vec<Breakpoint>,
+    pub breakpoints: Vec<FunctionBreakpoint>,
 }
 
 #[derive(Debug, Serialize, Clone)]
