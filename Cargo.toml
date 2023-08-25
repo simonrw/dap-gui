@@ -2,5 +2,5 @@
 
 members = [
     "dap-gui-ui",
-    "dap-gui-client",
+    "dap-client",
 ]

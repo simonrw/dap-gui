@@ -12,7 +12,7 @@ use std::{
     thread,
 };
 
-use dap_gui_client::{
+use dap_client::{
     requests::{self, RequestBody},
     responses::{self},
     types::{self, Breakpoint, Variable},
@@ -129,7 +129,7 @@ impl MyApp {
     }
 
     fn handle_message(&mut self, reply: Reply) {
-        use dap_gui_client::events::Event::*;
+        use dap_client::events::Event::*;
         match reply.message {
             Message::Response(r) => {
                 use responses::ResponseBody::*;

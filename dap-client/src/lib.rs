@@ -43,23 +43,31 @@ pub struct Writer {
     store: RequestStore,
 }
 
-trait DapSender {
-    fn send(&mut self, body: RequestBody) -> Result<()>;
+/// Type that is sent to the actual TCP stream that inclues a method of responding to the
+/// WriterProxy caller
+pub struct WriterMessage {
+    body: RequestBody,
+    respond_to: oneshot::Sender<responses::Response>,
 }
 
 #[derive(Debug)]
 pub struct WriterProxy {
-    sender: Sender<RequestBody>,
+    sender: Sender<WriterMessage>,
 }
 
 impl WriterProxy {
-    pub fn new(sender: Sender<RequestBody>) -> Self {
+    pub fn new(sender: Sender<WriterMessage>) -> Self {
         Self { sender }
     }
 
-    pub fn send(&self, body: RequestBody) -> Result<()> {
-        let _ = self.sender.send(body);
-        Ok(())
+    pub fn send(&self, body: RequestBody) -> Result<responses::Response> {
+        let (tx, rx) = oneshot::channel();
+        let _ = self.sender.send(WriterMessage {
+            body,
+            respond_to: tx,
+        });
+        let response = rx.recv().expect("sender went away");
+        Ok(response)
     }
 
     pub fn send_stacktrace_request(&self, thread_id: ThreadId) {
