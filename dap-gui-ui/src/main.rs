@@ -89,7 +89,6 @@ impl MyApp {
         let output_stream = input_stream.try_clone().unwrap();
 
         let (tx, rx) = mpsc::channel();
-
         let store = Arc::new(Mutex::new(HashMap::new()));
         let mut reader = Reader::new(BufReader::new(input_stream), tx, Arc::clone(&store));
         let mut sender = Writer::new(output_stream, Arc::clone(&store));

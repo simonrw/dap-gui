@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{self, Receiver};
+use std::thread;
 
 use serde::Deserialize;
 use std::sync::{mpsc::Sender, Arc, Mutex};
@@ -20,7 +21,10 @@ pub mod requests;
 pub mod responses;
 pub mod types;
 
-pub type RequestStore = Arc<Mutex<HashMap<i64, requests::Request>>>;
+// pub type RequestStore = Arc<Mutex<HashMap<i64, requests::Request>>>;
+pub struct RequestStore {
+}
+
 
 #[derive(Debug)]
 pub struct Reply {
@@ -86,12 +90,13 @@ impl WriterProxy {
         self.send(RequestBody::ConfigurationDone).unwrap();
     }
 
-    pub fn send_initialize(&self) {
+    pub fn send_initialize(&self) -> Result<responses::Capabilities> {
         log::debug!("sending initialize");
         self.send(RequestBody::Initialize(Initialize {
             adapter_id: "dap-gui".to_string(),
         }))
         .unwrap();
+        todo!()
     }
 
     pub fn send_continue(&self, thread_id: i64) {
@@ -155,13 +160,13 @@ impl Clone for Writer {
         Self {
             output_buffer: self.output_buffer.try_clone().unwrap(),
             sequence_number: Arc::clone(&self.sequence_number),
-            store: self.store.clone(),
+            store: Arc::clone(&self.store),
         }
     }
 }
 
 impl Writer {
-    pub fn new(output_buffer: TcpStream, store: RequestStore) -> Self {
+    pub fn new(output_buffer: TcpStream, store: RequestStore, messages_tx: Sender<()>) -> Self {
         Self {
             output_buffer,
             sequence_number: Arc::new(AtomicI64::new(0)),
@@ -169,9 +174,9 @@ impl Writer {
         }
     }
 
-    pub fn send(&mut self, body: RequestBody) -> Result<()> {
-        // thread::sleep(Duration::from_secs(1));
+    pub fn send(&mut self, body: WriterMessage) -> Result<responses::Response> {
         self.sequence_number.fetch_add(1, Ordering::SeqCst);
+        let WriterMessage { body, respond_to } = body;
         let message = requests::Request {
             seq: self.sequence_number.load(Ordering::SeqCst),
             r#type: "request".to_string(),
@@ -191,7 +196,21 @@ impl Writer {
         store.insert(message.seq, message);
         Ok(())
     }
+
+    pub fn handle(mut self) -> WriterProxy {
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            for msg in rx {
+                match self.send(msg) {
+                    Ok(_) => {}
+                    Err(e) => log::warn!("sending message to writer: {e}"),
+                }
+            }
+        });
+        WriterProxy::new(tx)
+    }
 }
+
 
 pub struct Reader<R>
 where
@@ -206,7 +225,12 @@ impl<R> Reader<R>
 where
     R: Read,
 {
-    pub fn new(input: BufReader<R>, dest: Sender<Reply>, store: RequestStore) -> Self {
+    pub fn new(
+        input: BufReader<R>,
+        dest: Sender<Reply>,
+        store: RequestStore,
+        for_responses: Receiver<()>,
+    ) -> Self {
         Self {
             input_buffer: input,
             dest,
