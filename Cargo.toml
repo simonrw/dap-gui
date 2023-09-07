@@ -1,6 +1,5 @@
 [workspace]
 
 members = [
-    "dap-gui-ui",
     "dap-gui-client",
 ]
