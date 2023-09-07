@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+pub type Seq = i64;
 pub type ThreadId = i64;
 pub type BreakpointId = i64;
 pub type StackFrameId = i64;
