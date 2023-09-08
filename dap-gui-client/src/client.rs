@@ -30,10 +30,6 @@ pub struct Client {
     // TODO: trait implementor
     output: TcpStream,
 
-    // reader
-    // TODO: trait implementor
-    input: BufReader<TcpStream>,
-
     // common
     sequence_number: Arc<AtomicI64>,
     store: RequestStore,
@@ -41,18 +37,23 @@ pub struct Client {
 
 impl Client {
     pub fn new(stream: TcpStream) -> Result<Self> {
-        let input = stream.try_clone().context("cloning stream")?;
-        let buffered_stream = BufReader::new(input);
-
         // internal state
         let sequence_number = Arc::new(AtomicI64::new(1));
 
         Ok(Self {
             output: stream,
-            input: buffered_stream,
             sequence_number,
             store: RequestStore::default(),
         })
+    }
+
+    pub fn reader<Handler>(&self, handler: Handler) -> Reader<Handler> {
+        let input = self.output.try_clone().unwrap();
+        Reader {
+            input: BufReader::new(input),
+            store: Arc::clone(&self.store),
+            handler,
+        }
     }
 
     pub fn send(&mut self, body: requests::RequestBody) -> Result<responses::Response> {
@@ -73,7 +74,6 @@ impl Client {
         )
         .unwrap();
         self.output.flush().unwrap();
-        let mut store = self.store.lock().unwrap();
 
         let (tx, rx) = oneshot::channel();
         let waiting_request = WaitingRequest {
@@ -81,12 +81,31 @@ impl Client {
             responder: tx,
         };
 
-        store.insert(message.seq, waiting_request);
+        {
+            let mut store = self.store.lock().unwrap();
+            store.insert(message.seq, waiting_request);
+        }
         let reply = rx.recv().unwrap();
         Ok(reply)
     }
+}
 
-    pub fn poll_message(&mut self) -> Result<Option<Message>> {
+enum ClientState {
+    Header,
+    Content,
+}
+
+pub struct Reader<Handler> {
+    input: BufReader<TcpStream>,
+    store: RequestStore,
+    handler: Handler,
+}
+
+impl<Handler> Reader<Handler>
+where
+    Handler: EventHandler,
+{
+    fn poll_message(&mut self) -> Result<Option<Message>> {
         let mut state = ClientState::Header;
         let mut buffer = String::new();
         let mut content_length: usize = 0;
@@ -141,9 +160,48 @@ impl Client {
             }
         }
     }
+
+    pub fn run_poll_loop(&mut self) -> Result<()> {
+        loop {
+            match self.poll_message() {
+                Ok(Some(msg)) => match msg {
+                    Message::Event(e) => {
+                        tracing::debug!(event = ?e, "got event");
+                        if let Err(e) = self.handler.on_event(e) {
+                            tracing::warn!(error = %e, "error handling event");
+                        };
+                    }
+                    Message::Response(r) => {
+                        tracing::debug!(response = ?r, "got response");
+                        let mut store = self.store.lock().unwrap();
+                        match store.remove(&r.request_seq) {
+                            Some(w) => {
+                                let _ = w.responder.send(r);
+                            }
+                            None => todo!(),
+                        }
+                    }
+                },
+                Ok(None) => return Ok(()),
+                Err(e) => eprintln!("reader error: {e}"),
+            }
+        }
+    }
 }
 
-enum ClientState {
-    Header,
-    Content,
+pub trait EventHandler {
+    type Error: std::fmt::Display;
+    fn on_event(&mut self, event: events::Event) -> Result<(), Self::Error>;
+}
+
+impl<E, F> EventHandler for F
+where
+    F: Fn(events::Event) -> Result<(), E>,
+    E: std::fmt::Display,
+{
+    type Error = E;
+
+    fn on_event(&mut self, event: events::Event) -> Result<(), Self::Error> {
+        self(event)
+    }
 }

@@ -48,6 +48,8 @@ dependencies = [
  "oneshot",
  "serde",
  "serde_json",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
