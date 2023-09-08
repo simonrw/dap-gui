@@ -1,9 +1,10 @@
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicI64, Ordering};
+use std::thread;
 
 use serde::Deserialize;
-use std::sync::Arc;
+use std::sync::{Arc, mpsc};
 // TODO: use internal error type
 use anyhow::{Context, Result};
 
@@ -36,28 +37,37 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(stream: TcpStream) -> Result<Self> {
+    pub fn new<Handler>(stream: TcpStream, handler: Handler) -> Result<Self>
+    where
+        Handler: EventHandler + Send + 'static,
+    {
         // internal state
-        let sequence_number = Arc::new(AtomicI64::new(1));
+        let sequence_number = Arc::new(AtomicI64::new(0));
+
+        // Background poller to send responses and events
+        let input_stream = stream.try_clone().unwrap();
+        let store = RequestStore::default();
+        let store_clone = Arc::clone(&store);
+        thread::spawn(move || {
+            let input = BufReader::new(input_stream);
+            let mut reader = Reader {
+                input,
+                store: store_clone,
+                handler,
+            };
+            if let Err(e) = reader.run_poll_loop() {
+                tracing::warn!(error = ?e, "running poll loop");
+            }
+        });
 
         Ok(Self {
             output: stream,
             sequence_number,
-            store: RequestStore::default(),
+            store,
         })
     }
 
-    pub fn reader<Handler>(&self, handler: Handler) -> Reader<Handler> {
-        let input = self.output.try_clone().unwrap();
-        Reader {
-            input: BufReader::new(input),
-            store: Arc::clone(&self.store),
-            handler,
-        }
-    }
-
     pub fn send(&mut self, body: requests::RequestBody) -> Result<responses::Response> {
-        // thread::sleep(Duration::from_secs(1));
         self.sequence_number.fetch_add(1, Ordering::SeqCst);
         let message = requests::Request {
             seq: self.sequence_number.load(Ordering::SeqCst),
@@ -75,10 +85,8 @@ impl Client {
         .unwrap();
         self.output.flush().unwrap();
 
-        let (tx, rx) = oneshot::channel();
-        let waiting_request = WaitingRequest {
-            responder: tx,
-        };
+        let (tx, rx) = mpsc::channel();
+        let waiting_request = WaitingRequest { responder: tx };
 
         {
             let mut store = self.store.lock().unwrap();
@@ -177,11 +185,14 @@ where
                             Some(w) => {
                                 let _ = w.responder.send(r);
                             }
-                            None => todo!(),
+                            None => todo!("no message in request store"),
                         }
                     }
                 },
-                Ok(None) => return Ok(()),
+                Ok(None) => {
+                    tracing::debug!("ok none");
+                    return Ok(());
+                }
                 Err(e) => eprintln!("reader error: {e}"),
             }
         }

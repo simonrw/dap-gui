@@ -1,4 +1,4 @@
-use std::{net::TcpStream, thread};
+use std::net::TcpStream;
 
 use dap_gui_client::requests::{self, Initialize};
 
@@ -14,13 +14,7 @@ fn test_initialize() {
     init_test_logger();
 
     let stream = TcpStream::connect("127.0.0.1:5678").unwrap();
-    let mut client = dap_gui_client::Client::new(stream).unwrap();
-    let mut reader = client.reader(|_e| Ok::<_, anyhow::Error>(()));
-    thread::spawn(move || {
-        if let Err(e) = reader.run_poll_loop() {
-            eprintln!("error running poll loop: {e}");
-        }
-    });
+    let mut client = dap_gui_client::Client::new(stream, |_| Ok::<_, anyhow::Error>(())).unwrap();
 
     let req = requests::RequestBody::Initialize(Initialize {
         adapter_id: "dap gui".to_string(),
