@@ -1,23 +1,14 @@
-use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicI64, Ordering};
 
 use serde::Deserialize;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 // TODO: use internal error type
 use anyhow::{Context, Result};
 
-use crate::{events, requests, responses, types};
-
-/// Wraps the incoming request with a channel to reply back on
-struct WaitingRequest {
-    request: requests::Request,
-    responder: oneshot::Sender<responses::Response>,
-}
-
-/// A container for the requests awaiting responses
-type RequestStore = Arc<Mutex<HashMap<types::Seq, WaitingRequest>>>;
+use crate::request_store::{RequestStore, WaitingRequest};
+use crate::{events, requests, responses};
 
 #[derive(Debug)]
 pub struct Reply {
@@ -49,6 +40,21 @@ pub struct Client {
 }
 
 impl Client {
+    pub fn new(stream: TcpStream) -> Result<Self> {
+        let input = stream.try_clone().context("cloning stream")?;
+        let buffered_stream = BufReader::new(input);
+
+        // internal state
+        let sequence_number = Arc::new(AtomicI64::new(1));
+
+        Ok(Self {
+            output: stream,
+            input: buffered_stream,
+            sequence_number,
+            store: RequestStore::default(),
+        })
+    }
+
     pub fn send(&mut self, body: requests::RequestBody) -> Result<responses::Response> {
         // thread::sleep(Duration::from_secs(1));
         self.sequence_number.fetch_add(1, Ordering::SeqCst);

@@ -6,5 +6,6 @@ pub mod requests;
 pub mod responses;
 pub mod types;
 mod client;
+mod request_store;
 
 pub use client::Client;
