@@ -1,10 +1,12 @@
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
+use std::time::Duration;
 
+use oneshot::{Receiver, Sender};
 use serde::Deserialize;
-use std::sync::{Arc, mpsc};
+use std::sync::{mpsc, Arc};
 // TODO: use internal error type
 use anyhow::{Context, Result};
 
@@ -34,6 +36,9 @@ pub struct Client {
     // common
     sequence_number: Arc<AtomicI64>,
     store: RequestStore,
+
+    // Option because of drop and take
+    exit: Option<Sender<()>>,
 }
 
 impl Client {
@@ -46,8 +51,12 @@ impl Client {
 
         // Background poller to send responses and events
         let input_stream = stream.try_clone().unwrap();
+        input_stream
+            .set_read_timeout(Some(Duration::from_secs(1)))
+            .unwrap();
         let store = RequestStore::default();
         let store_clone = Arc::clone(&store);
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
         thread::spawn(move || {
             let input = BufReader::new(input_stream);
             let mut reader = Reader {
@@ -55,7 +64,7 @@ impl Client {
                 store: store_clone,
                 handler,
             };
-            if let Err(e) = reader.run_poll_loop() {
+            if let Err(e) = reader.run_poll_loop(shutdown_rx) {
                 tracing::warn!(error = ?e, "running poll loop");
             }
         });
@@ -64,7 +73,28 @@ impl Client {
             output: stream,
             sequence_number,
             store,
+            exit: Some(shutdown_tx),
         })
+    }
+
+    pub fn emit(&mut self, body: requests::RequestBody) -> Result<()> {
+        self.sequence_number.fetch_add(1, Ordering::SeqCst);
+        let message = requests::Request {
+            seq: self.sequence_number.load(Ordering::SeqCst),
+            r#type: "request".to_string(),
+            body,
+        };
+        let resp_json = serde_json::to_string(&message).unwrap();
+        log::trace!("sending message {resp_json}");
+        write!(
+            self.output,
+            "Content-Length: {}\r\n\r\n{}",
+            resp_json.len(),
+            resp_json
+        )
+        .unwrap();
+        self.output.flush().unwrap();
+        Ok(())
     }
 
     pub fn send(&mut self, body: requests::RequestBody) -> Result<responses::Response> {
@@ -97,6 +127,14 @@ impl Client {
     }
 }
 
+impl Drop for Client {
+    fn drop(&mut self) {
+        tracing::debug!("shutting down client");
+        // Shutdown the background thread
+        let _ = self.exit.take().unwrap().send(());
+    }
+}
+
 enum ClientState {
     Header,
     Content,
@@ -112,12 +150,22 @@ impl<Handler> Reader<Handler>
 where
     Handler: EventHandler,
 {
-    fn poll_message(&mut self) -> Result<Option<Message>> {
+    fn poll_message(&mut self, shutdown: &Receiver<()>) -> Result<Option<Message>> {
         let mut state = ClientState::Header;
         let mut buffer = String::new();
         let mut content_length: usize = 0;
 
         loop {
+            // check for shutdown
+            match shutdown.try_recv() {
+                Ok(_) => return Ok(None),
+                Err(oneshot::TryRecvError::Empty) => {}
+                Err(e) => {
+                    tracing::error!(error = %e, "shutdown sender closed");
+                    anyhow::bail!("shutdown sender closed");
+                }
+            }
+
             match self.input.read_line(&mut buffer) {
                 Ok(read_size) => {
                     if read_size == 0 {
@@ -162,15 +210,18 @@ where
                     }
                 }
                 Err(e) => {
+                    if e.kind() == io::ErrorKind::WouldBlock {
+                        continue;
+                    }
                     return Err(anyhow::anyhow!("error reading from buffer: {e:?}"));
                 }
             }
         }
     }
 
-    pub fn run_poll_loop(&mut self) -> Result<()> {
+    pub fn run_poll_loop(&mut self, shutdown: Receiver<()>) -> Result<()> {
         loop {
-            match self.poll_message() {
+            match self.poll_message(&shutdown) {
                 Ok(Some(msg)) => match msg {
                     Message::Event(e) => {
                         tracing::debug!(event = ?e, "got event");
