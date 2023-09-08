@@ -77,7 +77,6 @@ impl Client {
 
         let (tx, rx) = oneshot::channel();
         let waiting_request = WaitingRequest {
-            request: message.clone(),
             responder: tx,
         };
 

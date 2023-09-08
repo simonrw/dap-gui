@@ -1,7 +1,6 @@
 use std::{net::TcpStream, thread};
 
 use dap_gui_client::requests::{self, Initialize};
-use dap_gui_client::EventHandler;
 
 // Loop
 // Initialize
