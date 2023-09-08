@@ -1,3 +1,4 @@
+//! Responses in reply to [`crate::requests`] from a DAP server
 use crate::types::{self, Scope, StackFrame, Thread, Variable};
 use serde::Deserialize;
 

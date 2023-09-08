@@ -1,3 +1,4 @@
+//! Requests you can send to a DAP server
 use serde::Serialize;
 
 use crate::types::{Seq, StackFrameId, ThreadId, VariablesReference};

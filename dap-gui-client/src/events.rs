@@ -1,3 +1,4 @@
+//! Events emitted by a DAP server
 use serde::Deserialize;
 
 use crate::types::{BreakpointId, Module, ThreadId};

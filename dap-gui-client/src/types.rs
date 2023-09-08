@@ -1,3 +1,4 @@
+//! General types used common to [`crate::requests`], [`crate::responses`] or [`crate::events`].
 use serde::Deserialize;
 
 pub type Seq = i64;

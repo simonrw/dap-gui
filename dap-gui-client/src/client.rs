@@ -33,6 +33,7 @@ pub enum Message {
     Response(responses::Response),
 }
 
+/// DAP client
 pub struct Client {
     // writer
     // TODO: trait implementor
