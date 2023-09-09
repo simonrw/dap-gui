@@ -3,4 +3,5 @@ resolver = "2"
 
 members = [
     "dap-gui-client",
+    "dap-gui",
 ]
