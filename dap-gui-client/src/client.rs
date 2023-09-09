@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use oneshot::{Receiver, Sender};
 use serde::Deserialize;
-use std::sync::{mpsc, Arc};
+use std::sync::Arc;
 // TODO: use internal error type
 use anyhow::{Context, Result};
 
@@ -115,7 +115,7 @@ impl Client {
         .unwrap();
         self.output.flush().unwrap();
 
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = oneshot::channel();
         let waiting_request = WaitingRequest { responder: tx };
 
         {
