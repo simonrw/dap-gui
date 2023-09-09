@@ -4,9 +4,9 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
 use std::time::Duration;
 
-use oneshot::{Receiver, Sender};
+use oneshot::Receiver;
 use serde::Deserialize;
-use std::sync::Arc;
+use std::sync::{mpsc, Arc};
 // TODO: use internal error type
 use anyhow::{Context, Result};
 
@@ -38,14 +38,11 @@ pub struct Client {
     store: RequestStore,
 
     // Option because of drop and take
-    exit: Option<Sender<()>>,
+    exit: Option<oneshot::Sender<()>>,
 }
 
 impl Client {
-    pub fn new<Handler>(stream: TcpStream, handler: Handler) -> Result<Self>
-    where
-        Handler: EventHandler + Send + 'static,
-    {
+    pub fn new(stream: TcpStream, events_ch: mpsc::Sender<events::Event>) -> Result<Self> {
         // internal state
         let sequence_number = Arc::new(AtomicI64::new(0));
 
@@ -62,7 +59,7 @@ impl Client {
             let mut reader = Reader {
                 input,
                 store: store_clone,
-                handler,
+                events_ch,
             };
             if let Err(e) = reader.run_poll_loop(shutdown_rx) {
                 tracing::warn!(error = ?e, "running poll loop");
@@ -140,16 +137,13 @@ enum ClientState {
     Content,
 }
 
-pub struct Reader<Handler> {
+pub struct Reader {
     input: BufReader<TcpStream>,
     store: RequestStore,
-    handler: Handler,
+    events_ch: mpsc::Sender<events::Event>,
 }
 
-impl<Handler> Reader<Handler>
-where
-    Handler: EventHandler,
-{
+impl Reader {
     fn poll_message(&mut self, shutdown: &Receiver<()>) -> Result<Option<Message>> {
         let mut state = ClientState::Header;
         let mut buffer = String::new();
@@ -225,9 +219,7 @@ where
                 Ok(Some(msg)) => match msg {
                     Message::Event(e) => {
                         tracing::debug!(event = ?e, "got event");
-                        if let Err(e) = self.handler.on_event(e) {
-                            tracing::warn!(error = %e, "error handling event");
-                        };
+                        let _ = self.events_ch.send(e);
                     }
                     Message::Response(r) => {
                         tracing::debug!(response = ?r, "got response");
