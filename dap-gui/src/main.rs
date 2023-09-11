@@ -8,8 +8,10 @@ use std::{
     thread,
 };
 
+use anyhow::Result;
 use dap_gui_client::events;
 use eframe::egui;
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "sentry")]
 macro_rules! setup_sentry {
@@ -57,26 +59,55 @@ impl AppState {
     }
 }
 
-#[allow(dead_code)]
-struct MyApp {
-    client: dap_gui_client::Client,
-    app_state: Arc<Mutex<AppState>>,
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+#[serde(tag = "type")]
+#[non_exhaustive]
+enum LaunchConfiguration {
+    File { filename: String },
+    Module { module: String },
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+#[serde(tag = "command")]
+#[non_exhaustive]
+enum Command {
+    Launch {
+        #[serde(flatten)]
+        launch_config: LaunchConfiguration,
+        working_directory: String,
+    },
 }
 
 fn control_worker(listener: TcpListener, state: Arc<Mutex<AppState>>) {
     thread::spawn(move || {
-        listener.accept().into_iter().for_each(|(socket, _)| {
-            // read instruction
-            let mut reader = BufReader::new(socket);
-            let mut line = String::new();
-            reader.read_line(&mut line).unwrap();
+        loop {
+            if let Ok((socket, addr)) = listener.accept() {
+                tracing::debug!(?addr, "got connection");
+                // read instruction
+                let mut reader = BufReader::new(socket);
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
 
-            // update state accordingly
-            let mut unlocked_state = state.lock().unwrap();
-            *unlocked_state = AppState::Running;
-            // TODO: trigger refresh
-        });
+                if let Ok(command) = serde_json::from_str::<Command>(&line) {
+                    tracing::debug!(?command, "got valid command");
+
+                    // update state accordingly
+                    let mut unlocked_state = state.lock().unwrap();
+                    *unlocked_state = AppState::Running;
+                    // TODO: trigger refresh
+                    return;
+                }
+            };
+        }
     });
+}
+
+#[allow(dead_code)]
+struct MyApp {
+    client: dap_gui_client::Client,
+    app_state: Arc<Mutex<AppState>>,
 }
 
 impl MyApp {
@@ -117,6 +148,7 @@ impl eframe::App for MyApp {
 
 fn main() -> Result<(), eframe::Error> {
     setup_sentry!();
+    tracing_subscriber::fmt::init();
 
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(1024.0, 768.0)),
@@ -131,4 +163,28 @@ fn main() -> Result<(), eframe::Error> {
         options,
         Box::new(move |_| Box::new(MyApp::new(client, rx))),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Command, LaunchConfiguration};
+
+    #[test]
+    fn launch_file() {
+        let input = r#"{
+            "command": "launch",
+            "working_directory": "test",
+            "type": "file",
+            "filename": "file.py"
+        }"#;
+        let command: Command= serde_json::from_str(input).unwrap();
+
+        let expected = Command::Launch {
+            launch_config: LaunchConfiguration::File {
+                filename: "file.py".to_string(),
+            },
+            working_directory: "test".to_string(),
+        };
+        assert_eq!(command, expected);
+    }
 }
