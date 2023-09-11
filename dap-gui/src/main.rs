@@ -35,27 +35,29 @@ macro_rules! setup_sentry {
 #[derive(Debug)]
 enum AppState {
     WaitingForConnection,
-    Running,
+    Running {
+        launch_config: LaunchConfiguration,
+        working_directory: String,
+    },
 }
 
 impl AppState {
     fn render(&mut self, ctx: &egui::Context) {
         match self {
-            AppState::WaitingForConnection => self.render_waiting_for_connection(ctx),
-            AppState::Running => self.render_running(ctx),
+            AppState::WaitingForConnection => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.label("Waiting for connection");
+                });
+            }
+            AppState::Running {
+                launch_config: _launch_config,
+                working_directory: _working_directory,
+            } => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.label("Running");
+                });
+            }
         }
-    }
-
-    fn render_waiting_for_connection(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.label("Waiting for connection");
-        });
-    }
-
-    fn render_running(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.label("Running");
-        });
     }
 }
 
@@ -74,10 +76,17 @@ enum LaunchConfiguration {
 #[non_exhaustive]
 enum Command {
     Launch {
+        language: Language,
         #[serde(flatten)]
         launch_config: LaunchConfiguration,
         working_directory: String,
     },
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[non_exhaustive]
+enum Language {
+    Python,
 }
 
 fn control_worker(listener: TcpListener, state: Arc<Mutex<AppState>>) {
@@ -90,14 +99,31 @@ fn control_worker(listener: TcpListener, state: Arc<Mutex<AppState>>) {
                 let mut line = String::new();
                 reader.read_line(&mut line).unwrap();
 
-                if let Ok(command) = serde_json::from_str::<Command>(&line) {
-                    tracing::debug!(?command, "got valid command");
+                match serde_json::from_str::<Command>(&line) {
+                    Ok(command) => {
+                        tracing::debug!(?command, "got valid command");
 
-                    // update state accordingly
-                    let mut unlocked_state = state.lock().unwrap();
-                    *unlocked_state = AppState::Running;
-                    // TODO: trigger refresh
-                    return;
+                        match command {
+                            Command::Launch {
+                                launch_config,
+                                working_directory,
+                                language,
+                            } => {
+                                // TODO: dispatch on language
+                                // update state accordingly
+                                let mut unlocked_state = state.lock().unwrap();
+                                *unlocked_state = AppState::Running {
+                                    launch_config,
+                                    working_directory,
+                                };
+                            }
+                        }
+                        // TODO: trigger refresh
+                        return;
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "parsing command");
+                    }
                 }
             };
         }
@@ -154,6 +180,7 @@ fn main() -> Result<(), eframe::Error> {
         initial_window_size: Some(egui::vec2(1024.0, 768.0)),
         ..Default::default()
     };
+    // TODO: connect to DAP server once language is known
     let (tx, rx) = mpsc::channel();
     let stream = TcpStream::connect("127.0.0.1:5678").unwrap();
     let client = dap_gui_client::Client::new(stream, tx).unwrap();
@@ -167,7 +194,7 @@ fn main() -> Result<(), eframe::Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Command, LaunchConfiguration};
+    use super::{Command, Language, LaunchConfiguration};
 
     #[test]
     fn launch_file() {
@@ -177,9 +204,10 @@ mod tests {
             "type": "file",
             "filename": "file.py"
         }"#;
-        let command: Command= serde_json::from_str(input).unwrap();
+        let command: Command = serde_json::from_str(input).unwrap();
 
         let expected = Command::Launch {
+            language: Language::Python,
             launch_config: LaunchConfiguration::File {
                 filename: "file.py".to_string(),
             },
