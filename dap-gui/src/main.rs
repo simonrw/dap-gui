@@ -29,7 +29,23 @@ macro_rules! setup_sentry {
     () => {};
 }
 
-struct AppState;
+enum AppState {
+    WaitingForConnection,
+}
+
+impl AppState {
+    fn render(&mut self, ctx: &egui::Context) {
+        match self {
+            AppState::WaitingForConnection => self.render_waiting_for_connection(ctx),
+        }
+    }
+
+    fn render_waiting_for_connection(&mut self, ctx: &egui::Context) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.label("Waiting for onnection");
+        });
+    }
+}
 
 #[allow(dead_code)]
 struct MyApp {
@@ -41,7 +57,7 @@ impl MyApp {
     pub fn new(client: dap_gui_client::Client, client_events: Receiver<events::Event>) -> Self {
         // set up background thread watching events
 
-        let state = Arc::new(Mutex::new(AppState {}));
+        let state = Arc::new(Mutex::new(AppState::WaitingForConnection));
         let background_state = Arc::clone(&state);
         let this = Self {
             client,
@@ -62,9 +78,9 @@ fn handle_event(_event: events::Event, state_m: Arc<Mutex<AppState>>) {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.label("Hello world");
-        });
+        // TODO: locked for too long?
+        let mut state = self.app_state.lock().unwrap();
+        state.render(ctx);
     }
 }
 
