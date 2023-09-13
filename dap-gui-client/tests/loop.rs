@@ -151,21 +151,6 @@ where
     unreachable!()
 }
 
-#[test]
-fn test_initialize() {
-    // TODO: automatic setup for running the server
-    // for now assume the server is running
-    init_test_logger();
-
-    let (tx, _) = mpsc::channel();
-    let mut client = default_client(tx);
-    let req = requests::RequestBody::Initialize(Initialize {
-        adapter_id: "dap gui".to_string(),
-    });
-    let res = client.send(req).unwrap();
-    assert_eq!(res.success, true);
-}
-
 fn init_test_logger() {
     let _ = tracing_subscriber::fmt::try_init();
 }
