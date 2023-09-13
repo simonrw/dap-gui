@@ -3,7 +3,6 @@ use std::{net::TcpStream, sync::mpsc};
 use dap_gui_client::{
     events,
     requests::{self, Initialize, Launch},
-    types,
 };
 
 // Loop
@@ -17,20 +16,26 @@ fn test_loop() {
 
     let (tx, rx) = mpsc::channel();
     let mut client = default_client(tx);
+
+    // initialize
     let req = requests::RequestBody::Initialize(Initialize {
         adapter_id: "dap gui".to_string(),
     });
     let res = client.send(req).unwrap();
     assert!(res.success);
 
+    // launch
     client
         .emit(requests::RequestBody::Launch(Launch {
             program: "./test.py".to_string(),
         }))
         .unwrap();
 
-    let _ = wait_for_event(&rx, |e| matches!(e, events::Event::Initialized));
+    // wait for initialized event
+    let _initialized_event =
+        wait_for_event(&rx, |e| matches!(e, events::Event::Initialized { .. }));
 
+    // set function breakpoints
     let req = requests::RequestBody::SetFunctionBreakpoints(requests::SetFunctionBreakpoints {
         breakpoints: vec![requests::Breakpoint {
             name: "main".to_string(),
@@ -39,21 +44,46 @@ fn test_loop() {
     let res = client.send(req).unwrap();
     assert!(res.success);
 
+    // configuration done
+    let req = requests::RequestBody::ConfigurationDone;
+    let res = client.send(req).unwrap();
+    assert!(res.success);
+
+    // wait for stopped event
+    let events::Event::Stopped(events::StoppedEventBody {
+        reason,
+        thread_id,
+        hit_breakpoint_ids,
+    }) = wait_for_event(&rx, |e| matches!(e, events::Event::Stopped { .. }))
+    else {
+        unreachable!();
+    };
+
+    tracing::debug!(?reason, ?thread_id, ?hit_breakpoint_ids, "got stopped event");
+
+    // restart
     let req = requests::RequestBody::Continue(requests::Continue {
-        thread_id: todo!(),
-        single_thread: todo!(),
+        thread_id,
+        single_thread: false,
+    });
+    tracing::debug!(?req, "sending continue request");
+    let res = client.send(req).unwrap();
+    assert!(res.success);
+
+    wait_for_event(&rx, |e| matches!(e, events::Event::Terminated));
+
+    // terminate
+    let req = requests::RequestBody::Terminate(requests::Terminate {
+        restart: Some(false),
     });
     let res = client.send(req).unwrap();
     assert!(res.success);
 
-    let stopped_event = wait_for_event(&rx, |e| matches!(e, events::Event::Stopped { .. }));
-
-    // terminate
-    let res = client
-        .send(requests::RequestBody::Disconnect(requests::Disconnect {
-            terminate_debugee: true,
-        }))
-        .unwrap();
+    // disconnect
+    let req = requests::RequestBody::Disconnect(requests::Disconnect {
+        terminate_debugee: true,
+    });
+    let res = client.send(req).unwrap();
     assert!(res.success);
 }
 
@@ -61,6 +91,7 @@ fn wait_for_event<F>(rx: &mpsc::Receiver<events::Event>, pred: F) -> events::Eve
 where
     F: Fn(&events::Event) -> bool,
 {
+    tracing::debug!("waiting for event");
     let mut n = 0;
     for msg in rx {
         if n >= 10 {
@@ -68,6 +99,7 @@ where
         }
 
         if pred(&msg) {
+            tracing::debug!(event = ?msg, "received expected event");
             return msg;
         } else {
             n += 1;

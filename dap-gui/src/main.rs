@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "sentry")]
 macro_rules! setup_sentry {
     () => {
-        log::info!("setting up sentry for crash reporting");
+        tracing::info!("setting up sentry for crash reporting");
         let _guard = sentry::init((
             "https://f08b65bc9944ecbb855f1ebb2cadcb92@o366030.ingest.sentry.io/4505663159926784",
             sentry::ClientOptions {

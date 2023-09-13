@@ -24,6 +24,7 @@ pub enum RequestBody {
     Launch(Launch),
     Scopes(Scopes),
     Variables(Variables),
+    Terminate(Terminate),
     Disconnect(Disconnect),
 }
 
@@ -78,9 +79,14 @@ pub struct Variables {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct Terminate {
+    pub restart: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Disconnect {
     pub terminate_debugee: bool,
 }
-
 
 

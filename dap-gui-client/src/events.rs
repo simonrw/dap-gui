@@ -5,7 +5,6 @@ use crate::types::{BreakpointId, Module, ThreadId};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "event", content = "body", rename_all = "camelCase")]
-#[non_exhaustive]
 pub enum Event {
     Initialized,
     Output(OutputEventBody),

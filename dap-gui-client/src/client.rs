@@ -74,6 +74,7 @@ impl Client {
         })
     }
 
+    #[tracing::instrument(skip(self, body))]
     pub fn emit(&mut self, body: requests::RequestBody) -> Result<()> {
         self.sequence_number.fetch_add(1, Ordering::SeqCst);
         let message = requests::Request {
@@ -82,7 +83,7 @@ impl Client {
             body,
         };
         let resp_json = serde_json::to_string(&message).unwrap();
-        log::trace!("sending message {resp_json}");
+        tracing::debug!(request = ?message, "sending message");
         write!(
             self.output,
             "Content-Length: {}\r\n\r\n{}",
@@ -94,6 +95,7 @@ impl Client {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, body))]
     pub fn send(&mut self, body: requests::RequestBody) -> Result<responses::Response> {
         self.sequence_number.fetch_add(1, Ordering::SeqCst);
         let message = requests::Request {
@@ -102,7 +104,7 @@ impl Client {
             body,
         };
         let resp_json = serde_json::to_string(&message).unwrap();
-        log::trace!("sending message {resp_json}");
+        tracing::debug!(request = ?message, "sending message");
         write!(
             self.output,
             "Content-Length: {}\r\n\r\n{}",
@@ -120,6 +122,7 @@ impl Client {
             store.insert(message.seq, waiting_request);
         }
         let reply = rx.recv().unwrap();
+        tracing::debug!(response = ?reply, "got response");
         Ok(reply)
     }
 }
@@ -222,13 +225,12 @@ impl Reader {
                         let _ = self.events_ch.send(e);
                     }
                     Message::Response(r) => {
-                        tracing::debug!(response = ?r, "got response");
                         let mut store = self.store.lock().unwrap();
                         match store.remove(&r.request_seq) {
                             Some(w) => {
                                 let _ = w.responder.send(r);
                             }
-                            None => todo!("no message in request store"),
+                            None => tracing::warn!(response = ?r, "no message in request store"),
                         }
                     }
                 },
