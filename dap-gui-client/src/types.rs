@@ -15,10 +15,28 @@ pub struct Thread {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub enum PresentationHint {
+    Arguments,
+    Locals,
+    Registers,
+    Other(String),
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Scope {
     pub name: String,
-    #[serde(rename = "variablesReference")]
-    pub variables_reference: i64,
+    pub variables_reference: VariablesReference,
+    pub presentation_hint: Option<PresentationHint>,
+    pub named_variables: Option<usize>,
+    pub indexed_variables: Option<usize>,
+    pub expensive: bool,
+    pub line: Option<i64>,
+    pub column: Option<i64>,
+    pub source: Option<Source>,
+    pub end_line: Option<i64>,
+    pub end_column: Option<i64>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -53,13 +71,24 @@ pub struct StackFrame {
     pub name: String,
 }
 
+
 #[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct VariablePresentationHint {
+    pub kind: Option<String>,
+    pub attributes: Option<String>,
+    pub visibility: Option<String>,
+    pub lazy: Option<bool>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Variable {
     pub name: String,
     pub value: String,
     pub r#type: Option<String>,
-    #[serde(rename = "variablesReference")]
     pub variables_reference: VariablesReference,
+    pub presentation_hint: Option<VariablePresentationHint>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

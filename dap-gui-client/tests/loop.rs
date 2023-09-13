@@ -3,6 +3,7 @@ use std::{net::TcpStream, sync::mpsc};
 use dap_gui_client::{
     events,
     requests::{self, Initialize, Launch},
+    responses,
 };
 
 // Loop
@@ -59,9 +60,50 @@ fn test_loop() {
         unreachable!();
     };
 
-    tracing::debug!(?reason, ?thread_id, ?hit_breakpoint_ids, "got stopped event");
+    tracing::debug!(
+        ?reason,
+        ?thread_id,
+        ?hit_breakpoint_ids,
+        "got stopped event"
+    );
 
-    // restart
+    // fetch thread info
+    let req = requests::RequestBody::Threads;
+    let res = client.send(req).unwrap();
+    assert!(res.success);
+
+    // fetch stack info
+    let req = requests::RequestBody::StackTrace(requests::StackTrace { thread_id });
+    let res = client.send(req).unwrap();
+    assert!(res.success);
+
+    let Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse { stack_frames })) =
+        res.body
+    else {
+        unreachable!();
+    };
+    for frame in stack_frames {
+        // scopes
+        let req = requests::RequestBody::Scopes(requests::Scopes { frame_id: frame.id });
+        let res = client.send(req).unwrap();
+        assert!(res.success);
+
+        let Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })) = res.body
+        else {
+            unreachable!();
+        };
+
+        // variables
+        for scope in scopes {
+            let req = requests::RequestBody::Variables(requests::Variables {
+                variables_reference: scope.variables_reference,
+            });
+            let res = client.send(req).unwrap();
+            assert!(res.success);
+        }
+    }
+
+    // continue
     let req = requests::RequestBody::Continue(requests::Continue {
         thread_id,
         single_thread: false,
