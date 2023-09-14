@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use std::{
+    io::{BufRead, BufReader, Read},
     net::{TcpListener, TcpStream},
+    process::Stdio,
     sync::mpsc,
     thread,
     time::Duration,
@@ -48,11 +50,26 @@ where
             &format!("{port}"),
             "--log-stderr",
         ])
+        .stderr(Stdio::piped())
         .current_dir(cwd.join("..").canonicalize().unwrap())
         .spawn()
         .context("spawning background process")?;
-    thread::sleep(Duration::from_secs(2));
+
+    tracing::debug!("server started, waiting for completion");
+
+    // wait until server is ready
+    let stderr = child.stderr.take().unwrap();
+    let reader = BufReader::new(stderr);
+    for line in reader.lines() {
+        let line = line.unwrap();
+        tracing::debug!(%line, "log line");
+        if line.contains("Listening for incoming Client connections") {
+            break;
+        }
+    }
+
     let result = f(port);
+
     child.kill().context("killing background process")?;
     child.wait().context("waiting for server to exit")?;
     result
