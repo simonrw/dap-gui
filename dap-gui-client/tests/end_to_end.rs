@@ -1,11 +1,10 @@
 use anyhow::{Context, Result};
 use std::{
-    io::{BufRead, BufReader, Read},
+    io::{BufRead, BufReader},
     net::{TcpListener, TcpStream},
     process::Stdio,
     sync::mpsc,
     thread,
-    time::Duration,
 };
 use tracing_subscriber::EnvFilter;
 
@@ -60,13 +59,21 @@ where
     // wait until server is ready
     let stderr = child.stderr.take().unwrap();
     let reader = BufReader::new(stderr);
-    for line in reader.lines() {
-        let line = line.unwrap();
-        tracing::debug!(%line, "log line");
-        if line.contains("Listening for incoming Client connections") {
-            break;
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let mut should_signal = true;
+        for line in reader.lines() {
+            let line = line.unwrap();
+            tracing::debug!(%line);
+
+            if should_signal && line.contains("Listening for incoming Client connections") {
+                should_signal = false;
+                let _ = tx.send(());
+            }
         }
-    }
+    });
+    let _ = rx.recv();
 
     let result = f(port);
 

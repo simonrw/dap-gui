@@ -107,7 +107,7 @@ fn control_worker(listener: TcpListener, state: Arc<Mutex<AppState>>) {
                             Command::Launch {
                                 launch_config,
                                 working_directory,
-                                language,
+                                ..
                             } => {
                                 // TODO: dispatch on language
                                 // update state accordingly
