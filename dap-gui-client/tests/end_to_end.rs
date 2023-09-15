@@ -11,7 +11,7 @@ use tracing_subscriber::EnvFilter;
 use dap_gui_client::{
     events,
     requests::{self, Initialize, Launch},
-    responses,
+    responses, Received,
 };
 
 fn get_random_tcp_port() -> Result<u16> {
@@ -99,18 +99,21 @@ fn test_loop() -> Result<()> {
         let span = tracing::debug_span!("with_server", %port);
         let _guard = span.enter();
 
-        let mut client = build_client(port, tx);
+        let handle_event = |_| {};
+        let handle_response = |_| {};
+
+        let stream = TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
+        let client = dap_gui_client::Client::new(stream, tx).unwrap();
 
         // initialize
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
         });
-        let res = client.send(req).unwrap();
-        assert!(res.success);
+        client.send(req).unwrap();
 
         // launch
         client
-            .emit(requests::RequestBody::Launch(Launch {
+            .send(requests::RequestBody::Launch(Launch {
                 program: "./test.py".to_string(),
             }))
             .unwrap();
@@ -216,7 +219,7 @@ fn test_loop() -> Result<()> {
     })
 }
 
-fn wait_for_event<F>(rx: &mpsc::Receiver<events::Event>, pred: F) -> events::Event
+fn wait_for_event<F>(rx: &mpsc::Receiver<Received>, pred: F) -> events::Event
 where
     F: Fn(&events::Event) -> bool,
 {
@@ -227,12 +230,14 @@ where
             panic!("did not receive event");
         }
 
-        if pred(&msg) {
-            tracing::debug!(event = ?msg, "received expected event");
-            return msg;
-        } else {
-            n += 1;
+        if let Received::Event(evt) = msg {
+            if pred(&evt) {
+                tracing::debug!(event = ?evt, "received expected event");
+                return evt;
+            }
         }
+
+        n += 1;
     }
 
     unreachable!()
@@ -251,7 +256,7 @@ fn init_test_logger() {
     }
 }
 
-fn build_client(port: u16, tx: mpsc::Sender<events::Event>) -> dap_gui_client::Client {
+fn build_client(port: u16, tx: mpsc::Sender<Received>) -> dap_gui_client::Client {
     let stream = TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
     dap_gui_client::Client::new(stream, tx).unwrap()
 }

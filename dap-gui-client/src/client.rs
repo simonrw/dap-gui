@@ -1,12 +1,13 @@
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::Duration;
 
 use oneshot::Receiver;
 use serde::Deserialize;
-use std::sync::{mpsc, Arc};
+use std::sync::Arc;
 // TODO: use internal error type
 use anyhow::{Context, Result};
 
@@ -42,7 +43,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(stream: TcpStream, events_ch: mpsc::Sender<events::Event>) -> Result<Self> {
+    pub fn new(stream: TcpStream, responses: Sender<Received>) -> Result<Self> {
         // internal state
         let sequence_number = Arc::new(AtomicI64::new(0));
 
@@ -59,7 +60,7 @@ impl Client {
             let mut reader = Reader {
                 input,
                 store: store_clone,
-                events_ch,
+                responses,
             };
             if let Err(e) = reader.run_poll_loop(shutdown_rx) {
                 tracing::warn!(error = ?e, "running poll loop");
@@ -75,33 +76,12 @@ impl Client {
     }
 
     #[tracing::instrument(skip(self, body))]
-    pub fn emit(&mut self, body: requests::RequestBody) -> Result<()> {
+    pub fn send(&mut self, body: requests::RequestBody) -> Result<()> {
         self.sequence_number.fetch_add(1, Ordering::SeqCst);
         let message = requests::Request {
             seq: self.sequence_number.load(Ordering::SeqCst),
             r#type: "request".to_string(),
-            body,
-        };
-        let resp_json = serde_json::to_string(&message).unwrap();
-        tracing::debug!(request = ?message, "sending message");
-        write!(
-            self.output,
-            "Content-Length: {}\r\n\r\n{}",
-            resp_json.len(),
-            resp_json
-        )
-        .unwrap();
-        self.output.flush().unwrap();
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self, body))]
-    pub fn send(&mut self, body: requests::RequestBody) -> Result<responses::Response> {
-        self.sequence_number.fetch_add(1, Ordering::SeqCst);
-        let message = requests::Request {
-            seq: self.sequence_number.load(Ordering::SeqCst),
-            r#type: "request".to_string(),
-            body,
+            body: body.clone(),
         };
         let resp_json = serde_json::to_string(&message).unwrap();
         tracing::debug!(request = ?message, "sending message");
@@ -114,16 +94,13 @@ impl Client {
         .unwrap();
         self.output.flush().unwrap();
 
-        let (tx, rx) = oneshot::channel();
-        let waiting_request = WaitingRequest { responder: tx };
+        let waiting_request = WaitingRequest(body);
 
         {
             let mut store = self.store.lock().unwrap();
             store.insert(message.seq, waiting_request);
         }
-        let reply = rx.recv().unwrap();
-        tracing::debug!(response = ?reply, "got response");
-        Ok(reply)
+        Ok(())
     }
 }
 
@@ -143,7 +120,7 @@ enum ClientState {
 struct Reader {
     input: BufReader<TcpStream>,
     store: RequestStore,
-    events_ch: mpsc::Sender<events::Event>,
+    responses: Sender<Received>,
 }
 
 impl Reader {
@@ -220,17 +197,18 @@ impl Reader {
         loop {
             match self.poll_message(&shutdown) {
                 Ok(Some(msg)) => match msg {
-                    Message::Event(e) => {
-                        tracing::debug!(event = ?e, "got event");
-                        let _ = self.events_ch.send(e);
+                    Message::Event(evt) => {
+                        let _ = self.responses.send(Received::Event(evt));
                     }
                     Message::Response(r) => {
                         let mut store = self.store.lock().unwrap();
                         match store.remove(&r.request_seq) {
-                            Some(w) => {
-                                let _ = w.responder.send(r);
+                            Some(request) => {
+                                let _ = self.responses.send(Received::Response(request.0, r));
                             }
-                            None => tracing::warn!(response = ?r, "no message in request store"),
+                            None => {
+                                tracing::warn!(response = ?r, "no message in request store")
+                            }
                         }
                     }
                 },
@@ -242,4 +220,10 @@ impl Reader {
             }
         }
     }
+}
+
+#[derive(Debug)]
+pub enum Received {
+    Event(events::Event),
+    Response(requests::RequestBody, responses::Response),
 }
