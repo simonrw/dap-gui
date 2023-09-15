@@ -9,4 +9,3 @@ mod client;
 mod request_store;
 
 pub use client::Client;
-pub use client::EventHandler;

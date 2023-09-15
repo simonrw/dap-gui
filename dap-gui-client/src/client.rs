@@ -140,7 +140,7 @@ enum ClientState {
     Content,
 }
 
-pub struct Reader {
+struct Reader {
     input: BufReader<TcpStream>,
     store: RequestStore,
     events_ch: mpsc::Sender<events::Event>,
@@ -216,7 +216,7 @@ impl Reader {
         }
     }
 
-    pub fn run_poll_loop(&mut self, shutdown: Receiver<()>) -> Result<()> {
+    fn run_poll_loop(&mut self, shutdown: Receiver<()>) -> Result<()> {
         loop {
             match self.poll_message(&shutdown) {
                 Ok(Some(msg)) => match msg {
@@ -241,22 +241,5 @@ impl Reader {
                 Err(e) => eprintln!("reader error: {e}"),
             }
         }
-    }
-}
-
-pub trait EventHandler {
-    type Error: std::fmt::Display;
-    fn on_event(&mut self, event: events::Event) -> Result<(), Self::Error>;
-}
-
-impl<E, F> EventHandler for F
-where
-    F: Fn(events::Event) -> Result<(), E>,
-    E: std::fmt::Display,
-{
-    type Error = E;
-
-    fn on_event(&mut self, event: events::Event) -> Result<(), Self::Error> {
-        self(event)
     }
 }
