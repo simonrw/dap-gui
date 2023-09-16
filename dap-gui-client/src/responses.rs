@@ -22,6 +22,8 @@ pub enum ResponseBody {
     StackTrace(StackTraceResponse),
     Scopes(ScopesResponse),
     Variables(VariablesResponse),
+    ConfigurationDone,
+    Terminate,
     Disconnect,
 }
 

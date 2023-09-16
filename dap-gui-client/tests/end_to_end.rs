@@ -126,10 +126,12 @@ fn test_loop() -> Result<()> {
             }],
         });
         client.send(req).unwrap();
+        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::SetFunctionBreakpoints { .. }));
 
         // configuration done
         let req = requests::RequestBody::ConfigurationDone;
         client.send(req).unwrap();
+        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::ConfigurationDone));
 
         // wait for stopped event
         let events::Event::Stopped(events::StoppedEventBody {
@@ -151,6 +153,7 @@ fn test_loop() -> Result<()> {
         // fetch thread info
         let req = requests::RequestBody::Threads;
         client.send(req).unwrap();
+        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::Threads(_))); 
 
         // fetch stack info
         let req = requests::RequestBody::StackTrace(requests::StackTrace { thread_id });
@@ -210,6 +213,7 @@ fn test_loop() -> Result<()> {
         });
         tracing::debug!(?req, "sending continue request");
         client.send(req).unwrap();
+        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::Continue(_)));
 
         wait_for_event(&rx, |e| matches!(e, events::Event::Terminated));
 
@@ -218,6 +222,7 @@ fn test_loop() -> Result<()> {
             restart: Some(false),
         });
         client.send(req).unwrap();
+        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::Terminate));
 
         // disconnect
         let req = requests::RequestBody::Disconnect(requests::Disconnect {
@@ -241,6 +246,7 @@ where
         }
 
         if let Received::Response(_, response) = msg {
+            assert!(response.success);
             if let Some(body) = response.body {
                 if pred(&body) {
                     tracing::debug!(response = ?body, "received expected response");
@@ -290,9 +296,4 @@ fn init_test_logger() {
             .json()
             .init();
     }
-}
-
-fn build_client(port: u16, tx: mpsc::Sender<Received>) -> dap_gui_client::Client {
-    let stream = TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
-    dap_gui_client::Client::new(stream, tx).unwrap()
 }
