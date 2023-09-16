@@ -99,11 +99,8 @@ fn test_loop() -> Result<()> {
         let span = tracing::debug_span!("with_server", %port);
         let _guard = span.enter();
 
-        let handle_event = |_| {};
-        let handle_response = |_| {};
-
         let stream = TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
-        let client = dap_gui_client::Client::new(stream, tx).unwrap();
+        let mut client = dap_gui_client::Client::new(stream, tx).unwrap();
 
         // initialize
         let req = requests::RequestBody::Initialize(Initialize {
@@ -165,20 +162,25 @@ fn test_loop() -> Result<()> {
                     r,
                     responses::ResponseBody::StackTrace(responses::StackTraceResponse { .. })
                 )
-            });
+            })
+        else {
+            unreachable!()
+        };
 
         for frame in stack_frames {
             // scopes
             let req = requests::RequestBody::Scopes(requests::Scopes { frame_id: frame.id });
             client.send(req).unwrap();
-            let responses::ResponseBody::Scopes(responses::Scopes { scopes }) = wait_for_response(&rx, |r| {
-                matches!(r, responses::ResponseBody::Scopes(responses::Scopes { .. }))
-            });
 
-            let Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })) =
-                res.body
+            let responses::ResponseBody::Scopes(responses::ScopesResponse { scopes }) =
+                wait_for_response(&rx, |r| {
+                    matches!(
+                        r,
+                        responses::ResponseBody::Scopes(responses::ScopesResponse { .. })
+                    )
+                })
             else {
-                unreachable!();
+                unreachable!()
             };
 
             // variables
@@ -186,8 +188,18 @@ fn test_loop() -> Result<()> {
                 let req = requests::RequestBody::Variables(requests::Variables {
                     variables_reference: scope.variables_reference,
                 });
-                let res = client.send(req).unwrap();
-                assert!(res.success);
+                client.send(req).unwrap();
+
+                let responses::ResponseBody::Variables(responses::VariablesResponse { .. }) =
+                    wait_for_response(&rx, |r| {
+                        matches!(
+                            r,
+                            responses::ResponseBody::Variables(responses::VariablesResponse { .. })
+                        )
+                    })
+                else {
+                    unreachable!()
+                };
             }
         }
 
@@ -197,8 +209,7 @@ fn test_loop() -> Result<()> {
             single_thread: false,
         });
         tracing::debug!(?req, "sending continue request");
-        let res = client.send(req).unwrap();
-        assert!(res.success);
+        client.send(req).unwrap();
 
         wait_for_event(&rx, |e| matches!(e, events::Event::Terminated));
 
@@ -206,15 +217,14 @@ fn test_loop() -> Result<()> {
         let req = requests::RequestBody::Terminate(requests::Terminate {
             restart: Some(false),
         });
-        let res = client.send(req).unwrap();
-        assert!(res.success);
+        client.send(req).unwrap();
 
         // disconnect
         let req = requests::RequestBody::Disconnect(requests::Disconnect {
             terminate_debugee: true,
         });
-        let res = client.send(req).unwrap();
-        assert!(res.success);
+        client.send(req).unwrap();
+        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::Disconnect));
         Ok(())
     })
 }
