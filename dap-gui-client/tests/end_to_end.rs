@@ -128,13 +128,11 @@ fn test_loop() -> Result<()> {
                 name: "main".to_string(),
             }],
         });
-        let res = client.send(req).unwrap();
-        assert!(res.success);
+        client.send(req).unwrap();
 
         // configuration done
         let req = requests::RequestBody::ConfigurationDone;
-        let res = client.send(req).unwrap();
-        assert!(res.success);
+        client.send(req).unwrap();
 
         // wait for stopped event
         let events::Event::Stopped(events::StoppedEventBody {
@@ -155,25 +153,27 @@ fn test_loop() -> Result<()> {
 
         // fetch thread info
         let req = requests::RequestBody::Threads;
-        let res = client.send(req).unwrap();
-        assert!(res.success);
+        client.send(req).unwrap();
 
         // fetch stack info
         let req = requests::RequestBody::StackTrace(requests::StackTrace { thread_id });
-        let res = client.send(req).unwrap();
-        assert!(res.success);
+        client.send(req).unwrap();
 
-        let Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
-            stack_frames,
-        })) = res.body
-        else {
-            unreachable!();
-        };
+        let responses::ResponseBody::StackTrace(responses::StackTraceResponse { stack_frames }) =
+            wait_for_response(&rx, |r| {
+                matches!(
+                    r,
+                    responses::ResponseBody::StackTrace(responses::StackTraceResponse { .. })
+                )
+            });
+
         for frame in stack_frames {
             // scopes
             let req = requests::RequestBody::Scopes(requests::Scopes { frame_id: frame.id });
-            let res = client.send(req).unwrap();
-            assert!(res.success);
+            client.send(req).unwrap();
+            let responses::ResponseBody::Scopes(responses::Scopes { scopes }) = wait_for_response(&rx, |r| {
+                matches!(r, responses::ResponseBody::Scopes(responses::Scopes { .. }))
+            });
 
             let Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })) =
                 res.body
@@ -217,6 +217,32 @@ fn test_loop() -> Result<()> {
         assert!(res.success);
         Ok(())
     })
+}
+
+fn wait_for_response<F>(rx: &mpsc::Receiver<Received>, pred: F) -> responses::ResponseBody
+where
+    F: Fn(&responses::ResponseBody) -> bool,
+{
+    tracing::debug!("waiting for response");
+    let mut n = 0;
+    for msg in rx {
+        if n >= 10 {
+            panic!("did not receive response");
+        }
+
+        if let Received::Response(_, response) = msg {
+            if let Some(body) = response.body {
+                if pred(&body) {
+                    tracing::debug!(response = ?body, "received expected response");
+                    return body;
+                }
+            }
+        }
+
+        n += 1;
+    }
+
+    unreachable!()
 }
 
 fn wait_for_event<F>(rx: &mpsc::Receiver<Received>, pred: F) -> events::Event
