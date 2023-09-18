@@ -9,7 +9,7 @@ use std::{
 };
 
 use anyhow::Result;
-use dap_gui_client::events;
+use dap_gui_client::Received;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 
@@ -137,7 +137,7 @@ struct MyApp {
 }
 
 impl MyApp {
-    pub fn new(client: dap_gui_client::Client, client_events: Receiver<events::Event>) -> Self {
+    pub fn new(client: dap_gui_client::Client, client_events: Receiver<Received>) -> Self {
         // set up background thread watching events
 
         let state = Arc::new(Mutex::new(AppState::WaitingForConnection));
@@ -152,16 +152,17 @@ impl MyApp {
             app_state: state,
         };
         thread::spawn(move || {
-            for event in client_events {
-                handle_event(event, Arc::clone(&background_state));
+            for msg in client_events {
+                handle_message(msg, Arc::clone(&background_state));
             }
         });
         this
     }
 }
 
-fn handle_event(_event: events::Event, state_m: Arc<Mutex<AppState>>) {
+fn handle_message(_msg: Received, state_m: Arc<Mutex<AppState>>) {
     let _state = state_m.lock().unwrap();
+    // TODO
 }
 
 impl eframe::App for MyApp {
