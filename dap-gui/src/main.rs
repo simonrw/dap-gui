@@ -9,7 +9,7 @@ use std::{
 };
 
 use anyhow::Result;
-use dap_gui_client::Received;
+use dap_gui_client::{events, requests, responses, Received};
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 
@@ -34,7 +34,7 @@ macro_rules! setup_sentry {
 
 #[derive(Debug)]
 enum AppState {
-    WaitingForConnection,
+    // WaitingForConnection,
     Running {
         launch_config: LaunchConfiguration,
         working_directory: String,
@@ -42,13 +42,25 @@ enum AppState {
 }
 
 impl AppState {
+    fn handle_message(&mut self, message: Received) {
+        match message {
+            Received::Event(event) => self.handle_event(event),
+            Received::Response(request, response) => self.handle_response(request, response),
+        }
+    }
+
+    fn handle_event(&mut self, _event: events::Event) {}
+
+    fn handle_response(&mut self, _request: requests::RequestBody, _response: responses::Response) {
+    }
+
     fn render(&mut self, ctx: &egui::Context) {
         match self {
-            AppState::WaitingForConnection => {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.label("Waiting for connection");
-                });
-            }
+            // AppState::WaitingForConnection => {
+            //     egui::CentralPanel::default().show(ctx, |ui| {
+            //         ui.label("Waiting for connection");
+            //     });
+            // }
             AppState::Running {
                 launch_config: _launch_config,
                 working_directory: _working_directory,
@@ -67,7 +79,7 @@ impl AppState {
 #[non_exhaustive]
 enum LaunchConfiguration {
     File { filename: String },
-    Module { module: String },
+    // Module { module: String },
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
@@ -89,7 +101,7 @@ enum Language {
     Python,
 }
 
-fn control_worker(listener: TcpListener, state: Arc<Mutex<AppState>>) {
+fn _control_worker(listener: TcpListener, state: Arc<Mutex<AppState>>) {
     thread::spawn(move || {
         loop {
             if let Ok((socket, addr)) = listener.accept() {
@@ -140,11 +152,18 @@ impl MyApp {
     pub fn new(client: dap_gui_client::Client, client_events: Receiver<Received>) -> Self {
         // set up background thread watching events
 
-        let state = Arc::new(Mutex::new(AppState::WaitingForConnection));
+        let state = Arc::new(Mutex::new(AppState::Running {
+            launch_config: LaunchConfiguration::File {
+                filename: "test.py".to_string(),
+            },
+            working_directory: "/home/simon/dev/dap-gui".to_string(),
+        }));
+        /*
         let trigger_socket =
             TcpListener::bind("127.0.0.1:8989").expect("could not bind control socket");
         let control_state = Arc::clone(&state);
         control_worker(trigger_socket, control_state);
+        */
 
         let background_state = Arc::clone(&state);
         let this = Self {
@@ -160,9 +179,9 @@ impl MyApp {
     }
 }
 
-fn handle_message(_msg: Received, state_m: Arc<Mutex<AppState>>) {
-    let _state = state_m.lock().unwrap();
-    // TODO
+fn handle_message(msg: Received, state_m: Arc<Mutex<AppState>>) {
+    let mut state = state_m.lock().unwrap();
+    state.handle_message(msg);
 }
 
 impl eframe::App for MyApp {
