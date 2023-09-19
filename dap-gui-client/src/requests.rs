@@ -21,6 +21,7 @@ pub enum RequestBody {
     Initialize(Initialize),
     Continue(Continue),
     SetFunctionBreakpoints(SetFunctionBreakpoints),
+    Attach(Attach),
     Launch(Launch),
     Scopes(Scopes),
     Variables(Variables),
@@ -61,6 +62,29 @@ pub struct SetFunctionBreakpoints {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct ConnectInfo {
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PathMapping {
+    pub local_root: String,
+    pub remote_root: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Attach {
+    pub connect: ConnectInfo,
+    pub path_mappings: Vec<PathMapping>,
+    pub just_my_code: bool,
+    pub workspace_folder: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Launch {
     pub program: String,
 }
@@ -88,5 +112,3 @@ pub struct Terminate {
 pub struct Disconnect {
     pub terminate_debugee: bool,
 }
-
-

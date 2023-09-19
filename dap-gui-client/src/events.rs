@@ -15,6 +15,7 @@ pub enum Event {
     Exited(ExitedEventBody),
     Module(ModuleEventBody),
     Terminated,
+    Unknown(String),
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from threading import Thread
+from threading import Event, Thread
 from collections import defaultdict
 import sys
 from enum import Enum
@@ -17,9 +17,7 @@ from queue import Empty, Queue
 import logging
 
 
-logging.basicConfig(
-    level=logging.DEBUG, filename="log.log", filemode="w", format="%(asctime)s %(message)s"
-)
+logging.basicConfig(level=logging.DEBUG, filename="log.log", filemode="w", format="%(message)s")
 
 LOG = logging.getLogger(__name__)
 
@@ -108,11 +106,13 @@ class Handler:
     stack_frames: dict[ThreadId, list[StackFrame] | None]
     scopes: dict[int, list[Scope]]
     variables: dict[int, list[Variable]]
+    wait_event: Event | None
 
     def __init__(self, client: Client, events: Queue):
         self.client = client
         self.awaiting_response = {}
         self.queue = events
+        self.wait_event = None
 
         # state about the debug adapter
         self.capabilities = {}
@@ -123,20 +123,11 @@ class Handler:
         self.scopes = {}
         self.variables = defaultdict(list)
 
-        # init message
-        msg = {
-            "command": "initialize",
-            "arguments": {
-                "adapterID": "dap-gui",
-                "clientName": "DAP GUI",
-                "pathFormat": "path",
-                # TODO
-                "supportsRunInTerminalRequest": False,
-                "supportsStartDebuggingRequest": False,
-            },
-        }
-        sent_message = self.client.send_request(msg)
-        self.awaiting_response[sent_message["seq"]] = sent_message
+    def wait_for_connect(self):
+        self.wait_event = Event()
+        LOG.info("waiting for debugger to stop")
+        self.wait_event.wait()
+        LOG.info("debugger stopped")
 
     @property
     def initialised(self) -> bool:
@@ -154,7 +145,7 @@ class Handler:
                     raise NotImplementedError(t)
 
     def handle_response(self, res: Response):
-        req = self.awaiting_response.get(res["request_seq"], None)
+        req = self.awaiting_response.pop(res["request_seq"], None)
         if not req:
             return
         LOG.debug(f"RESPONSE: {res} replying to {req}")
@@ -167,11 +158,10 @@ class Handler:
         match res["command"]:
             case "initialize":
                 self.capabilities = res["body"]
-                LOG.debug(f"Server cababilities: {json.dumps(self.capabilities, indent=2)}")
                 self.clear_awaiting(res)
 
-                # launch the debugee
-                self.launch()
+                self.send_attach()
+
             case "setFunctionBreakpoints":
                 self.configuration_done()
 
@@ -219,6 +209,7 @@ class Handler:
                 for variable in body["variables"]:
                     if (ref := variable.get("variablesReference")) > 0:
                         # TODO decode further
+                        return
                         self.send_variables(variable["variablesReference"])
                         self.clear_awaiting(res)
                     else:
@@ -245,13 +236,17 @@ class Handler:
         self.awaiting_response.pop(response["request_seq"], None)
 
     def handle_event(self, event: ServerMessage):
-        LOG.debug(f"EVENT: {event=}")
+        LOG.debug("EVENT: %s", event)
 
         match event["event"]:
             case "initialized":
                 self.initialized = True
+                self.set_breakpoints()
                 self.set_function_breakpoints()
             case "stopped":
+                if self.wait_event and not self.wait_event.is_set():
+                    self.wait_event.set()
+
                 self.current_thread = event["body"]["threadId"]
                 self.reset_state()
                 self.send_threads()
@@ -275,7 +270,22 @@ class Handler:
         self.stack_frames.clear()
         self.scopes.clear()
 
-    def disconnect(self):
+    def send_initialize(self):
+        msg = {
+            "command": "initialize",
+            "arguments": {
+                "adapterID": "dap-gui",
+                "clientName": "DAP GUI",
+                "pathFormat": "path",
+                # TODO
+                "supportsRunInTerminalRequest": False,
+                "supportsStartDebuggingRequest": False,
+            },
+        }
+        sent_message = self.client.send_request(msg)
+        self.awaiting_response[sent_message["seq"]] = sent_message
+
+    def send_disconnect(self):
         msg = {
             "command": "disconnect",
             "terminateDebuggee": True,
@@ -325,6 +335,34 @@ class Handler:
         sent_message = self.client.send_request(msg)
         self.awaiting_response[sent_message["seq"]] = sent_message
 
+    def send_attach(self):
+        msg = {
+            "command": "attach",
+            "arguments": {
+                "name": "Python: Remote Attach (ext)",
+                "type": "python",
+                "request": "attach",
+                "connect": {"host": "localhost", "port": 5678},
+                "pathMappings": [
+                    {
+                        "localRoot": "/home/simon/work/localstack/localstack-ext/localstack_ext",
+                        "remoteRoot": "/opt/code/localstack/.venv/lib/python3.10/site-packages/localstack_ext",
+                    }
+                ],
+                "justMyCode": False,
+                "__configurationTarget": 6,
+                "clientOS": "unix",
+                "debugOptions": ["DebugStdLib", "RedirectOutput", "ShowReturnValue"],
+                "showReturnValue": True,
+                "workspaceFolder": "/home/simon/work/localstack/localstack-ext",
+                "__sessionId": "e4998b67-23f8-4ab0-adee-a14556f1ce01",
+            },
+            "type": "request",
+            "seq": 2,
+        }
+        sent_message = self.client.send_request(msg)
+        self.awaiting_response[sent_message["seq"]] = sent_message
+
     def launch(self):
         msg = {
             "command": "launch",
@@ -345,6 +383,22 @@ class Handler:
         sent_message = self.client.send_request(msg)
         self.awaiting_response[sent_message["seq"]] = sent_message
         self.current_thread = None
+
+    def set_breakpoints(self):
+        msg = {
+            "command": "setBreakpoints",
+            "arguments": {
+                "source": {
+                    "name": "mapping.py",
+                    "path": "/home/simon/work/localstack/localstack-ext/localstack_ext/services/appsync/mapping.py",
+                },
+                "lines": [114],
+                "breakpoints": [{"line": 114}],
+                "sourceModified": False,
+            },
+        }
+        sent_message = self.client.send_request(msg)
+        self.awaiting_response[sent_message["seq"]] = sent_message
 
     def set_function_breakpoints(self):
         msg = {
@@ -380,14 +434,20 @@ class Client:
                 "type": "request",
             },
         }
-        LOG.debug(f"Sending message: {full_message}")
+        LOG.debug("REQUEST: %s", full_message)
         buf = serislise_message(full_message)
         self.sock.send(buf)
         self.seq += 1
         return full_message
 
     def receive_message(self) -> Generator[ServerMessage, None, None]:
-        m = self.sock.recv(8196).decode("utf8")
+        try:
+            m = self.sock.recv(8196).decode("utf8")
+        except OSError:
+            LOG.warning("nothing read")
+            # EOF
+            raise SystemExit(0)
+
         self.buf += m
         # TODO: what if more headers are added?
         assert self.buf.startswith("Content-Length")
@@ -422,89 +482,32 @@ class Client:
 
 
 def receive_messages(client: Client, events: Queue):
-    while True:
-        for msg in client.receive_message():
-            events.put(msg)
-
-
-class AsyncHandler:
-    def __init__(self, client: Client, events: Queue):
-        self.client = client
-        self.events = events
-        self.responses = {}
-
-    async def loop(self):
-        while True:
-            try:
-                msg = self.events.get(block=False, timeout=0.5)
-            except Empty:
-                await asyncio.sleep(0.5)
-                continue
-
-            match msg["type"]:
-                case "response":
-                    request_seq = msg["request_seq"]
-                    self.responses[request_seq] = msg
-                case "event":
-                    print(f"Event {msg}")
-
-    async def send_initialize(self):
-        msg = {
-            "command": "initialize",
-            "arguments": {
-                "adapterID": "dap-gui",
-                "clientName": "DAP GUI",
-                "pathFormat": "path",
-                # TODO
-                "supportsRunInTerminalRequest": False,
-                "supportsStartDebuggingRequest": False,
-            },
-        }
-        return await self.send_message(msg)
-
-    async def send_message(self, payload: dict, has_response: bool = True) -> dict | None:
-        sent_message = await self._send(payload)
-
-        if not has_response:
-            return
-
-        seq = sent_message["seq"]
-
-        while True:
-            if seq in self.responses:
-                return self.responses[seq]
-
-            await asyncio.sleep(0.5)
-
-    async def _send(self, payload: dict) -> dict:
-        """
-        Low level method that wraps the blocking API in an async wrapper
-        """
-        return await asyncio.to_thread(self.client.send_request, payload)
-
-
-async def main():
-    # marker file to prove the debuggee was run
     try:
-        os.remove("out.txt")
-    except:
-        pass
-
-    events = Queue()
-    client = Client()
-
-    # background thread to receive messages
-    # TODO: asyncio task
-    thread = Thread(target=receive_messages, kwargs={"client": client, "events": events})
-    thread.daemon = True
-    thread.start()
-
-    handler = AsyncHandler(client, events)
-    asyncio.create_task(handler.loop())
-    print(f"Started background task")
-    res = await handler.send_initialize()
-    print(f"Result from send_initialize: {res}")
+        while True:
+            for msg in client.receive_message():
+                events.put(msg)
+    except Exception:
+        LOG.warning("background thread error", exc_info=True)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    queue = Queue()
+    client = Client(port=5678)
+    message_handler = Thread(
+        target=receive_messages,
+        name="message-handler",
+        kwargs=dict(client=client, events=queue),
+        daemon=True,
+    )
+    message_handler.start()
+
+    handler = Handler(client, queue)
+    ht = Thread(target=handler.loop, name="handler-loop", daemon=True)
+    ht.start()
+
+    handler.send_initialize()
+    handler.wait_for_connect()
+    breakpoint()
+    handler.send_continue()
+    time.sleep(10)
+    handler.send_disconnect()
