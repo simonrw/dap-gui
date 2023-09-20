@@ -1,11 +1,12 @@
+//! Requests you can send to a DAP server
 use serde::Serialize;
 
-use crate::types::{StackFrameId, ThreadId, VariablesReference};
+use crate::types::{Seq, StackFrameId, ThreadId, VariablesReference};
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Request {
-    pub seq: i64,
+    pub seq: Seq,
     pub r#type: String,
     #[serde(flatten)]
     pub body: RequestBody,
@@ -20,9 +21,12 @@ pub enum RequestBody {
     Initialize(Initialize),
     Continue(Continue),
     SetFunctionBreakpoints(SetFunctionBreakpoints),
+    Attach(Attach),
     Launch(Launch),
     Scopes(Scopes),
     Variables(Variables),
+    Terminate(Terminate),
+    Disconnect(Disconnect),
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -58,6 +62,29 @@ pub struct SetFunctionBreakpoints {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct ConnectInfo {
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PathMapping {
+    pub local_root: String,
+    pub remote_root: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Attach {
+    pub connect: ConnectInfo,
+    pub path_mappings: Vec<PathMapping>,
+    pub just_my_code: bool,
+    pub workspace_folder: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Launch {
     pub program: String,
 }
@@ -72,4 +99,16 @@ pub struct Scopes {
 #[serde(rename_all = "camelCase")]
 pub struct Variables {
     pub variables_reference: VariablesReference,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Terminate {
+    pub restart: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Disconnect {
+    pub terminate_debugee: bool,
 }

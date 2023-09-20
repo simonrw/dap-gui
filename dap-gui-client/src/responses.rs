@@ -1,3 +1,4 @@
+//! Responses in reply to [`crate::requests`] from a DAP server
 use crate::types::{self, Scope, StackFrame, Thread, Variable};
 use serde::Deserialize;
 
@@ -13,7 +14,6 @@ pub struct Response {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "command", content = "body", rename_all = "camelCase")]
-#[non_exhaustive]
 pub enum ResponseBody {
     Initialize(Capabilities),
     SetFunctionBreakpoints(SetFunctionBreakpointsResponse),
@@ -22,6 +22,9 @@ pub enum ResponseBody {
     StackTrace(StackTraceResponse),
     Scopes(ScopesResponse),
     Variables(VariablesResponse),
+    ConfigurationDone,
+    Terminate,
+    Disconnect,
 }
 
 #[derive(Debug, Clone, Deserialize)]
