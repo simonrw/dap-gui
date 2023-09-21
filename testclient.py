@@ -182,12 +182,12 @@ class Handler:
             case "threads":
                 body = res["body"]
                 self.stack_frames.clear()
-                for thread in body["threads"]:
-                    self.stack_frames[thread["id"]] = None
-                    self.send_stack_trace(thread["id"])
+            #     for thread in body["threads"]:
+            #         self.stack_frames[thread["id"]] = None
+            #         self.send_stack_trace(thread["id"])
 
-                # TODO: wait for the results of these requests
-                # self.send_continue()
+            # TODO: wait for the results of these requests
+            # self.send_continue()
 
             case "stackTrace":
                 body = res["body"]
@@ -265,6 +265,7 @@ class Handler:
                 self.current_thread = event["body"]["threadId"]
                 self.reset_state()
                 self.send_threads()
+                self.send_stack_trace(self.current_thread)
             case "output":
                 body = event["body"]
                 match body["category"]:
