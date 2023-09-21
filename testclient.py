@@ -13,13 +13,28 @@ from dataclasses import dataclass
 import json
 import socket
 from typing import Any, Literal, TypedDict, cast, Generator
-from queue import Empty, Queue
+from queue import Queue
+import structlog
 import logging
 
-
 logging.basicConfig(level=logging.DEBUG, filename="log.log", filemode="w", format="%(message)s")
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.StackInfoRenderer(),
+        structlog.dev.set_exc_info,
+        structlog.processors.TimeStamper(),
+        structlog.processors.JSONRenderer(),
+    ],
+    wrapper_class=structlog.stdlib.BoundLogger,
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=False,
+)
 
-LOG = logging.getLogger(__name__)
+LOG = structlog.get_logger()
+
 
 ServerMessageType = Literal["event", "response"]
 
@@ -148,12 +163,11 @@ class Handler:
         req = self.awaiting_response.pop(res["request_seq"], None)
         if not req:
             return
-        LOG.debug(f"RESPONSE: {res} replying to {req}")
+        LOG.debug("response", type="response", response=res, request=req)
 
         if not res["success"]:
-            LOG.warning(f"failed response {res} to {req}")
+            LOG.warning("failed response", response=res, request=req)
             raise RuntimeError(res)
-            return
 
         match res["command"]:
             case "initialize":
@@ -223,20 +237,21 @@ class Handler:
                         #     raise ValueError(f"Already encountered variable {variable_ref}: {v}")
                         self.variables[variable_ref].append(v)
                         LOG.debug(
-                            f"Number of variables: {sum(len(self.variables[key]) for key in self.variables)}"
+                            "variables",
+                            count=sum(len(self.variables[key]) for key in self.variables),
                         )
                     self.clear_awaiting(res)
 
             case "disconnect":
                 self.client.disconnect()
-                LOG.debug("Got disconnect response -exiting")
+                LOG.debug("disconnect")
                 raise SystemExit(0)
 
     def clear_awaiting(self, response: Response):
         self.awaiting_response.pop(response["request_seq"], None)
 
     def handle_event(self, event: ServerMessage):
-        LOG.debug("EVENT: %s", event)
+        LOG.debug("event", message=event)
 
         match event["event"]:
             case "initialized":
@@ -262,7 +277,7 @@ class Handler:
                 thread_id = body["threadId"]
                 status = ThreadStatus(body["reason"])
                 self.thread_status[thread_id] = status
-                LOG.debug(f"thread status: {self.thread_status}")
+                LOG.debug("thread", status=self.thread_status)
             case "terminated":
                 self.disconnect()
 
@@ -434,7 +449,7 @@ class Client:
                 "type": "request",
             },
         }
-        LOG.debug("REQUEST: %s", full_message)
+        LOG.debug("request", request=full_message)
         buf = serislise_message(full_message)
         self.sock.send(buf)
         self.seq += 1
@@ -486,8 +501,8 @@ def receive_messages(client: Client, events: Queue):
         while True:
             for msg in client.receive_message():
                 events.put(msg)
-    except Exception:
-        LOG.warning("background thread error", exc_info=True)
+    except Exception as e:
+        LOG.warning("background thread error", exc_info=e)
 
 
 if __name__ == "__main__":

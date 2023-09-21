@@ -16,6 +16,7 @@ let
     debugpy
     black
     scapy
+    structlog
   ]);
 
 in
