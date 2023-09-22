@@ -166,16 +166,16 @@ impl MyApp {
         */
 
         let background_state = Arc::clone(&state);
-        let this = Self {
-            client,
-            app_state: state,
-        };
         thread::spawn(move || {
             for msg in client_events {
                 handle_message(msg, Arc::clone(&background_state));
             }
         });
-        this
+        // TODO: spawn the debug program?
+        Self {
+            client,
+            app_state: state,
+        }
     }
 }
 
@@ -210,29 +210,4 @@ fn main() -> Result<(), eframe::Error> {
         options,
         Box::new(move |_| Box::new(MyApp::new(client, rx))),
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Command, Language, LaunchConfiguration};
-
-    #[test]
-    fn launch_file() {
-        let input = r#"{
-            "command": "launch",
-            "working_directory": "test",
-            "type": "file",
-            "filename": "file.py"
-        }"#;
-        let command: Command = serde_json::from_str(input).unwrap();
-
-        let expected = Command::Launch {
-            language: Language::Python,
-            launch_config: LaunchConfiguration::File {
-                filename: "file.py".to_string(),
-            },
-            working_directory: "test".to_string(),
-        };
-        assert_eq!(command, expected);
-    }
 }

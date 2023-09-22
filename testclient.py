@@ -256,7 +256,6 @@ class Handler:
         match event["event"]:
             case "initialized":
                 self.initialized = True
-                self.set_breakpoints()
                 self.set_function_breakpoints()
             case "stopped":
                 if self.wait_event and not self.wait_event.is_set():
@@ -280,7 +279,7 @@ class Handler:
                 self.thread_status[thread_id] = status
                 LOG.debug("thread", status=self.thread_status)
             case "terminated":
-                self.disconnect()
+                self.send_disconnect()
 
     def reset_state(self):
         self.stack_frames.clear()
@@ -358,20 +357,7 @@ class Handler:
                 "name": "Python: Remote Attach (ext)",
                 "type": "python",
                 "request": "attach",
-                "connect": {"host": "localhost", "port": 5678},
-                "pathMappings": [
-                    {
-                        "localRoot": "/home/simon/work/localstack/localstack-ext/localstack_ext",
-                        "remoteRoot": "/opt/code/localstack/.venv/lib/python3.10/site-packages/localstack_ext",
-                    }
-                ],
                 "justMyCode": False,
-                "__configurationTarget": 6,
-                "clientOS": "unix",
-                "debugOptions": ["DebugStdLib", "RedirectOutput", "ShowReturnValue"],
-                "showReturnValue": True,
-                "workspaceFolder": "/home/simon/work/localstack/localstack-ext",
-                "__sessionId": "e4998b67-23f8-4ab0-adee-a14556f1ce01",
             },
             "type": "request",
             "seq": 2,
@@ -401,6 +387,7 @@ class Handler:
         self.current_thread = None
 
     def set_breakpoints(self):
+        raise NotImplementedError
         msg = {
             "command": "setBreakpoints",
             "arguments": {
@@ -525,5 +512,4 @@ if __name__ == "__main__":
     handler.wait_for_connect()
     breakpoint()
     handler.send_continue()
-    time.sleep(10)
     handler.send_disconnect()
