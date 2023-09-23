@@ -4,13 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"time"
 
 	g "github.com/AllenDang/giu"
 	dap "github.com/google/go-dap"
+	"github.com/simonrw/dap-gui/pkg/client"
 )
 
 func onClickMe() {
@@ -38,42 +38,8 @@ func main() {
 	// wnd.Run(loop)
 }
 
-type Client struct {
-	seq int
-}
-
-func NewClient() *Client {
-	return &Client{
-		seq: 1,
-	}
-}
-
-func (c *Client) newRequest(command string) dap.Request {
-	seq := c.seq
-	c.seq++
-	pm := dap.ProtocolMessage{
-		Seq:  seq,
-		Type: "request",
-	}
-	r := dap.Request{
-		ProtocolMessage: pm,
-		Command:         command,
-	}
-	return r
-}
-
-func (c *Client) Send(w io.Writer, r dap.RequestMessage) error {
-	switch t := r.(type) {
-	case *dap.InitializeRequest:
-		t.Request = c.newRequest("initialize")
-		return dap.WriteProtocolMessage(w, t)
-	default:
-		return fmt.Errorf("unhandled type: %v", t)
-	}
-}
-
 func foo() {
-	client := NewClient()
+	client := client.New()
 	var b bytes.Buffer
 	i := dap.InitializeRequest{
 		Arguments: dap.InitializeRequestArguments{
