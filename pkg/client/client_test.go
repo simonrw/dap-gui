@@ -2,6 +2,7 @@ package client
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -9,6 +10,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/google/go-dap"
 )
 
 func getRandomTCPPort() (int, error) {
@@ -66,7 +69,7 @@ func withServer(t *testing.T, f func(int) error) {
 	// wait for server to be ready
 	<-c
 
-	callbackErr := f(0)
+	callbackErr := f(port)
 
 	if err := child.Process.Kill(); err != nil {
 		t.Fatal(err)
@@ -78,7 +81,41 @@ func withServer(t *testing.T, f func(int) error) {
 }
 
 func TestFoo(t *testing.T) {
+	c := make(chan dap.Message)
 	withServer(t, func(port int) error {
+		conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+
+		client := New(conn, c)
+		go client.Poll()
+
+		// initialise
+		initializeR := dap.InitializeRequest{
+			Arguments: dap.InitializeRequestArguments{
+				AdapterID: "adapter-id",
+			},
+		}
+		if err := client.Send(&initializeR); err != nil {
+			t.Fatal(err)
+		}
+
+		// launch
+		launchArgs := struct {
+			Program string `json:"program"`
+		}{
+			Program: "./test.py",
+		}
+		launchArgsStr, _ := json.Marshal(launchArgs)
+		launchR := dap.LaunchRequest{
+			Arguments: launchArgsStr,
+		}
+		if err := client.Send(&launchR); err != nil {
+			t.Fatal(err)
+		}
+
 		return nil
 	})
 }
