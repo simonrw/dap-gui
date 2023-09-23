@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"time"
@@ -30,26 +32,75 @@ func loop() {
 }
 
 func main() {
-	wnd := g.NewMasterWindow("Hello world", 400, 200, g.MasterWindowFlagsNotResizable)
-	wnd.Run(loop)
+	foo()
+
+	// wnd := g.NewMasterWindow("Hello world", 400, 200, g.MasterWindowFlagsNotResizable)
+	// wnd.Run(loop)
 }
 
-func mainClient() {
+type Client struct {
+	seq int
+}
+
+func NewClient() *Client {
+	return &Client{
+		seq: 1,
+	}
+}
+
+func (c *Client) newRequest(command string) dap.Request {
+	seq := c.seq
+	c.seq++
 	pm := dap.ProtocolMessage{
-		Seq:  1,
+		Seq:  seq,
 		Type: "request",
 	}
 	r := dap.Request{
 		ProtocolMessage: pm,
-		Command:         "initialize",
+		Command:         command,
 	}
+	return r
+}
+
+func (c *Client) Send(w io.Writer, r dap.RequestMessage) error {
+	switch t := r.(type) {
+	case *dap.InitializeRequest:
+		t.Request = c.newRequest("initialize")
+		return dap.WriteProtocolMessage(w, t)
+	default:
+		return fmt.Errorf("unhandled type: %v", t)
+	}
+}
+
+func foo() {
+	client := NewClient()
+	var b bytes.Buffer
 	i := dap.InitializeRequest{
-		Request: r,
 		Arguments: dap.InitializeRequestArguments{
 			AdapterID: "adapter-id",
 		},
 	}
+	client.Send(&b, &i)
+	client.Send(&b, &i)
 
+	fmt.Printf("%s\n", b.String())
+}
+
+func mainClient() {
+	// pm := dap.ProtocolMessage{
+	// 	Seq:  1,
+	// 	Type: "request",
+	// }
+	// r := dap.Request{
+	// 	ProtocolMessage: pm,
+	// 	Command:         "initialize",
+	// }
+	i := dap.InitializeRequest{
+		// Request: r,
+		Arguments: dap.InitializeRequestArguments{
+			AdapterID: "adapter-id",
+		},
+	}
 	client, err := net.Dial("tcp", "127.0.0.1:5678")
 	if err != nil {
 		panic(err)
