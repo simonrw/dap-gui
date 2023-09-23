@@ -2,16 +2,14 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"net"
 	"time"
-	"fmt"
 
-	dap "github.com/google/go-dap"
 	g "github.com/AllenDang/giu"
+	dap "github.com/google/go-dap"
 )
-
-
 
 func onClickMe() {
 	fmt.Println("Hello world!")
@@ -38,7 +36,7 @@ func main() {
 
 func mainClient() {
 	pm := dap.ProtocolMessage{
-		Seq: 1,
+		Seq:  1,
 		Type: "request",
 	}
 	r := dap.Request{
