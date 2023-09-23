@@ -5,6 +5,8 @@ let
     OpenGL
     CoreServices
     AppKit
+    Cocoa
+    Kernel
   ];
   apple-libs = [
     libiconv
