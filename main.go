@@ -1,10 +1,7 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
-	"log"
 	"net"
 	"time"
 
@@ -31,62 +28,29 @@ func loop() {
 	)
 }
 
+func mainGui() {
+	wnd := g.NewMasterWindow("Hello world", 400, 200, g.MasterWindowFlagsNotResizable)
+	wnd.Run(loop)
+}
+
 func main() {
-	foo()
-
-	// wnd := g.NewMasterWindow("Hello world", 400, 200, g.MasterWindowFlagsNotResizable)
-	// wnd.Run(loop)
-}
-
-func foo() {
-	client := client.New()
-	var b bytes.Buffer
-	i := dap.InitializeRequest{
-		Arguments: dap.InitializeRequestArguments{
-			AdapterID: "adapter-id",
-		},
-	}
-	client.Send(&b, &i)
-	client.Send(&b, &i)
-
-	fmt.Printf("%s\n", b.String())
-}
-
-func mainClient() {
-	// pm := dap.ProtocolMessage{
-	// 	Seq:  1,
-	// 	Type: "request",
-	// }
-	// r := dap.Request{
-	// 	ProtocolMessage: pm,
-	// 	Command:         "initialize",
-	// }
-	i := dap.InitializeRequest{
-		// Request: r,
-		Arguments: dap.InitializeRequestArguments{
-			AdapterID: "adapter-id",
-		},
-	}
-	client, err := net.Dial("tcp", "127.0.0.1:5678")
+	conn, err := net.Dial("tcp", "127.0.0.1:5678")
 	if err != nil {
 		panic(err)
 	}
-	defer client.Close()
+	defer conn.Close()
 
-	go func() {
-		reader := bufio.NewReader(client)
-		// handle background messages
-		for {
-			msg, err := dap.ReadProtocolMessage(reader)
-			if err != nil {
-				log.Printf("reading message from client: %v", err)
-				continue
-			}
-			log.Printf("message: %+v", msg)
-		}
-	}()
+	c := client.New(conn)
+	// TODO defer c.Shutdown()
+	go c.Poll()
 
-	if err := dap.WriteProtocolMessage(client, &i); err != nil {
+	i := dap.InitializeRequest{
+		Arguments: dap.InitializeRequestArguments{
+			AdapterID: "adapter-id",
+		},
+	}
+
+	if err := c.Send(&i); err != nil {
 		panic(err)
 	}
 

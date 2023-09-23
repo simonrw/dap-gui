@@ -1,19 +1,23 @@
 package client
 
 import (
+	"bufio"
 	"fmt"
 	"io"
+	"log"
 
 	"github.com/google/go-dap"
 )
 
 type Client struct {
-	seq int
+	conn io.ReadWriter
+	seq  int
 }
 
-func New() *Client {
+func New(conn io.ReadWriter) *Client {
 	return &Client{
-		seq: 1,
+		conn: conn,
+		seq:  1,
 	}
 }
 
@@ -31,12 +35,24 @@ func (c *Client) newRequest(command string) dap.Request {
 	return r
 }
 
-func (c *Client) Send(w io.Writer, r dap.RequestMessage) error {
+func (c *Client) Send(r dap.RequestMessage) error {
 	switch t := r.(type) {
 	case *dap.InitializeRequest:
 		t.Request = c.newRequest("initialize")
-		return dap.WriteProtocolMessage(w, t)
+		return dap.WriteProtocolMessage(c.conn, t)
 	default:
 		return fmt.Errorf("unhandled type: %v", t)
+	}
+}
+
+func (c *Client) Poll() {
+	reader := bufio.NewReader(c.conn)
+	for {
+		msg, err := dap.ReadProtocolMessage(reader)
+		if err != nil {
+			log.Printf("reading message from client: %v", err)
+			continue
+		}
+		log.Printf("message: %+v", msg)
 	}
 }
