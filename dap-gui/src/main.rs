@@ -9,7 +9,10 @@ use std::{
 };
 
 use anyhow::Result;
-use dap_gui_client::{events, requests, responses, Received};
+use dap_gui_client::{
+    events::{self, OutputEventBody},
+    requests::{self, Initialize}, responses, Received,
+};
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 
@@ -49,9 +52,43 @@ impl AppState {
         }
     }
 
-    fn handle_event(&mut self, _event: events::Event) {}
+    fn handle_event(&mut self, event: events::Event) {
+        match event {
+            events::Event::Initialized => todo!(),
+            events::Event::Output(OutputEventBody { output, source, .. }) => {
+                tracing::debug!(%output, ?source, "output event");
+            }
+            events::Event::Process(_) => todo!(),
+            events::Event::Stopped(_) => todo!(),
+            events::Event::Continued(_) => todo!(),
+            events::Event::Thread(_) => todo!(),
+            events::Event::Exited(_) => todo!(),
+            events::Event::Module(_) => todo!(),
+            events::Event::Terminated => todo!(),
+            events::Event::Unknown(_) => todo!(),
+            _ => todo!(),
+        }
+    }
 
-    fn handle_response(&mut self, _request: requests::RequestBody, _response: responses::Response) {
+    fn handle_response(&mut self, _request: requests::RequestBody, response: responses::Response) {
+        if let Some(body) = response.body {
+            match body {
+                responses::ResponseBody::Initialize(_) => {
+                    tracing::debug!("initialize response");
+                    // TODO: store capabilities
+                },
+                responses::ResponseBody::SetFunctionBreakpoints(_) => todo!(),
+                responses::ResponseBody::Continue(_) => todo!(),
+                responses::ResponseBody::Threads(_) => todo!(),
+                responses::ResponseBody::StackTrace(_) => todo!(),
+                responses::ResponseBody::Scopes(_) => todo!(),
+                responses::ResponseBody::Variables(_) => todo!(),
+                responses::ResponseBody::ConfigurationDone => todo!(),
+                responses::ResponseBody::Terminate => todo!(),
+                responses::ResponseBody::Disconnect => todo!(),
+                _ => todo!(),
+            }
+        }
     }
 
     fn render(&mut self, ctx: &egui::Context) {
@@ -149,7 +186,11 @@ struct MyApp {
 }
 
 impl MyApp {
-    pub fn new(client: dap_gui_client::Client, client_events: Receiver<Received>) -> Self {
+    pub fn new(
+        ctx: egui::Context,
+        mut client: dap_gui_client::Client,
+        client_events: Receiver<Received>,
+    ) -> Self {
         // set up background thread watching events
 
         let state = Arc::new(Mutex::new(AppState::Running {
@@ -169,9 +210,17 @@ impl MyApp {
         thread::spawn(move || {
             for msg in client_events {
                 handle_message(msg, Arc::clone(&background_state));
+                // refresh the UI
+                ctx.request_repaint();
             }
         });
-        // TODO: spawn the debug program?
+
+        // send initialize
+        let req = requests::RequestBody::Initialize(Initialize {
+            adapter_id: "dap gui".to_string(),
+        });
+        client.send(req).unwrap();
+
         Self {
             client,
             app_state: state,
@@ -208,6 +257,9 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "DAP GUI",
         options,
-        Box::new(move |_| Box::new(MyApp::new(client, rx))),
+        Box::new(move |cc| {
+            let ctx = cc.egui_ctx.clone();
+            Box::new(MyApp::new(ctx, client, rx))
+        }),
     )
 }

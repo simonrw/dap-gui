@@ -14,6 +14,7 @@ pub struct Response {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "command", content = "body", rename_all = "camelCase")]
+#[non_exhaustive]
 pub enum ResponseBody {
     Initialize(Capabilities),
     SetFunctionBreakpoints(SetFunctionBreakpointsResponse),

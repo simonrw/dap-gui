@@ -1,10 +1,11 @@
 //! Events emitted by a DAP server
 use serde::Deserialize;
 
-use crate::types::{BreakpointId, Module, ThreadId};
+use crate::types::{BreakpointId, Module, Source, ThreadId};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "event", content = "body", rename_all = "camelCase")]
+#[non_exhaustive]
 pub enum Event {
     Initialized,
     Output(OutputEventBody),
@@ -24,7 +25,7 @@ pub struct OutputEventBody {
     pub output: String,
     // pub group: Option<OutputEventGroup>,
     pub variables_reference: Option<i64>,
-    // pub source: Option<Source>,
+    pub source: Option<Source>,
     pub line: Option<i64>,
     pub column: Option<i64>,
     // pub data: Option<Value>,
