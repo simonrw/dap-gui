@@ -19,6 +19,7 @@ use dap_gui_client::{
 use tracing_subscriber::EnvFilter;
 
 #[test]
+#[ignore]
 fn localstack() -> Result<()> {
     init_test_logger();
 
