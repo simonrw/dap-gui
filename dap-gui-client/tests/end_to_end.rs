@@ -38,7 +38,6 @@ where
 {
     let port = get_random_tcp_port().context("finding random tcp port")?;
     let cwd = std::env::current_dir().unwrap();
-    tracing::warn!(current_dir = ?cwd, "current_dir");
     let mut child = std::process::Command::new("python")
         .args(&[
             "-m",

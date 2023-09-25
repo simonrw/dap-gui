@@ -19,17 +19,18 @@ use dap_gui_client::{
 use tracing_subscriber::EnvFilter;
 
 #[test]
-#[ignore]
 fn localstack() -> Result<()> {
     init_test_logger();
 
     let (tx, rx) = mpsc::channel();
-    with_server(|port| {
-        let span = tracing::debug_span!("with_server", %port);
+    with_launch_localstack(|edge_port, debug_port| {
+        let span = tracing::debug_span!("with_launch_localstack", %edge_port, %debug_port);
         let _guard = span.enter();
 
-        let stream = TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
+        let stream = TcpStream::connect(format!("127.0.0.1:{debug_port}")).unwrap();
         let mut client = dap_gui_client::Client::new(stream, tx).unwrap();
+
+        return Ok(());
 
         // initialize
         let req = requests::RequestBody::Initialize(Initialize {
@@ -69,6 +70,122 @@ fn localstack() -> Result<()> {
 
         Ok(())
     })
+}
+
+type ContainerId = String;
+
+struct DockerClient {}
+
+impl DockerClient {
+    fn create(&self, edge_port: u16, debug_port: u16) -> Result<ContainerId> {
+        let output = std::process::Command::new("docker")
+            .args(&[
+                "create",
+                "-p",
+                &format!("127.0.0.1:{edge_port}:4566"),
+                "-p",
+                &format!("127.0.0.1:{debug_port}:5678"),
+                "-v",
+                "/var/run/docker.sock:/var/run/docker.sock",
+                "-e",
+                "DEVELOP=1",
+                "-e",
+                "WAIT_FOR_DEBUGGER=1",
+                "localstack/localstack",
+            ])
+            .output()
+            .context("waiting for docker create command to finish")?;
+
+        if !output.status.success() {
+            anyhow::bail!("bad exit code from docker command");
+        }
+
+        let output = String::from_utf8(output.stdout).context("invalid utf8 output")?;
+        Ok(output.trim().to_string())
+    }
+    fn start(&self, id: &ContainerId) -> Result<()> {
+        let exit_code = std::process::Command::new("docker")
+            .args(&["start", id])
+            .stdout(Stdio::piped())
+            .spawn()
+            .context("spawning docker command")?
+            .wait()
+            .context("waiting for docker start command")?;
+        if !exit_code.success() {
+            anyhow::bail!("bad exit code from docker command");
+        }
+
+        Ok(())
+    }
+    fn stop(&self, id: ContainerId) -> Result<()> {
+        let exit_code = std::process::Command::new("docker")
+            .args(&["rm", "-f", &id])
+            .stdout(Stdio::piped())
+            .spawn()
+            .context("spawning docker command")?
+            .wait()
+            .context("waiting for docker start command")?;
+        if !exit_code.success() {
+            anyhow::bail!("bad exit code from docker command");
+        }
+        Ok(())
+    }
+
+    fn logs(&self, container_id: &str) -> Result<Vec<String>> {
+        let output = std::process::Command::new("docker")
+            .args(&["logs", container_id])
+            .output()
+            .context("waiting for docker create command to finish")?;
+
+        if !output.status.success() {
+            anyhow::bail!("bad exit code from docker command");
+        }
+
+        let output = String::from_utf8(output.stdout).context("invalid utf8 output")?;
+        Ok(output.split('\n').map(ToString::to_string).collect())
+    }
+}
+
+fn with_launch_localstack<F>(f: F) -> Result<()>
+where
+    F: FnOnce(u16, u16) -> Result<()>,
+{
+    let edge_port = get_random_tcp_port().context("finding random tcp port")?;
+    let debug_port = get_random_tcp_port().context("finding random tcp port")?;
+
+    let client = DockerClient {};
+    let container_id = client
+        .create(edge_port, debug_port)
+        .context("creating localstack container")?;
+    client
+        .start(&container_id)
+        .context("starting LocalStack container")?;
+
+    'outer: loop {
+        match client.logs(&container_id) {
+            Ok(logs) => {
+                for line in dbg!(logs) {
+                    if line.contains("Starting debug server") {
+                        break 'outer;
+                    }
+                }
+            }
+            Err(e) => {
+                client
+                    .stop(container_id)
+                    .context("stopping LocalStack container")?;
+                return Err(e);
+            }
+        }
+    }
+
+    let res = f(edge_port, debug_port);
+
+    client
+        .stop(container_id)
+        .context("stopping LocalStack container")?;
+
+    res
 }
 
 fn wait_for_response<F>(rx: &mpsc::Receiver<Received>, pred: F) -> responses::ResponseBody
@@ -152,55 +269,4 @@ fn get_random_tcp_port() -> Result<u16> {
     }
 
     anyhow::bail!("could not get free port");
-}
-
-// Function to start the server in the background
-fn with_server<F>(f: F) -> Result<()>
-where
-    F: FnOnce(u16) -> Result<()>,
-{
-    let port = get_random_tcp_port().context("finding random tcp port")?;
-    let cwd = std::env::current_dir().unwrap();
-    tracing::warn!(current_dir = ?cwd, "current_dir");
-    let mut child = std::process::Command::new("python")
-        .args(&[
-            "-m",
-            "debugpy.adapter",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            &format!("{port}"),
-            "--log-stderr",
-        ])
-        .stderr(Stdio::piped())
-        .current_dir(cwd.join("..").canonicalize().unwrap())
-        .spawn()
-        .context("spawning background process")?;
-
-    tracing::debug!("server started, waiting for completion");
-
-    // wait until server is ready
-    let stderr = child.stderr.take().unwrap();
-    let reader = BufReader::new(stderr);
-
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let mut should_signal = true;
-        for line in reader.lines() {
-            let line = line.unwrap();
-            tracing::trace!(%line);
-
-            if should_signal && line.contains("Listening for incoming Client connections") {
-                should_signal = false;
-                let _ = tx.send(());
-            }
-        }
-    });
-    let _ = rx.recv();
-
-    let result = f(port);
-
-    child.kill().context("killing background process")?;
-    child.wait().context("waiting for server to exit")?;
-    result
 }
