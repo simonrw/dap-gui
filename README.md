@@ -4,6 +4,15 @@ Very early prototype of a general purpose GUI debugger based on the DAP protocol
 
 https://github.com/simonrw/dap-gui/assets/59756/2000a2ee-9131-422c-bd3a-ff2c098c94d4
 
+```mermaid
+stateDiagram-v2
+    waiting: Waiting for stop
+    paused: Paused
+
+    waiting --> paused: Foobar
+    paused --> waiting: Foobar again
+```
+
 
 
 
