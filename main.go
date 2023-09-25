@@ -40,7 +40,8 @@ func main() {
 	}
 	defer conn.Close()
 
-	c := client.New(conn)
+	msgs := make(chan dap.Message)
+	c := client.New(conn, msgs)
 	// TODO defer c.Shutdown()
 	go c.Poll()
 
