@@ -1,17 +1,22 @@
 use std::{
+    env::current_dir,
     io::{BufRead, BufReader},
     net::{TcpListener, TcpStream},
+    path::PathBuf,
+    process::Child,
     sync::{
         mpsc::{self, Receiver},
         Arc, Mutex,
     },
-    thread,
+    thread, time::Duration,
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use clap::Parser;
 use dap_gui_client::{
     events::{self, OutputEventBody},
-    requests::{self, Initialize}, responses, Received,
+    requests::{self, Initialize},
+    responses, Received,
 };
 use eframe::egui;
 use serde::{Deserialize, Serialize};
@@ -76,7 +81,7 @@ impl AppState {
                 responses::ResponseBody::Initialize(_) => {
                     tracing::debug!("initialize response");
                     // TODO: store capabilities
-                },
+                }
                 responses::ResponseBody::SetFunctionBreakpoints(_) => todo!(),
                 responses::ResponseBody::Continue(_) => todo!(),
                 responses::ResponseBody::Threads(_) => todo!(),
@@ -219,6 +224,7 @@ impl MyApp {
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
         });
+        tracing::info!("initializing debug adapter");
         client.send(req).unwrap();
 
         Self {
@@ -241,9 +247,86 @@ impl eframe::App for MyApp {
     }
 }
 
-fn main() -> Result<(), eframe::Error> {
+struct DebugServerConfig {
+    working_dir: PathBuf,
+    filename: PathBuf,
+}
+
+struct DebugServer {
+    child: Child,
+    config: DebugServerConfig,
+}
+
+impl DebugServer {
+    fn new(config: DebugServerConfig) -> Result<Self> {
+        let child = std::process::Command::new("python")
+            .args(&[
+                "-m",
+                "debugpy",
+                "--log-to-stderr",
+                "--wait-for-client",
+                "--listen",
+                "127.0.0.1:5678",
+                &config.filename.display().to_string(),
+            ])
+            .spawn()
+            .context("spawning debugpy server")?;
+
+        // TODO: wait for ready
+        thread::sleep(Duration::from_secs(3));
+
+        Ok(Self { config, child })
+    }
+
+    fn stop(&mut self) -> Result<()> {
+        self.child.kill().context("killing debug server")?;
+        Ok(())
+    }
+}
+
+impl Drop for DebugServer {
+    fn drop(&mut self) {
+        if let Err(e) = self.stop() {
+            tracing::error!(error = %e, "debug server still running after program exit");
+        }
+    }
+}
+
+#[derive(Debug, Parser)]
+struct AttachArguments {}
+
+#[derive(Debug, Parser)]
+struct LaunchArguments {
+    #[clap(short, long)]
+    working_directory: Option<PathBuf>,
+
+    #[clap(short, long)]
+    file: PathBuf,
+}
+
+#[derive(Debug, Parser)]
+enum Arguments {
+    Attach(AttachArguments),
+    Launch(LaunchArguments),
+}
+
+fn main() -> Result<()> {
     setup_sentry!();
     tracing_subscriber::fmt::init();
+
+    let args = Arguments::parse();
+
+    // start debug server in the background
+    let _debug_server = match args {
+        Arguments::Launch(args @ LaunchArguments { .. }) => DebugServer::new(DebugServerConfig {
+            working_dir: args
+                .working_directory
+                .unwrap_or_else(|| current_dir().unwrap()),
+            filename: args.file,
+        })
+        .context("launching debugpy")?,
+        Arguments::Attach(_) => todo!(),
+    };
 
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(1024.0, 768.0)),
@@ -254,12 +337,20 @@ fn main() -> Result<(), eframe::Error> {
     let stream = TcpStream::connect("127.0.0.1:5678").unwrap();
     let client = dap_gui_client::Client::new(stream, tx).unwrap();
 
-    eframe::run_native(
+    let res = eframe::run_native(
         "DAP GUI",
         options,
         Box::new(move |cc| {
             let ctx = cc.egui_ctx.clone();
             Box::new(MyApp::new(ctx, client, rx))
         }),
-    )
+    );
+
+    tracing::info!("exiting");
+
+    if let Err(e) = res {
+        anyhow::bail!("error running GUI: {e}");
+    }
+
+    Ok(())
 }
