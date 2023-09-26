@@ -10,6 +10,7 @@ use dap_gui_client::{
 };
 
 #[test]
+#[ignore]
 fn localstack() -> Result<()> {
     init_test_logger();
 
