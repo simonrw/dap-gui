@@ -42,12 +42,16 @@ macro_rules! setup_sentry {
 }
 
 #[derive(Debug)]
-enum AppState {
-    // WaitingForConnection,
-    Running {
-        launch_config: LaunchConfiguration,
-        working_directory: String,
-    },
+enum DebuggerStatus {
+    Running,
+}
+
+#[derive(Debug)]
+struct AppState {
+    launch_config: LaunchConfiguration,
+    working_directory: String,
+
+    debugger_status: DebuggerStatus,
 }
 
 impl AppState {
@@ -98,16 +102,8 @@ impl AppState {
     }
 
     fn render(&mut self, ctx: &egui::Context) {
-        match self {
-            // AppState::WaitingForConnection => {
-            //     egui::CentralPanel::default().show(ctx, |ui| {
-            //         ui.label("Waiting for connection");
-            //     });
-            // }
-            AppState::Running {
-                launch_config: _launch_config,
-                working_directory: _working_directory,
-            } => {
+        match self.debugger_status {
+            DebuggerStatus::Running => {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.label("Running");
                 });
@@ -144,6 +140,7 @@ enum Language {
     Python,
 }
 
+/*
 fn _control_worker(listener: TcpListener, state: Arc<Mutex<AppState>>) {
     thread::spawn(move || {
         loop {
@@ -167,7 +164,8 @@ fn _control_worker(listener: TcpListener, state: Arc<Mutex<AppState>>) {
                                 // TODO: dispatch on language
                                 // update state accordingly
                                 let mut unlocked_state = state.lock().unwrap();
-                                *unlocked_state = AppState::Running {
+                                *unlocked_state = AppState {
+                                    debugger_status: DebuggerStatus::Running,
                                     launch_config,
                                     working_directory,
                                 };
@@ -184,6 +182,7 @@ fn _control_worker(listener: TcpListener, state: Arc<Mutex<AppState>>) {
         }
     });
 }
+*/
 
 #[allow(dead_code)]
 struct MyApp {
@@ -199,7 +198,8 @@ impl MyApp {
     ) -> Self {
         // set up background thread watching events
 
-        let state = Arc::new(Mutex::new(AppState::Running {
+        let state = Arc::new(Mutex::new(AppState {
+            debugger_status: DebuggerStatus::Running,
             launch_config: LaunchConfiguration::File {
                 filename: "test.py".to_string(),
             },
