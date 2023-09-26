@@ -3,18 +3,16 @@ use std::{
     io::{BufRead, BufReader},
     net::{TcpListener, TcpStream},
     path::PathBuf,
-    process::Child,
     sync::{
         mpsc::{self, Receiver},
         Arc, Mutex,
     },
     thread,
-    time::Duration,
 };
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use dap_gui::debug_server::{DebugServer, DebugServerConfig};
+use dap_gui::debug_server::{DebugServerConfig, PythonDebugServer};
 use dap_gui_client::{
     bindings::get_random_tcp_port,
     events::{self, OutputEventBody},
@@ -277,14 +275,16 @@ fn main() -> Result<()> {
     // start debug server in the background
     let port = get_random_tcp_port().context("no free ports available")?;
     let _debug_server = match args {
-        Arguments::Launch(args @ LaunchArguments { .. }) => DebugServer::new(DebugServerConfig {
-            working_dir: args
-                .working_directory
-                .unwrap_or_else(|| current_dir().unwrap()),
-            filename: args.file,
-            port,
-        })
-        .context("launching debugpy")?,
+        Arguments::Launch(args @ LaunchArguments { .. }) => {
+            PythonDebugServer::new(DebugServerConfig {
+                working_dir: args
+                    .working_directory
+                    .unwrap_or_else(|| current_dir().unwrap()),
+                filename: args.file,
+                port,
+            })
+            .context("launching debugpy")?
+        }
         Arguments::Attach(_) => todo!(),
     };
 

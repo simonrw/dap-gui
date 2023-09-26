@@ -1,16 +1,26 @@
 use anyhow::{Context, Result};
 use std::{path::PathBuf, process::Child, thread, time::Duration};
+
 pub struct DebugServerConfig {
     pub working_dir: PathBuf,
     pub filename: PathBuf,
     pub port: u16,
 }
 
-pub struct DebugServer {
+pub trait DebugServer {
+    fn start(&mut self, config: DebugServerConfig) -> Result<()>;
+    fn stop(&mut self) -> Result<()>;
+}
+
+pub enum Language {
+    Python,
+}
+
+pub struct PythonDebugServer {
     child: Child,
 }
 
-impl DebugServer {
+impl PythonDebugServer {
     pub fn new(config: DebugServerConfig) -> Result<Self> {
         let child = std::process::Command::new("python")
             .args([
@@ -38,7 +48,7 @@ impl DebugServer {
     }
 }
 
-impl Drop for DebugServer {
+impl Drop for PythonDebugServer {
     fn drop(&mut self) {
         if let Err(e) = self.stop() {
             tracing::error!(error = %e, "debug server still running after program exit");
