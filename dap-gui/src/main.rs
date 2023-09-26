@@ -15,6 +15,7 @@ use std::{
 use anyhow::{Context, Result};
 use clap::Parser;
 use dap_gui_client::{
+    bindings::get_random_tcp_port,
     events::{self, OutputEventBody},
     requests::{self, Initialize},
     responses, Received,
@@ -251,6 +252,7 @@ impl eframe::App for MyApp {
 struct DebugServerConfig {
     working_dir: PathBuf,
     filename: PathBuf,
+    port: u16,
 }
 
 struct DebugServer {
@@ -266,7 +268,7 @@ impl DebugServer {
                 "--log-to-stderr",
                 "--wait-for-client",
                 "--listen",
-                "127.0.0.1:5678",
+                &format!("127.0.0.1:{}", config.port),
                 &config.filename.display().to_string(),
             ])
             .current_dir(&config.working_dir)
@@ -318,12 +320,14 @@ fn main() -> Result<()> {
     let args = Arguments::parse();
 
     // start debug server in the background
+    let port = get_random_tcp_port().context("no free ports available")?;
     let _debug_server = match args {
         Arguments::Launch(args @ LaunchArguments { .. }) => DebugServer::new(DebugServerConfig {
             working_dir: args
                 .working_directory
                 .unwrap_or_else(|| current_dir().unwrap()),
             filename: args.file,
+            port,
         })
         .context("launching debugpy")?,
         Arguments::Attach(_) => todo!(),
@@ -335,7 +339,7 @@ fn main() -> Result<()> {
     };
     // TODO: connect to DAP server once language is known
     let (tx, rx) = mpsc::channel();
-    let stream = TcpStream::connect("127.0.0.1:5678").unwrap();
+    let stream = TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
     let client = dap_gui_client::Client::new(stream, tx).unwrap();
 
     let res = eframe::run_native(
