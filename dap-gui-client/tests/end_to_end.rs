@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::{
     io::{BufRead, BufReader},
-    net::{TcpListener, TcpStream},
+    net::TcpStream,
     process::Stdio,
     sync::mpsc,
     thread,
@@ -9,27 +9,11 @@ use std::{
 use tracing_subscriber::EnvFilter;
 
 use dap_gui_client::{
+    bindings::get_random_tcp_port,
     events,
     requests::{self, Initialize, Launch},
     responses, Received,
 };
-
-fn get_random_tcp_port() -> Result<u16> {
-    for _ in 0..50 {
-        match TcpListener::bind("127.0.0.1:0") {
-            Ok(listener) => {
-                let addr = listener.local_addr().unwrap();
-                let port = addr.port();
-                return Ok(port);
-            }
-            Err(e) => {
-                tracing::warn!(%e, "binding");
-            }
-        }
-    }
-
-    anyhow::bail!("could not get free port");
-}
 
 // Function to start the server in the background
 fn with_server<F>(f: F) -> Result<()>
@@ -242,8 +226,7 @@ where
     F: Fn(&responses::ResponseBody) -> bool,
 {
     tracing::debug!("waiting for response");
-    let mut n = 0;
-    for msg in rx {
+    for (n, msg) in rx.iter().enumerate() {
         if n >= 10 {
             panic!("did not receive response");
         }
@@ -257,8 +240,6 @@ where
                 }
             }
         }
-
-        n += 1;
     }
 
     unreachable!()
@@ -269,8 +250,7 @@ where
     F: Fn(&events::Event) -> bool,
 {
     tracing::debug!("waiting for event");
-    let mut n = 0;
-    for msg in rx {
+    for (n, msg) in rx.iter().enumerate() {
         if n >= 10 {
             panic!("did not receive event");
         }
@@ -281,8 +261,6 @@ where
                 return evt;
             }
         }
-
-        n += 1;
     }
 
     unreachable!()

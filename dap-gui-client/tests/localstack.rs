@@ -1,37 +1,23 @@
-// Test connecting to and debugging LocalStack
-//
-// Run `DEVELOP=1 localstack start` in another terminal
-
-use std::{
-    io::{BufRead, BufReader},
-    net::{TcpListener, TcpStream},
-    process::Stdio,
-    sync::mpsc,
-    thread,
-};
+use std::{net::TcpStream, process::Stdio, sync::mpsc};
 
 use anyhow::{Context, Result};
-use dap_gui_client::{
-    events,
-    requests::{self, Attach, ConnectInfo, Initialize, PathMapping},
-    responses, Received,
-};
 use tracing_subscriber::EnvFilter;
+
+use dap_gui_client::bindings::get_random_tcp_port;
 
 #[test]
 fn localstack() -> Result<()> {
     init_test_logger();
 
-    let (tx, rx) = mpsc::channel();
+    let (tx, _rx) = mpsc::channel();
     with_launch_localstack(|edge_port, debug_port| {
         let span = tracing::debug_span!("with_launch_localstack", %edge_port, %debug_port);
         let _guard = span.enter();
 
         let stream = TcpStream::connect(format!("127.0.0.1:{debug_port}")).unwrap();
-        let mut client = dap_gui_client::Client::new(stream, tx).unwrap();
+        let _client = dap_gui_client::Client::new(stream, tx).unwrap();
 
-        return Ok(());
-
+        /*
         // initialize
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
@@ -67,6 +53,7 @@ fn localstack() -> Result<()> {
             }
             return false;
         });
+        */
 
         Ok(())
     })
@@ -79,7 +66,7 @@ struct DockerClient {}
 impl DockerClient {
     fn create(&self, edge_port: u16, debug_port: u16) -> Result<ContainerId> {
         let output = std::process::Command::new("docker")
-            .args(&[
+            .args([
                 "create",
                 "-p",
                 &format!("127.0.0.1:{edge_port}:4566"),
@@ -105,7 +92,7 @@ impl DockerClient {
     }
     fn start(&self, id: &ContainerId) -> Result<()> {
         let exit_code = std::process::Command::new("docker")
-            .args(&["start", id])
+            .args(["start", id])
             .stdout(Stdio::piped())
             .spawn()
             .context("spawning docker command")?
@@ -119,7 +106,7 @@ impl DockerClient {
     }
     fn stop(&self, id: ContainerId) -> Result<()> {
         let exit_code = std::process::Command::new("docker")
-            .args(&["rm", "-f", &id])
+            .args(["rm", "-f", &id])
             .stdout(Stdio::piped())
             .spawn()
             .context("spawning docker command")?
@@ -133,7 +120,7 @@ impl DockerClient {
 
     fn logs(&self, container_id: &str) -> Result<Vec<String>> {
         let output = std::process::Command::new("docker")
-            .args(&["logs", container_id])
+            .args(["logs", container_id])
             .output()
             .context("waiting for docker create command to finish")?;
 
@@ -188,6 +175,7 @@ where
     res
 }
 
+/*
 fn wait_for_response<F>(rx: &mpsc::Receiver<Received>, pred: F) -> responses::ResponseBody
 where
     F: Fn(&responses::ResponseBody) -> bool,
@@ -214,7 +202,9 @@ where
 
     unreachable!()
 }
+*/
 
+/*
 fn wait_for_event<F>(rx: &mpsc::Receiver<Received>, pred: F) -> events::Event
 where
     F: Fn(&events::Event) -> bool,
@@ -240,6 +230,7 @@ where
 
     unreachable!()
 }
+*/
 
 fn init_test_logger() {
     if atty::is(atty::Stream::Stderr) {
@@ -252,21 +243,4 @@ fn init_test_logger() {
             .json()
             .init();
     }
-}
-
-fn get_random_tcp_port() -> Result<u16> {
-    for _ in 0..50 {
-        match TcpListener::bind("127.0.0.1:0") {
-            Ok(listener) => {
-                let addr = listener.local_addr().unwrap();
-                let port = addr.port();
-                return Ok(port);
-            }
-            Err(e) => {
-                tracing::warn!(%e, "binding");
-            }
-        }
-    }
-
-    anyhow::bail!("could not get free port");
 }
