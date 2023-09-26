@@ -39,7 +39,7 @@ where
     let port = get_random_tcp_port().context("finding random tcp port")?;
     let cwd = std::env::current_dir().unwrap();
     let mut child = std::process::Command::new("python")
-        .args(&[
+        .args([
             "-m",
             "debugpy.adapter",
             "--host",
@@ -125,12 +125,16 @@ fn test_loop() -> Result<()> {
             }],
         });
         client.send(req).unwrap();
-        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::SetFunctionBreakpoints { .. }));
+        let _ = wait_for_response(&rx, |r| {
+            matches!(r, responses::ResponseBody::SetFunctionBreakpoints { .. })
+        });
 
         // configuration done
         let req = requests::RequestBody::ConfigurationDone;
         client.send(req).unwrap();
-        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::ConfigurationDone));
+        let _ = wait_for_response(&rx, |r| {
+            matches!(r, responses::ResponseBody::ConfigurationDone)
+        });
 
         // wait for stopped event
         let events::Event::Stopped(events::StoppedEventBody {
@@ -152,7 +156,7 @@ fn test_loop() -> Result<()> {
         // fetch thread info
         let req = requests::RequestBody::Threads;
         client.send(req).unwrap();
-        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::Threads(_))); 
+        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::Threads(_)));
 
         // fetch stack info
         let req = requests::RequestBody::StackTrace(requests::StackTrace { thread_id });

@@ -8,7 +8,8 @@ use std::{
         mpsc::{self, Receiver},
         Arc, Mutex,
     },
-    thread, time::Duration,
+    thread,
+    time::Duration,
 };
 
 use anyhow::{Context, Result};
@@ -254,13 +255,12 @@ struct DebugServerConfig {
 
 struct DebugServer {
     child: Child,
-    config: DebugServerConfig,
 }
 
 impl DebugServer {
     fn new(config: DebugServerConfig) -> Result<Self> {
         let child = std::process::Command::new("python")
-            .args(&[
+            .args([
                 "-m",
                 "debugpy",
                 "--log-to-stderr",
@@ -269,13 +269,14 @@ impl DebugServer {
                 "127.0.0.1:5678",
                 &config.filename.display().to_string(),
             ])
+            .current_dir(&config.working_dir)
             .spawn()
             .context("spawning debugpy server")?;
 
         // TODO: wait for ready
         thread::sleep(Duration::from_secs(3));
 
-        Ok(Self { config, child })
+        Ok(Self { child })
     }
 
     fn stop(&mut self) -> Result<()> {
