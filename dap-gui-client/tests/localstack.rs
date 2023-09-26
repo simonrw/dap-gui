@@ -5,7 +5,7 @@ use tracing_subscriber::EnvFilter;
 
 use dap_gui_client::{
     bindings::get_random_tcp_port,
-    requests::{self, Initialize},
+    requests::{self, Attach, ConnectInfo, Initialize, PathMapping},
     responses, Received,
 };
 
