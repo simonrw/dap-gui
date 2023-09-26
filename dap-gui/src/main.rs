@@ -14,6 +14,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use dap_gui::debug_server::{DebugServer, DebugServerConfig};
 use dap_gui_client::{
     bindings::get_random_tcp_port,
     events::{self, OutputEventBody},
@@ -246,52 +247,6 @@ impl eframe::App for MyApp {
         // TODO: locked for too long?
         let mut state = self.app_state.lock().unwrap();
         state.render(ctx);
-    }
-}
-
-struct DebugServerConfig {
-    working_dir: PathBuf,
-    filename: PathBuf,
-    port: u16,
-}
-
-struct DebugServer {
-    child: Child,
-}
-
-impl DebugServer {
-    fn new(config: DebugServerConfig) -> Result<Self> {
-        let child = std::process::Command::new("python")
-            .args([
-                "-m",
-                "debugpy",
-                "--log-to-stderr",
-                "--wait-for-client",
-                "--listen",
-                &format!("127.0.0.1:{}", config.port),
-                &config.filename.display().to_string(),
-            ])
-            .current_dir(&config.working_dir)
-            .spawn()
-            .context("spawning debugpy server")?;
-
-        // TODO: wait for ready
-        thread::sleep(Duration::from_secs(3));
-
-        Ok(Self { child })
-    }
-
-    fn stop(&mut self) -> Result<()> {
-        self.child.kill().context("killing debug server")?;
-        Ok(())
-    }
-}
-
-impl Drop for DebugServer {
-    fn drop(&mut self) {
-        if let Err(e) = self.stop() {
-            tracing::error!(error = %e, "debug server still running after program exit");
-        }
     }
 }
 
