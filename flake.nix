@@ -45,7 +45,9 @@
             in
             mkShell {
               buildInputs = [
-                rust-bin.beta.latest.default
+                (rust-bin.beta.latest.default.override {
+                  extensions = [ "rust-src" ];
+                })
                 rust-bin.beta.latest.rust-analyzer
                 cargo-nextest
                 custom-python
