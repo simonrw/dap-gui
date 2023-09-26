@@ -44,12 +44,14 @@ macro_rules! setup_sentry {
 #[derive(Debug)]
 enum DebuggerStatus {
     Running,
+    Initialized,
 }
 
 #[derive(Debug)]
 struct AppState {
     launch_config: LaunchConfiguration,
     working_directory: String,
+    contents: String,
 
     debugger_status: DebuggerStatus,
 }
@@ -67,6 +69,7 @@ impl AppState {
             events::Event::Initialized => todo!(),
             events::Event::Output(OutputEventBody { output, source, .. }) => {
                 tracing::debug!(%output, ?source, "output event");
+                self.debugger_status = DebuggerStatus::Initialized;
             }
             events::Event::Process(_) => todo!(),
             events::Event::Stopped(_) => todo!(),
@@ -105,7 +108,15 @@ impl AppState {
         match self.debugger_status {
             DebuggerStatus::Running => {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.label("Running");
+                    ui.label("Configuring");
+                });
+            }
+            DebuggerStatus::Initialized => {
+                egui::CentralPanel::default().show(ctx, |ui| match self.launch_config {
+                    LaunchConfiguration::File { ref filename } => {
+                        ui.label(filename);
+                        ui.code_editor(&mut self.contents);
+                    }
                 });
             }
         }
@@ -198,12 +209,14 @@ impl MyApp {
     ) -> Self {
         // set up background thread watching events
 
+        let filename = "test.py".to_string();
         let state = Arc::new(Mutex::new(AppState {
             debugger_status: DebuggerStatus::Running,
             launch_config: LaunchConfiguration::File {
-                filename: "test.py".to_string(),
+                filename: filename.clone(),
             },
             working_directory: "/home/simon/dev/dap-gui".to_string(),
+            contents: std::fs::read_to_string(&filename).unwrap(),
         }));
         /*
         let trigger_socket =
