@@ -1,30 +1,34 @@
-use std::{net::TcpStream, process::Stdio, sync::mpsc};
+use std::{net::TcpStream, process::Stdio, sync::mpsc, thread, time::Duration};
 
 use anyhow::{Context, Result};
 use tracing_subscriber::EnvFilter;
 
-use dap_gui_client::bindings::get_random_tcp_port;
+use dap_gui_client::{
+    bindings::get_random_tcp_port,
+    requests::{self, Initialize},
+    responses, Received,
+};
 
 #[test]
 fn localstack() -> Result<()> {
     init_test_logger();
 
-    let (tx, _rx) = mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     with_launch_localstack(|edge_port, debug_port| {
         let span = tracing::debug_span!("with_launch_localstack", %edge_port, %debug_port);
         let _guard = span.enter();
 
         let stream = TcpStream::connect(format!("127.0.0.1:{debug_port}")).unwrap();
-        let _client = dap_gui_client::Client::new(stream, tx).unwrap();
+        let mut client = dap_gui_client::Client::new(stream, tx).unwrap();
 
-        /*
         // initialize
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
         });
         client.send(req).unwrap();
 
-        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::Initialize(_)));
+        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::Initialize(_)))
+            .context("waiting for initialize response")?;
 
         // attach
         let req = requests::RequestBody::Attach(Attach {
@@ -43,6 +47,7 @@ fn localstack() -> Result<()> {
         });
         client.send(req).unwrap();
 
+        /*
         // wait for initialized event
         let _waiting_for_server_event = wait_for_event(&rx, |e| {
             tracing::debug!(event = ?e, "got event");
@@ -164,6 +169,7 @@ where
                 return Err(e);
             }
         }
+        thread::sleep(Duration::from_secs(1));
     }
 
     let res = f(edge_port, debug_port);
@@ -175,34 +181,25 @@ where
     res
 }
 
-/*
-fn wait_for_response<F>(rx: &mpsc::Receiver<Received>, pred: F) -> responses::ResponseBody
+fn wait_for_response<F>(rx: &mpsc::Receiver<Received>, pred: F) -> Result<responses::ResponseBody>
 where
     F: Fn(&responses::ResponseBody) -> bool,
 {
     tracing::debug!("waiting for response");
-    let mut n = 0;
-    for msg in rx {
-        if n >= 10 {
-            panic!("did not receive response");
-        }
-
+    for msg in rx.iter().take(10) {
         if let Received::Response(_, response) = msg {
             assert!(response.success);
             if let Some(body) = response.body {
                 if pred(&body) {
                     tracing::debug!(response = ?body, "received expected response");
-                    return body;
+                    return Ok(body);
                 }
             }
         }
-
-        n += 1;
     }
 
-    unreachable!()
+    anyhow::bail!("did not receive message");
 }
-*/
 
 /*
 fn wait_for_event<F>(rx: &mpsc::Receiver<Received>, pred: F) -> events::Event
