@@ -1,5 +1,12 @@
 use anyhow::{Context, Result};
-use std::{path::PathBuf, process::Child, thread, time::Duration};
+use std::{
+    io::{BufRead, BufReader},
+    path::PathBuf,
+    process::{Child, Stdio},
+    sync::mpsc,
+    thread,
+    time::Duration,
+};
 
 pub struct DebugServerConfig {
     pub working_dir: PathBuf,
@@ -16,13 +23,15 @@ pub enum Language {
     Python,
 }
 
+static SERVER_READY_TEXT: &str = "wait_for_client()";
+
 pub struct PythonDebugServer {
     child: Child,
 }
 
 impl PythonDebugServer {
     pub fn new(config: DebugServerConfig) -> Result<Self> {
-        let child = std::process::Command::new("python")
+        let mut child = std::process::Command::new("python")
             .args([
                 "-m",
                 "debugpy",
@@ -32,12 +41,25 @@ impl PythonDebugServer {
                 &format!("127.0.0.1:{}", config.port),
                 &config.filename.display().to_string(),
             ])
+            .stderr(Stdio::piped())
             .current_dir(&config.working_dir)
             .spawn()
             .context("spawning debugpy server")?;
 
-        // TODO: wait for ready
-        thread::sleep(Duration::from_secs(3));
+        let stderr = child.stderr.take().unwrap();
+        let reader = BufReader::new(stderr);
+
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            for line in reader.lines() {
+                let line = line.unwrap();
+                if line.contains(SERVER_READY_TEXT) {
+                    let _ = tx.send(());
+                    break;
+                }
+            }
+        });
+        let _ = rx.recv();
 
         Ok(Self { child })
     }
