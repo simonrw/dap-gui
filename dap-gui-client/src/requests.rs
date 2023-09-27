@@ -1,4 +1,6 @@
 //! Requests you can send to a DAP server
+use std::path::PathBuf;
+
 use serde::Serialize;
 
 use crate::types::{Seq, StackFrameId, ThreadId, VariablesReference};
@@ -80,13 +82,13 @@ pub struct Attach {
     pub connect: ConnectInfo,
     pub path_mappings: Vec<PathMapping>,
     pub just_my_code: bool,
-    pub workspace_folder: String,
+    pub workspace_folder: PathBuf,
 }
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Launch {
-    pub program: String,
+    pub program: PathBuf,
 }
 
 #[derive(Debug, Serialize, Clone)]

@@ -16,7 +16,11 @@ pub enum Event {
     Exited(ExitedEventBody),
     Module(ModuleEventBody),
     Terminated,
-    Unknown(String),
+    // TODO: handle unknown event types
+    DebugpyWaitingForServer {
+        host: String,
+        port: u16,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize)]

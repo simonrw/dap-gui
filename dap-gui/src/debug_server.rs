@@ -5,7 +5,6 @@ use std::{
     process::{Child, Stdio},
     sync::mpsc,
     thread,
-    time::Duration,
 };
 
 pub struct DebugServerConfig {
@@ -30,6 +29,7 @@ pub struct PythonDebugServer {
 }
 
 impl PythonDebugServer {
+    #[tracing::instrument(skip(config))]
     pub fn new(config: DebugServerConfig) -> Result<Self> {
         let mut child = std::process::Command::new("python")
             .args([
@@ -50,12 +50,14 @@ impl PythonDebugServer {
         let reader = BufReader::new(stderr);
 
         let (tx, rx) = mpsc::channel();
+        let mut should_send = true;
         thread::spawn(move || {
             for line in reader.lines() {
                 let line = line.unwrap();
-                if line.contains(SERVER_READY_TEXT) {
+                tracing::trace!(%line, "debugger line");
+                if should_send && line.contains(SERVER_READY_TEXT) {
                     let _ = tx.send(());
-                    break;
+                    should_send = false;
                 }
             }
         });

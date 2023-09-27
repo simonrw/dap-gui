@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use oneshot::Receiver;
 use serde::Deserialize;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 // TODO: use internal error type
 use anyhow::{Context, Result};
 
@@ -28,8 +28,7 @@ pub enum Message {
     Response(responses::Response),
 }
 
-/// DAP client
-pub struct Client {
+pub struct ClientInternals {
     // writer
     // TODO: trait implementor
     output: TcpStream,
@@ -40,6 +39,12 @@ pub struct Client {
 
     // Option because of drop and take
     exit: Option<oneshot::Sender<()>>,
+}
+
+/// DAP client
+#[derive(Clone)]
+pub struct Client {
+    internals: Arc<Mutex<ClientInternals>>,
 }
 
 impl Client {
@@ -67,15 +72,25 @@ impl Client {
             }
         });
 
-        Ok(Self {
+        let internal = ClientInternals {
             output: stream,
             sequence_number,
             store,
             exit: Some(shutdown_tx),
+        };
+
+        Ok(Self {
+            internals: Arc::new(Mutex::new(internal)),
         })
     }
 
     #[tracing::instrument(skip(self, body))]
+    pub fn send(&self, body: requests::RequestBody) -> Result<()> {
+        self.internals.lock().unwrap().send(body)
+    }
+}
+
+impl ClientInternals {
     pub fn send(&mut self, body: requests::RequestBody) -> Result<()> {
         self.sequence_number.fetch_add(1, Ordering::SeqCst);
         let message = requests::Request {
@@ -104,7 +119,7 @@ impl Client {
     }
 }
 
-impl Drop for Client {
+impl Drop for ClientInternals {
     fn drop(&mut self) {
         tracing::debug!("shutting down client");
         // Shutdown the background thread

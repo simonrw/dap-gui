@@ -1,7 +1,6 @@
 use std::{
     env::current_dir,
-    io::{BufRead, BufReader},
-    net::{TcpListener, TcpStream},
+    net::TcpStream,
     path::PathBuf,
     sync::{
         mpsc::{self, Receiver},
@@ -15,9 +14,11 @@ use clap::Parser;
 use dap_gui::debug_server::{DebugServerConfig, PythonDebugServer};
 use dap_gui_client::{
     bindings::get_random_tcp_port,
-    events::{self, OutputEventBody},
+    events::{self, OutputEventBody, StoppedEventBody},
     requests::{self, Initialize},
-    responses, Received,
+    responses,
+    types::ThreadId,
+    Client, Received,
 };
 use eframe::egui::{self, TextEdit};
 use serde::{Deserialize, Serialize};
@@ -45,62 +46,84 @@ macro_rules! setup_sentry {
 enum DebuggerStatus {
     Running,
     Initialized,
+    Paused,
 }
 
 #[derive(Debug)]
 struct AppState {
     launch_config: LaunchConfiguration,
-    working_directory: String,
+    working_directory: PathBuf,
     contents: String,
 
+    current_thread_id: Option<ThreadId>,
     debugger_status: DebuggerStatus,
 }
 
 impl AppState {
-    fn handle_message(&mut self, message: Received) {
+    fn handle_message(&mut self, client: &Client, message: Received) {
         match message {
-            Received::Event(event) => self.handle_event(event),
-            Received::Response(request, response) => self.handle_response(request, response),
+            Received::Event(event) => self.handle_event(client, event),
+            Received::Response(request, response) => {
+                self.handle_response(client, request, response)
+            }
         }
     }
 
-    fn handle_event(&mut self, event: events::Event) {
+    #[tracing::instrument(skip(self, _client))]
+    fn handle_event(&mut self, _client: &Client, event: events::Event) {
+        tracing::trace!("got event");
         match event {
-            events::Event::Initialized => todo!(),
             events::Event::Output(OutputEventBody { output, source, .. }) => {
                 tracing::debug!(%output, ?source, "output event");
+            }
+            events::Event::Stopped(StoppedEventBody { ref thread_id, .. }) => {
+                self.current_thread_id = Some(*thread_id);
+                self.debugger_status = DebuggerStatus::Paused;
+            }
+            events::Event::Initialized => {
                 self.debugger_status = DebuggerStatus::Initialized;
             }
-            events::Event::Process(_) => todo!(),
-            events::Event::Stopped(_) => todo!(),
-            events::Event::Continued(_) => todo!(),
-            events::Event::Thread(_) => todo!(),
-            events::Event::Exited(_) => todo!(),
-            events::Event::Module(_) => todo!(),
-            events::Event::Terminated => todo!(),
-            events::Event::Unknown(_) => todo!(),
-            _ => todo!(),
+            _ => tracing::warn!("todo"),
         }
     }
 
-    fn handle_response(&mut self, _request: requests::RequestBody, response: responses::Response) {
+    #[tracing::instrument(skip(self, client, request))]
+    fn handle_response(
+        &mut self,
+        client: &Client,
+        request: requests::RequestBody,
+        response: responses::Response,
+    ) {
+        if !response.success {
+            tracing::warn!(request = ?request, "unsuccessful request");
+            return;
+        }
+
+        tracing::trace!("got resposne");
+
         if let Some(body) = response.body {
             match body {
                 responses::ResponseBody::Initialize(_) => {
                     tracing::debug!("initialize response");
                     // TODO: store capabilities
+
+                    // send launch
+                    if let Err(e) = client.send(requests::RequestBody::Attach(requests::Attach {
+                        connect: requests::ConnectInfo {
+                            host: "localhost".to_string(),
+                            port: 5678,
+                        },
+                        path_mappings: vec![],
+                        just_my_code: false,
+                        workspace_folder: self.working_directory.clone(),
+                    })) {
+                        tracing::warn!(error = %e, "error launching program");
+                    }
                 }
-                responses::ResponseBody::SetFunctionBreakpoints(_) => todo!(),
-                responses::ResponseBody::Continue(_) => todo!(),
-                responses::ResponseBody::Threads(_) => todo!(),
-                responses::ResponseBody::StackTrace(_) => todo!(),
-                responses::ResponseBody::Scopes(_) => todo!(),
-                responses::ResponseBody::Variables(_) => todo!(),
-                responses::ResponseBody::ConfigurationDone => todo!(),
-                responses::ResponseBody::Terminate => todo!(),
-                responses::ResponseBody::Disconnect => todo!(),
-                _ => todo!(),
+                _ => tracing::warn!("todo"),
             }
+        } else {
+            tracing::warn!("no body specified");
         }
     }
 
@@ -109,6 +132,15 @@ impl AppState {
             DebuggerStatus::Running => {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.label("Configuring");
+                });
+            }
+            DebuggerStatus::Paused => {
+                // sidebar
+                egui::SidePanel::left("left-panel").show(ctx, |ui| {
+                    ui.label("Side Bar");
+                });
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.label("Paused");
                 });
             }
             DebuggerStatus::Initialized => {
@@ -208,7 +240,7 @@ struct MyApp {
 impl MyApp {
     pub fn new(
         ctx: egui::Context,
-        mut client: dap_gui_client::Client,
+        client: dap_gui_client::Client,
         client_events: Receiver<Received>,
     ) -> Self {
         // set up background thread watching events
@@ -219,8 +251,9 @@ impl MyApp {
             launch_config: LaunchConfiguration::File {
                 filename: filename.clone(),
             },
-            working_directory: "/home/simon/dev/dap-gui".to_string(),
+            working_directory: PathBuf::from("/home/simon/dev/dap-gui"),
             contents: std::fs::read_to_string(&filename).unwrap(),
+            current_thread_id: None,
         }));
         /*
         let trigger_socket =
@@ -230,9 +263,10 @@ impl MyApp {
         */
 
         let background_state = Arc::clone(&state);
+        let background_client = client.clone();
         thread::spawn(move || {
             for msg in client_events {
-                handle_message(msg, Arc::clone(&background_state));
+                handle_message(msg, &background_client, Arc::clone(&background_state));
                 // refresh the UI
                 ctx.request_repaint();
             }
@@ -252,9 +286,9 @@ impl MyApp {
     }
 }
 
-fn handle_message(msg: Received, state_m: Arc<Mutex<AppState>>) {
+fn handle_message(msg: Received, client: &Client, state_m: Arc<Mutex<AppState>>) {
     let mut state = state_m.lock().unwrap();
-    state.handle_message(msg);
+    state.handle_message(client, msg);
 }
 
 impl eframe::App for MyApp {
