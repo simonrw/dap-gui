@@ -19,7 +19,7 @@ use dap_gui_client::{
     requests::{self, Initialize},
     responses, Received,
 };
-use eframe::egui;
+use eframe::egui::{self, TextEdit};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "sentry")]
@@ -115,7 +115,11 @@ impl AppState {
                 egui::CentralPanel::default().show(ctx, |ui| match self.launch_config {
                     LaunchConfiguration::File { ref filename } => {
                         ui.label(filename);
-                        ui.code_editor(&mut self.contents);
+                        ui.add(
+                            TextEdit::multiline(&mut self.contents)
+                                .code_editor()
+                                .interactive(false),
+                        );
                     }
                 });
             }
