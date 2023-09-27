@@ -57,10 +57,16 @@ struct AppState {
 
     current_thread_id: Option<ThreadId>,
     debugger_status: DebuggerStatus,
+    should_quit: bool,
+}
+
+enum HandleNext {
+    Continue,
+    Break,
 }
 
 impl AppState {
-    fn handle_message(&mut self, client: &Client, message: Received) {
+    fn handle_message(&mut self, client: &Client, message: Received) -> HandleNext {
         match message {
             Received::Event(event) => self.handle_event(client, event),
             Received::Response(request, response) => {
@@ -70,7 +76,7 @@ impl AppState {
     }
 
     #[tracing::instrument(skip(self, client))]
-    fn handle_event(&mut self, client: &Client, event: events::Event) {
+    fn handle_event(&mut self, client: &Client, event: events::Event) -> HandleNext {
         tracing::trace!("got event");
         match event {
             events::Event::Output(OutputEventBody { output, source, .. }) => {
@@ -94,8 +100,17 @@ impl AppState {
                     tracing::warn!(error = %e, "sending setFunctionBreakpoints request");
                 }
             }
+            events::Event::Continued(_) => {
+                self.debugger_status = DebuggerStatus::Running;
+            }
+            events::Event::Terminated => {
+                tracing::debug!("debugee ended");
+                self.should_quit = true;
+                return HandleNext::Break;
+            }
             _ => tracing::warn!("todo"),
         }
+        HandleNext::Continue
     }
 
     #[tracing::instrument(skip(self, client, request))]
@@ -104,10 +119,10 @@ impl AppState {
         client: &Client,
         request: requests::RequestBody,
         response: responses::Response,
-    ) {
+    ) -> HandleNext {
         if !response.success {
             tracing::warn!(request = ?request, "unsuccessful request");
-            return;
+            return HandleNext::Continue;
         }
 
         tracing::trace!("got resposne");
@@ -140,15 +155,17 @@ impl AppState {
                 }
                 responses::ResponseBody::ConfigurationDone => {
                     self.debugger_status = DebuggerStatus::Running;
-                },
+                }
                 _ => tracing::warn!("todo"),
             }
         } else {
             tracing::warn!("no body specified");
         }
+
+        HandleNext::Continue
     }
 
-    fn render(&mut self, ctx: &egui::Context) {
+    fn render(&mut self, client: &Client, ctx: &egui::Context) {
         match self.debugger_status {
             DebuggerStatus::Running => {
                 egui::CentralPanel::default().show(ctx, |ui| {
@@ -162,6 +179,18 @@ impl AppState {
                 });
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.heading("Paused");
+
+                    if ui.button("Continue").clicked() {
+                        // TODO: how to trigger continue cleanly
+                        if let Err(e) =
+                            client.send(requests::RequestBody::Continue(requests::Continue {
+                                thread_id: self.current_thread_id.take().unwrap(),
+                                single_thread: false,
+                            }))
+                        {
+                            tracing::warn!(error = %e, "sending continue request");
+                        }
+                    }
                 });
             }
             DebuggerStatus::Initialized => {
@@ -275,6 +304,7 @@ impl MyApp {
             working_directory: PathBuf::from("/home/simon/dev/dap-gui"),
             contents: std::fs::read_to_string(&filename).unwrap(),
             current_thread_id: None,
+            should_quit: false,
         }));
         /*
         let trigger_socket =
@@ -287,7 +317,12 @@ impl MyApp {
         let background_client = client.clone();
         thread::spawn(move || {
             for msg in client_events {
-                handle_message(msg, &background_client, Arc::clone(&background_state));
+                if let HandleNext::Break =
+                    handle_message(msg, &background_client, Arc::clone(&background_state))
+                {
+                    tracing::debug!("background message thread shutting down");
+                    break;
+                }
                 // refresh the UI
                 ctx.request_repaint();
             }
@@ -307,16 +342,19 @@ impl MyApp {
     }
 }
 
-fn handle_message(msg: Received, client: &Client, state_m: Arc<Mutex<AppState>>) {
+fn handle_message(msg: Received, client: &Client, state_m: Arc<Mutex<AppState>>) -> HandleNext {
     let mut state = state_m.lock().unwrap();
-    state.handle_message(client, msg);
+    state.handle_message(client, msg)
 }
 
 impl eframe::App for MyApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // TODO: locked for too long?
         let mut state = self.app_state.lock().unwrap();
-        state.render(ctx);
+        if state.should_quit {
+            frame.close();
+        }
+        state.render(&self.client, ctx);
     }
 }
 
