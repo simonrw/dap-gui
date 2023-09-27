@@ -69,8 +69,8 @@ impl AppState {
         }
     }
 
-    #[tracing::instrument(skip(self, _client))]
-    fn handle_event(&mut self, _client: &Client, event: events::Event) {
+    #[tracing::instrument(skip(self, client))]
+    fn handle_event(&mut self, client: &Client, event: events::Event) {
         tracing::trace!("got event");
         match event {
             events::Event::Output(OutputEventBody { output, source, .. }) => {
@@ -82,6 +82,17 @@ impl AppState {
             }
             events::Event::Initialized => {
                 self.debugger_status = DebuggerStatus::Initialized;
+
+                // configure
+                if let Err(e) = client.send(requests::RequestBody::SetFunctionBreakpoints(
+                    requests::SetFunctionBreakpoints {
+                        breakpoints: vec![requests::Breakpoint {
+                            name: "foo".to_string(),
+                        }],
+                    },
+                )) {
+                    tracing::warn!(error = %e, "sending setFunctionBreakpoints request");
+                }
             }
             _ => tracing::warn!("todo"),
         }
@@ -120,6 +131,16 @@ impl AppState {
                         tracing::warn!(error = %e, "error launching program");
                     }
                 }
+                responses::ResponseBody::SetFunctionBreakpoints(_) => {
+                    // TODO: handle multiple line/function breakpoints
+                    // for now only one breakpoint has been set
+                    if let Err(e) = client.send(requests::RequestBody::ConfigurationDone) {
+                        tracing::warn!(error = %e, "error sending configuration done request");
+                    }
+                }
+                responses::ResponseBody::ConfigurationDone => {
+                    self.debugger_status = DebuggerStatus::Running;
+                },
                 _ => tracing::warn!("todo"),
             }
         } else {
@@ -131,16 +152,16 @@ impl AppState {
         match self.debugger_status {
             DebuggerStatus::Running => {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.label("Configuring");
+                    ui.heading("Program running");
                 });
             }
             DebuggerStatus::Paused => {
                 // sidebar
                 egui::SidePanel::left("left-panel").show(ctx, |ui| {
-                    ui.label("Side Bar");
+                    ui.heading("Side Bar");
                 });
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.label("Paused");
+                    ui.heading("Paused");
                 });
             }
             DebuggerStatus::Initialized => {
