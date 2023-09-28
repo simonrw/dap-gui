@@ -17,7 +17,7 @@ use dap_gui_client::{
     events::{self, OutputEventBody, StoppedEventBody},
     requests::{self, Initialize},
     responses,
-    types::ThreadId,
+    types::{self, ThreadId},
     Client, Received,
 };
 use eframe::egui::{self, TextEdit};
@@ -58,6 +58,9 @@ struct AppState {
     current_thread_id: Option<ThreadId>,
     debugger_status: DebuggerStatus,
     should_quit: bool,
+
+    // variables
+    stack_frames: Vec<types::StackFrame>,
 }
 
 enum HandleNext {
@@ -166,6 +169,7 @@ impl AppState {
                 }
                 responses::ResponseBody::StackTrace(responses::StackTraceResponse { stack_frames }) => {
                     tracing::debug!(?stack_frames, "inspecting stack frames");
+                    self.stack_frames = stack_frames.clone();
                 },
                 _ => tracing::warn!("todo"),
             }
@@ -186,7 +190,14 @@ impl AppState {
             DebuggerStatus::Paused => {
                 // sidebar
                 egui::SidePanel::left("left-panel").show(ctx, |ui| {
-                    ui.heading("Side Bar");
+
+                    ui.heading("Variables");
+
+                    ui.heading("Stack Frames");
+                    for frame in &self.stack_frames {
+                        // TODO: change position in the stack
+                        ui.label(format!("{} {}", frame.id, frame.name));
+                    }
                 });
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.heading("Paused");
@@ -316,6 +327,7 @@ impl MyApp {
             contents: std::fs::read_to_string(&filename).unwrap(),
             current_thread_id: None,
             should_quit: false,
+            stack_frames: Default::default(),
         }));
         /*
         let trigger_socket =
