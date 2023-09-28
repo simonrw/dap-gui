@@ -85,6 +85,14 @@ impl AppState {
             events::Event::Stopped(StoppedEventBody { ref thread_id, .. }) => {
                 self.current_thread_id = Some(*thread_id);
                 self.debugger_status = DebuggerStatus::Paused;
+
+                if let Err(e) =
+                    client.send(requests::RequestBody::StackTrace(requests::StackTrace {
+                        thread_id: *thread_id,
+                    }))
+                {
+                    tracing::warn!(thread_id = thread_id, error = %e, "sending stacktrace request");
+                }
             }
             events::Event::Initialized => {
                 self.debugger_status = DebuggerStatus::Initialized;
@@ -156,6 +164,9 @@ impl AppState {
                 responses::ResponseBody::ConfigurationDone => {
                     self.debugger_status = DebuggerStatus::Running;
                 }
+                responses::ResponseBody::StackTrace(responses::StackTraceResponse { stack_frames }) => {
+                    tracing::debug!(?stack_frames, "inspecting stack frames");
+                },
                 _ => tracing::warn!("todo"),
             }
         } else {
