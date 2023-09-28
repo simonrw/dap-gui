@@ -22,22 +22,11 @@ let
 in
 mkShell {
   buildInputs = [
-    rustc
-    cargo
-    cargo-nextest
-    clippy
-    rustfmt
-    rust-analyzer
+    zig
     custom-python
   ] ++ lib.optionals stdenv.isDarwin apple-deps ++ lib.optionals stdenv.isLinux [
     gdb
   ];
-
-  RUST_BACKTRACE = "1";
-
-  RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
-
-  RUST_LOG = "dap_gui=debug,end_to_end=debug,dap_gui_ui=debug,dap_gui_client=debug";
 
   LD_LIBRARY_PATH =
     if stdenv.isLinux then

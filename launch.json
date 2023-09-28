@@ -1,7 +1,0 @@
-{
-    "language": "python",
-    "command": "launch",
-    "working_directory": ".",
-    "type": "file",
-    "filename": "test.py"
-}
