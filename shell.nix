@@ -23,6 +23,7 @@ in
 mkShell {
   buildInputs = [
     zig
+    zls
     custom-python
   ] ++ lib.optionals stdenv.isDarwin apple-deps ++ lib.optionals stdenv.isLinux [
     gdb

@@ -35,3 +35,5 @@ out.txt
 
 # log file
 log.log
+zig-out
+zig-cache
