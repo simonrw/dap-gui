@@ -14,13 +14,14 @@ pub enum Event {
     Continued(ContinuedEventBody),
     Thread(ThreadEventBody),
     Exited(ExitedEventBody),
-    Module(ModuleEventBody),
     Terminated,
     // TODO: handle unknown event types
+    // debugpy types
     DebugpyWaitingForServer {
         host: String,
         port: u16,
     },
+    Module(ModuleEventBody),
 }
 
 #[derive(Debug, Clone, Deserialize)]

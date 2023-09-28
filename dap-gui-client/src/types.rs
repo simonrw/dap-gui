@@ -1,4 +1,6 @@
 //! General types used common to [`crate::requests`], [`crate::responses`] or [`crate::events`].
+use std::path::PathBuf;
+
 use serde::Deserialize;
 
 pub type Seq = i64;
@@ -99,7 +101,7 @@ pub enum ModuleId {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Module {
-    pub id: ModuleId,
+    pub id: i64,
     pub name: String,
-    pub path: Option<String>,
+    pub path: Option<PathBuf>,
 }
