@@ -1,7 +1,7 @@
 //! General types used common to [`crate::requests`], [`crate::responses`] or [`crate::events`].
 use std::path::PathBuf;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub type Seq = i64;
 pub type ThreadId = i64;
@@ -41,7 +41,7 @@ pub struct Scope {
     pub end_column: Option<i64>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone)]
 pub struct Source {
     pub name: Option<String>,
     pub path: Option<String>,
@@ -68,9 +68,18 @@ pub struct Breakpoint {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct StackFrame {
     pub id: StackFrameId,
     pub name: String,
+    pub source: Option<Source>,
+    pub line: usize,
+    pub column: usize,
+    pub end_line: Option<usize>,
+    pub end_column: Option<usize>,
+    pub can_restart: Option<bool>,
+    pub module_id: Option<ModuleId>,
+    pub presentation_hint: Option<String>,
 }
 
 

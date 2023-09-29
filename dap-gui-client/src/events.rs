@@ -51,12 +51,17 @@ pub enum StoppedReason {
 pub struct StoppedEventBody {
     pub reason: StoppedReason,
     pub thread_id: ThreadId,
-    #[serde(rename = "hitBreakpointIds")]
     pub hit_breakpoint_ids: Option<Vec<BreakpointId>>,
+    pub description: Option<String>,
+    pub text: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct ThreadEventBody {}
+#[serde(rename_all = "camelCase")]
+pub struct ThreadEventBody {
+    pub reason: String,
+    pub thread_id: ThreadId,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

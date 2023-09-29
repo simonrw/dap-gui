@@ -59,6 +59,8 @@ struct AppState {
     debugger_status: DebuggerStatus,
     should_quit: bool,
 
+    capabilities: Option<responses::Capabilities>,
+
     // variables
     stack_frames: Vec<types::StackFrame>,
 }
@@ -127,6 +129,18 @@ impl AppState {
                         },
                     )
                 );
+
+                if self
+                    .capabilities
+                    .as_ref()
+                    .and_then(|cs| cs.supports_loaded_sources_request)
+                    .unwrap_or_default()
+                {
+                    send!(
+                        client,
+                        "loadedSources",
+                        requests::RequestBody::LoadedSources
+                    );
                 }
             }
             events::Event::Continued(_) => {
@@ -369,6 +383,7 @@ impl MyApp {
             contents: std::fs::read_to_string(&filename).unwrap(),
             current_thread_id: None,
             should_quit: false,
+            capabilities: None,
             stack_frames: Default::default(),
         }));
         /*
