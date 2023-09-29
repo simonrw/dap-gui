@@ -68,6 +68,15 @@ enum HandleNext {
     Break,
 }
 
+// macro to simplify sending messages handling the error response
+macro_rules! send {
+    ($client:expr, $name:literal, $body:expr) => {{
+        if let Err(e) = $client.send($body) {
+            tracing::warn!(error = %e, concat!("sending ", $name, " request"));
+        }
+    }}
+}
+
 impl AppState {
     fn handle_message(&mut self, client: &Client, message: Received) -> HandleNext {
         match message {
@@ -89,26 +98,35 @@ impl AppState {
                 self.current_thread_id = Some(*thread_id);
                 self.debugger_status = DebuggerStatus::Paused;
 
-                if let Err(e) =
-                    client.send(requests::RequestBody::StackTrace(requests::StackTrace {
+                send!(
+                    client,
+                    "stackTrace",
+                    requests::RequestBody::StackTrace(requests::StackTrace {
                         thread_id: *thread_id,
-                    }))
-                {
-                    tracing::warn!(thread_id = thread_id, error = %e, "sending stacktrace request");
-                }
+                    })
+                );
+            }
+            events::Event::Thread(events::ThreadEventBody { reason, thread_id }) => {
+                let span = tracing::debug_span!("thread event", ?reason, %thread_id);
+                let _guard = span.enter();
+
+                tracing::debug!("thread status");
             }
             events::Event::Initialized => {
                 self.debugger_status = DebuggerStatus::Initialized;
 
                 // configure
-                if let Err(e) = client.send(requests::RequestBody::SetFunctionBreakpoints(
-                    requests::SetFunctionBreakpoints {
-                        breakpoints: vec![requests::Breakpoint {
-                            name: "foo".to_string(),
-                        }],
-                    },
-                )) {
-                    tracing::warn!(error = %e, "sending setFunctionBreakpoints request");
+                send!(
+                    client,
+                    "setFunctionBreakpoints",
+                    requests::RequestBody::SetFunctionBreakpoints(
+                        requests::SetFunctionBreakpoints {
+                            breakpoints: vec![requests::Breakpoint {
+                                name: "foo".to_string(),
+                            }],
+                        },
+                    )
+                );
                 }
             }
             events::Event::Continued(_) => {
@@ -136,41 +154,58 @@ impl AppState {
             return HandleNext::Continue;
         }
 
-        tracing::trace!("got resposne");
-
         if let Some(body) = response.body {
             match body {
-                responses::ResponseBody::Initialize(_) => {
+                responses::ResponseBody::Initialize(capabilities) => {
                     tracing::debug!("initialize response");
-                    // TODO: store capabilities
+                    self.capabilities = Some(capabilities);
 
                     // send launch
-                    if let Err(e) = client.send(requests::RequestBody::Attach(requests::Attach {
-                        connect: requests::ConnectInfo {
-                            host: "localhost".to_string(),
-                            port: 5678,
-                        },
-                        path_mappings: vec![],
-                        just_my_code: false,
-                        workspace_folder: self.working_directory.clone(),
-                    })) {
-                        tracing::warn!(error = %e, "error launching program");
-                    }
+                    send!(
+                        client,
+                        "attach",
+                        requests::RequestBody::Attach(requests::Attach {
+                            connect: requests::ConnectInfo {
+                                host: "localhost".to_string(),
+                                port: 5678,
+                            },
+                            path_mappings: vec![],
+                            just_my_code: false,
+                            workspace_folder: self.working_directory.clone(),
+                        })
+                    );
                 }
                 responses::ResponseBody::SetFunctionBreakpoints(_) => {
+                    tracing::debug!("set function breakpoints response");
                     // TODO: handle multiple line/function breakpoints
                     // for now only one breakpoint has been set
-                    if let Err(e) = client.send(requests::RequestBody::ConfigurationDone) {
-                        tracing::warn!(error = %e, "error sending configuration done request");
-                    }
+                    send!(
+                        client,
+                        "configurationDone",
+                        requests::RequestBody::ConfigurationDone
+                    );
                 }
                 responses::ResponseBody::ConfigurationDone => {
+                    tracing::debug!("configuration done");
                     self.debugger_status = DebuggerStatus::Running;
                 }
-                responses::ResponseBody::StackTrace(responses::StackTraceResponse { stack_frames }) => {
+                responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+                    stack_frames,
+                }) => {
                     tracing::debug!(?stack_frames, "inspecting stack frames");
-                    self.stack_frames = stack_frames.clone();
-                },
+                    self.stack_frames = stack_frames;
+
+                    for frame in &self.stack_frames {
+                        send!(
+                            client,
+                            "scopes",
+                            requests::RequestBody::Scopes(requests::Scopes { frame_id: frame.id })
+                        );
+                    }
+                }
+                responses::ResponseBody::Scopes(responses::ScopesResponse { .. }) => {
+                    tracing::debug!("scopes response");
+                }
                 _ => tracing::warn!("todo"),
             }
         } else {
@@ -190,7 +225,6 @@ impl AppState {
             DebuggerStatus::Paused => {
                 // sidebar
                 egui::SidePanel::left("left-panel").show(ctx, |ui| {
-
                     ui.heading("Variables");
 
                     ui.heading("Stack Frames");
@@ -202,16 +236,24 @@ impl AppState {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.heading("Paused");
 
+                    // TODO: show the current breakpoint position
+
+                    ui.add(
+                        TextEdit::multiline(&mut self.contents)
+                            .code_editor()
+                            .interactive(false),
+                    );
+
                     if ui.button("Continue").clicked() {
                         // TODO: how to trigger continue cleanly
-                        if let Err(e) =
-                            client.send(requests::RequestBody::Continue(requests::Continue {
+                        send!(
+                            client,
+                            "continue",
+                            requests::RequestBody::Continue(requests::Continue {
                                 thread_id: self.current_thread_id.take().unwrap(),
                                 single_thread: false,
-                            }))
-                        {
-                            tracing::warn!(error = %e, "sending continue request");
-                        }
+                            })
+                        );
                     }
                 });
             }
