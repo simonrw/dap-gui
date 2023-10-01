@@ -88,7 +88,13 @@ impl eframe::App for MyEguiApp {
                     .text("Highlight line")
                     .integer(),
             );
-            ui.add(BreakpointEditor::new(&self.content, self.current_line, &self.breakpoint_positions));
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.add(BreakpointEditor::new(
+                    &self.content,
+                    self.current_line,
+                    &self.breakpoint_positions,
+                ));
+            });
         });
     }
 }
