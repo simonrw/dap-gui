@@ -6,23 +6,28 @@ use eframe::{
 #[derive(Default)]
 struct MyEguiApp {
     content: String,
-    breakpoint_line: usize,
-    should_highlight: bool,
+    current_line: usize,
     breakpoint_positions: Vec<usize>,
 }
 
-impl MyEguiApp {
-    pub fn new(_c: &eframe::CreationContext<'_>) -> Self {
-        let content = include_str!("../../test.py");
+struct BreakpointEditor<'a> {
+    content: &'a str,
+    current_line: usize,
+    breakpoint_positions: &'a [usize],
+}
+
+impl<'a> BreakpointEditor<'a> {
+    pub fn new(content: &'a str, current_line: usize, breakpoint_positions: &'a [usize]) -> Self {
         Self {
-            content: content.to_string(),
-            breakpoint_line: 0,
-            should_highlight: false,
-            breakpoint_positions: vec![3, 10],
+            content,
+            current_line,
+            breakpoint_positions,
         }
     }
+}
 
-    fn render_text_element(&mut self, ui: &mut egui::Ui) {
+impl<'a> egui::Widget for BreakpointEditor<'a> {
+    fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
         let mut layouter = |ui: &egui::Ui, s: &str, _wrap_width: f32| {
             let mut layout_job = LayoutJob::default();
             let indent = 16.0;
@@ -38,7 +43,7 @@ impl MyEguiApp {
                         },
                     );
                 };
-                if self.should_highlight && self.breakpoint_line == i {
+                if self.current_line == i {
                     // highlighted line
                     layout_job.append(
                         line,
@@ -60,23 +65,30 @@ impl MyEguiApp {
             TextEdit::multiline(&mut self.content)
                 .interactive(false)
                 .layouter(&mut layouter),
-        );
+        )
+    }
+}
+
+impl MyEguiApp {
+    pub fn new(_c: &eframe::CreationContext<'_>) -> Self {
+        let content = include_str!("../../test.py");
+        Self {
+            content: content.to_string(),
+            current_line: 0,
+            breakpoint_positions: vec![3, 10],
+        }
     }
 }
 
 impl eframe::App for MyEguiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.checkbox(&mut self.should_highlight, "Enable line highlighting");
             ui.add(
-                Slider::new(
-                    &mut self.breakpoint_line,
-                    0..=self.content.lines().count() - 1,
-                )
-                .text("Highlight line")
-                .integer(),
+                Slider::new(&mut self.current_line, 0..=self.content.lines().count() - 1)
+                    .text("Highlight line")
+                    .integer(),
             );
-            self.render_text_element(ui);
+            ui.add(BreakpointEditor::new(&self.content, self.current_line, &self.breakpoint_positions));
         });
     }
 }
