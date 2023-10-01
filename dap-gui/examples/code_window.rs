@@ -8,6 +8,7 @@ struct MyEguiApp {
     content: String,
     breakpoint_line: usize,
     should_highlight: bool,
+    breakpoint_positions: Vec<usize>,
 }
 
 impl MyEguiApp {
@@ -17,26 +18,40 @@ impl MyEguiApp {
             content: content.to_string(),
             breakpoint_line: 0,
             should_highlight: false,
+            breakpoint_positions: vec![3, 10],
         }
     }
 
     fn render_text_element(&mut self, ui: &mut egui::Ui) {
         let mut layouter = |ui: &egui::Ui, s: &str, _wrap_width: f32| {
             let mut layout_job = LayoutJob::default();
+            let indent = 16.0;
             for (i, line) in s.lines().enumerate() {
+                if self.breakpoint_positions.contains(&i) {
+                    // marker
+                    layout_job.append(
+                        "•",
+                        0.0,
+                        TextFormat {
+                            color: Color32::from_rgb(255, 0, 0),
+                            ..Default::default()
+                        },
+                    );
+                };
                 if self.should_highlight && self.breakpoint_line == i {
+                    // highlighted line
                     layout_job.append(
                         line,
-                        0.0,
+                        indent,
                         TextFormat {
                             background: Color32::from_gray(128),
                             ..Default::default()
                         },
                     );
                 } else {
-                    layout_job.append(line, 0.0, TextFormat::default());
+                    layout_job.append(line, indent, TextFormat::default());
                 }
-                layout_job.append("\n", 0.0, TextFormat::default());
+                layout_job.append("\n", indent, TextFormat::default());
             }
 
             ui.fonts(|f| f.layout_job(layout_job))
