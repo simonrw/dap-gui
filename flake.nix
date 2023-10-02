@@ -54,6 +54,7 @@
                 custom-python
               ] ++ lib.optionals stdenv.isDarwin apple-deps ++ lib.optionals stdenv.isLinux [
                 gdb
+                simplescreenrecorder
               ];
 
               RUST_BACKTRACE = "1";
