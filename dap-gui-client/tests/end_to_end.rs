@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use std::{
     io::{BufRead, BufReader},
     net::TcpStream,
+    path::PathBuf,
     process::Stdio,
     sync::mpsc,
     thread,
@@ -83,7 +84,7 @@ fn test_loop() -> Result<()> {
         let _guard = span.enter();
 
         let stream = TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
-        let mut client = dap_gui_client::Client::new(stream, tx).unwrap();
+        let client = dap_gui_client::Client::new(stream, tx).unwrap();
 
         // initialize
         let req = requests::RequestBody::Initialize(Initialize {
@@ -94,7 +95,7 @@ fn test_loop() -> Result<()> {
         // launch
         client
             .send(requests::RequestBody::Launch(Launch {
-                program: "./test.py".to_string(),
+                program: PathBuf::from("./test.py"),
             }))
             .unwrap();
 
@@ -125,6 +126,7 @@ fn test_loop() -> Result<()> {
             reason,
             thread_id,
             hit_breakpoint_ids,
+            ..
         }) = wait_for_event(&rx, |e| matches!(e, events::Event::Stopped { .. }))
         else {
             unreachable!();

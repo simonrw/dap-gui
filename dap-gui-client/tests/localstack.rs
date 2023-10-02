@@ -1,4 +1,4 @@
-use std::{net::TcpStream, process::Stdio, sync::mpsc, thread, time::Duration};
+use std::{net::TcpStream, process::Stdio, sync::mpsc, thread, time::Duration, path::PathBuf};
 
 use anyhow::{Context, Result};
 use tracing_subscriber::EnvFilter;
@@ -20,7 +20,7 @@ fn localstack() -> Result<()> {
         let _guard = span.enter();
 
         let stream = TcpStream::connect(format!("127.0.0.1:{debug_port}")).unwrap();
-        let mut client = dap_gui_client::Client::new(stream, tx).unwrap();
+        let client = dap_gui_client::Client::new(stream, tx).unwrap();
 
         // initialize
         let req = requests::RequestBody::Initialize(Initialize {
@@ -44,7 +44,7 @@ fn localstack() -> Result<()> {
                         .to_string(),
             }],
             just_my_code: false,
-            workspace_folder: "/home/simon/work/localstack/localstack-ext".to_string(),
+            workspace_folder: PathBuf::from("/home/simon/work/localstack/localstack-ext"),
         });
         client.send(req).unwrap();
 
