@@ -29,6 +29,8 @@ jobs:
         run: cargo generate-lockfile
       # https://twitter.com/jonhoo/status/1571290371124260865
       - name: cargo test --locked
+        env:
+          RUST_LOG: "dap_gui=debug,dap_gui_client=debug,end_to_end=debug"
         run: cargo test --locked --all-features --all-targets
       # https://github.com/rust-lang/cargo/issues/6669
       - name: cargo test --doc
