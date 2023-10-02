@@ -85,7 +85,6 @@ pub struct SetBreakpoints {
     pub breakpoints: Vec<types::Breakpoint>,
 }
 
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContinueResponse {

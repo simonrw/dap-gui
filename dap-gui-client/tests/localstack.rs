@@ -1,4 +1,4 @@
-use std::{net::TcpStream, process::Stdio, sync::mpsc, thread, time::Duration, path::PathBuf};
+use std::{net::TcpStream, path::PathBuf, process::Stdio, sync::mpsc, thread, time::Duration};
 
 use anyhow::{Context, Result};
 use tracing_subscriber::EnvFilter;
