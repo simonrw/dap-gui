@@ -89,6 +89,7 @@ fn test_loop() -> Result<()> {
         // initialize
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
+            lines_start_at_one: Some(false),
         });
         client.send(req).unwrap();
 
