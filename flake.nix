@@ -50,6 +50,7 @@
                 })
                 rust-bin.beta.latest.rust-analyzer
                 cargo-nextest
+                cargo-flamegraph
                 custom-python
               ] ++ lib.optionals stdenv.isDarwin apple-deps ++ lib.optionals stdenv.isLinux [
                 gdb

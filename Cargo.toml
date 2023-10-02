@@ -5,3 +5,6 @@ members = [
     "dap-gui-client",
     "dap-gui",
 ]
+
+[profile.release]
+debug = 1
