@@ -18,6 +18,7 @@ pub struct Response {
 pub enum ResponseBody {
     Initialize(Capabilities),
     SetFunctionBreakpoints(SetFunctionBreakpointsResponse),
+    SetBreakpoints(SetBreakpoints),
     Continue(ContinueResponse),
     Threads(ThreadsResponse),
     StackTrace(StackTraceResponse),
@@ -77,6 +78,13 @@ pub struct Capabilities {
 pub struct SetFunctionBreakpointsResponse {
     pub breakpoints: Vec<types::Breakpoint>,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetBreakpoints {
+    pub breakpoints: Vec<types::Breakpoint>,
+}
+
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -11,13 +11,14 @@ use std::{
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use dap_gui::code_view::CodeView;
 use dap_gui::debug_server::{DebugServerConfig, PythonDebugServer};
 use dap_gui_client::{
     bindings::get_random_tcp_port,
     events::{self, OutputEventBody, StoppedEventBody},
     requests::{self, Initialize},
     responses,
-    types::{self, ThreadId},
+    types::{self, Source, SourceBreakpoint, ThreadId},
     Client, Received,
 };
 use eframe::egui::{self, TextEdit};
@@ -54,12 +55,15 @@ struct AppState {
     launch_config: LaunchConfiguration,
     working_directory: PathBuf,
     contents: String,
+    line: Option<usize>,
 
     current_thread_id: Option<ThreadId>,
     debugger_status: DebuggerStatus,
     should_quit: bool,
 
     capabilities: Option<responses::Capabilities>,
+
+    breakpoints: Vec<types::Breakpoint>,
 
     // variables
     stack_frames: Vec<types::StackFrame>,
@@ -118,17 +122,41 @@ impl AppState {
                 self.debugger_status = DebuggerStatus::Initialized;
 
                 // configure
+                let breakpoints = vec![SourceBreakpoint {
+                    line: 3,
+                    ..Default::default()
+                }];
                 send!(
                     client,
-                    "setFunctionBreakpoints",
-                    requests::RequestBody::SetFunctionBreakpoints(
-                        requests::SetFunctionBreakpoints {
-                            breakpoints: vec![requests::Breakpoint {
-                                name: "foo".to_string(),
-                            }],
+                    "setBreakpoints",
+                    requests::RequestBody::SetBreakpoints(requests::SetBreakpoints {
+                        source: Source {
+                            name: Some("test.py".to_string()),
+                            path: Some(PathBuf::from("/home/simon/dev/dap-gui/test.py")),
+                            ..Default::default()
                         },
-                    )
+                        // deprecated api
+                        lines: Some(
+                            breakpoints
+                                .iter()
+                                .map(|breakpoint| breakpoint.line)
+                                .collect()
+                        ),
+                        breakpoints: Some(breakpoints),
+                        ..Default::default()
+                    })
                 );
+                // send!(
+                //     client,
+                //     "setFunctionBreakpoints",
+                //     requests::RequestBody::SetFunctionBreakpoints(
+                //         requests::SetFunctionBreakpoints {
+                //             breakpoints: vec![requests::Breakpoint {
+                //                 name: "foo".to_string(),
+                //             }],
+                //         },
+                //     )
+                // );
 
                 if self
                     .capabilities
@@ -199,6 +227,17 @@ impl AppState {
                         requests::RequestBody::ConfigurationDone
                     );
                 }
+                responses::ResponseBody::SetBreakpoints(responses::SetBreakpoints {
+                    breakpoints,
+                }) => {
+                    self.breakpoints = breakpoints;
+                    // TODO: handle multiple breakpoints
+                    send!(
+                        client,
+                        "configurationDone",
+                        requests::RequestBody::ConfigurationDone
+                    );
+                }
                 responses::ResponseBody::ConfigurationDone => {
                     tracing::debug!("configuration done");
                     self.debugger_status = DebuggerStatus::Running;
@@ -206,8 +245,21 @@ impl AppState {
                 responses::ResponseBody::StackTrace(responses::StackTraceResponse {
                     stack_frames,
                 }) => {
-                    tracing::debug!(?stack_frames, "inspecting stack frames");
                     self.stack_frames = stack_frames;
+
+                    // the first stack frame is the file to show
+                    let current_frame = &self.stack_frames[0];
+                    let current_file = current_frame
+                        .source
+                        .as_ref()
+                        .unwrap()
+                        .path
+                        .as_ref()
+                        .unwrap();
+                    self.contents =
+                        std::fs::read_to_string(&current_file).expect("reading file contents");
+                    self.line = Some(current_frame.line);
+                    tracing::debug!(file = %current_file.display(), "inspecting stack frames");
 
                     for frame in &self.stack_frames {
                         send!(
@@ -252,11 +304,27 @@ impl AppState {
 
                     // TODO: show the current breakpoint position
 
-                    ui.add(
-                        TextEdit::multiline(&mut self.contents)
-                            .code_editor()
-                            .interactive(false),
-                    );
+                    let breakpoint_positions: Vec<usize> = self
+                        .breakpoints
+                        .iter()
+                        .filter_map(|breakpoint| breakpoint.line.map(|line| line as usize))
+                        .collect();
+
+                    if let Some(ref current_line) = self.line {
+                        ui.add(CodeView::new(
+                            &self.contents,
+                            *current_line,
+                            true,
+                            breakpoint_positions.as_slice(),
+                        ));
+                    } else {
+                        ui.add(CodeView::new(
+                            &self.contents,
+                            0,
+                            false,
+                            breakpoint_positions.as_slice(),
+                        ));
+                    }
 
                     if ui.button("Continue").clicked() {
                         // TODO: how to trigger continue cleanly
@@ -381,10 +449,12 @@ impl MyApp {
             },
             working_directory: PathBuf::from("/home/simon/dev/dap-gui"),
             contents: std::fs::read_to_string(&filename).unwrap(),
+            line: None,
             current_thread_id: None,
             should_quit: false,
             capabilities: None,
             stack_frames: Default::default(),
+            breakpoints: Vec::new(),
         }));
         /*
         let trigger_socket =
@@ -411,6 +481,7 @@ impl MyApp {
         // send initialize
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
+            lines_start_at_one: Some(false),
         });
         tracing::info!("initializing debug adapter");
         client.send(req).unwrap();

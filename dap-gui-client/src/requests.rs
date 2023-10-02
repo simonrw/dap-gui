@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 
-use crate::types::{Seq, StackFrameId, ThreadId, VariablesReference, Source};
+use crate::types::{Seq, StackFrameId, ThreadId, VariablesReference, Source, SourceBreakpoint};
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -23,6 +23,7 @@ pub enum RequestBody {
     Initialize(Initialize),
     Continue(Continue),
     SetFunctionBreakpoints(SetFunctionBreakpoints),
+    SetBreakpoints(SetBreakpoints),
     Attach(Attach),
     Launch(Launch),
     Scopes(Scopes),
@@ -44,6 +45,8 @@ pub struct StackTrace {
 pub struct Initialize {
     #[serde(rename = "adapterID")]
     pub adapter_id: String,
+    #[serde(rename = "linesStartAt1")]
+    pub lines_start_at_one: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -62,6 +65,15 @@ pub struct Breakpoint {
 #[serde(rename_all = "camelCase")]
 pub struct SetFunctionBreakpoints {
     pub breakpoints: Vec<Breakpoint>,
+}
+
+#[derive(Debug, Default, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SetBreakpoints {
+    pub source: Source,
+    pub breakpoints: Option<Vec<SourceBreakpoint>>,
+    pub lines: Option<Vec<usize>>,
+    pub source_modified: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Clone)]
