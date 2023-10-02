@@ -52,6 +52,8 @@
                 cargo-nextest
                 cargo-flamegraph
                 custom-python
+                pkg-config
+                openssl
               ] ++ lib.optionals stdenv.isDarwin apple-deps ++ lib.optionals stdenv.isLinux [
                 gdb
                 simplescreenrecorder
