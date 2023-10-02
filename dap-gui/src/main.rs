@@ -122,10 +122,13 @@ impl AppState {
                 self.debugger_status = DebuggerStatus::Initialized;
 
                 // configure
-                let breakpoints = vec![SourceBreakpoint {
-                    line: 3,
-                    ..Default::default()
-                }];
+                let breakpoints: Vec<_> = [3, 7]
+                    .iter()
+                    .map(|line| SourceBreakpoint {
+                        line: *line,
+                        ..Default::default()
+                    })
+                    .collect();
                 send!(
                     client,
                     "setBreakpoints",
