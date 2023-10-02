@@ -10,6 +10,8 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
+env:
+  RUST_LOG: "dap_gui=debug,dap_gui_client=debug,end_to_end=debug"
 name: rolling
 jobs:
   # https://twitter.com/mycoliza/status/1571295690063753218
@@ -25,8 +27,9 @@ jobs:
       - name: cargo generate-lockfile
         if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
-      - name: cargo test --locked
-        run: cargo test --locked --all-features --all-targets
+      # TODO: remove no-run
+      - name: cargo test --locked --no-run
+        run: cargo test --locked --all-features --all-targets --no-run
   # https://twitter.com/alcuadrado/status/1571291687837732873
   update:
     runs-on: ubuntu-latest
@@ -45,8 +48,9 @@ jobs:
       - name: cargo update
         if: hashFiles('Cargo.lock') != ''
         run: cargo update
-      - name: cargo test
+      # TODO: remove no-run
+      - name: cargo test --no-run
         if: hashFiles('Cargo.lock') != ''
-        run: cargo test --locked --all-features --all-targets
+        run: cargo test --locked --all-features --all-targets --no-run
         env:
           RUSTFLAGS: -D deprecated

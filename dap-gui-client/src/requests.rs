@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 
-use crate::types::{Seq, StackFrameId, ThreadId, VariablesReference, Source, SourceBreakpoint};
+use crate::types::{Seq, Source, SourceBreakpoint, StackFrameId, ThreadId, VariablesReference};
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]

@@ -260,7 +260,7 @@ impl AppState {
                         .as_ref()
                         .unwrap();
                     self.contents =
-                        std::fs::read_to_string(&current_file).expect("reading file contents");
+                        std::fs::read_to_string(current_file).expect("reading file contents");
                     self.line = Some(current_frame.line);
                     tracing::debug!(file = %current_file.display(), "inspecting stack frames");
 

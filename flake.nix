@@ -46,15 +46,17 @@
             mkShell {
               buildInputs = [
                 (rust-bin.beta.latest.default.override {
-                  extensions = [ "rust-src" ];
+                  extensions = [ "rust-src" "llvm-tools-preview" ];
                 })
                 rust-bin.beta.latest.rust-analyzer
                 cargo-nextest
                 cargo-flamegraph
                 custom-python
+                cargo-hack
               ] ++ lib.optionals stdenv.isDarwin apple-deps ++ lib.optionals stdenv.isLinux [
                 gdb
                 simplescreenrecorder
+                cargo-llvm-cov
               ];
 
               RUST_BACKTRACE = "1";

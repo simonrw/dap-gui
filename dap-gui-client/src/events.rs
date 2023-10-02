@@ -17,10 +17,7 @@ pub enum Event {
     Terminated,
     // TODO: handle unknown event types
     // debugpy types
-    DebugpyWaitingForServer {
-        host: String,
-        port: u16,
-    },
+    DebugpyWaitingForServer { host: String, port: u16 },
     Module(ModuleEventBody),
 }
 
