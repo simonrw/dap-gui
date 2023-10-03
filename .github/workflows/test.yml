@@ -22,6 +22,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
       - name: Install ${{ matrix.toolchain }}
         uses: dtolnay/rust-toolchain@master
         with:
@@ -29,10 +32,15 @@ jobs:
       - name: cargo generate-lockfile
         if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
+      - name: Create python venv with debugpy
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install debugpy
       # https://twitter.com/jonhoo/status/1571290371124260865
-      # TODO: remove no-run
-      - name: cargo test --locked --no-run
-        run: cargo test --locked --all-features --all-targets --no-run
+      - name: cargo test --locked
+        run: |
+          source .venv/bin/activate
+          cargo test --locked --all-features --all-targets
       # https://github.com/rust-lang/cargo/issues/6669
       - name: cargo test --doc
         run: cargo test --locked --all-features --doc
@@ -43,6 +51,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
       - name: Install system packages
         run: |
           sudo apt-get install libssl-dev pkg-config
@@ -54,9 +65,14 @@ jobs:
         run: rustup default stable
       - name: cargo update -Zminimal-versions
         run: cargo +nightly update -Zminimal-versions
-      # TODO: remove no-run
-      - name: cargo test --no-run
-        run: cargo test --locked --all-features --all-targets --no-run
+      - name: Create python venv with debugpy
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install debugpy
+      - name: cargo test
+        run: |
+          source .venv/bin/activate
+          cargo test --locked --all-features --all-targets
   os-check:
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.os }} / stable
@@ -65,15 +81,12 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
     steps:
-      # if your project needs OpenSSL, uncommment this to fix Windows builds.
-      # it's commented out by default as tthe install command takes 5-10m.
-      # - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-      #   if: runner.os == 'Windows'
-      # - run: vcpkg install openssl:x64-windows-static-md
-      #   if: runner.os == 'Windows'
       - uses: actions/checkout@v4
         with:
           submodules: true
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
       - name: cargo generate-lockfile
@@ -81,9 +94,14 @@ jobs:
         run: cargo generate-lockfile
       - name: cargo check
         run: cargo check --locked --all-features --all-targets
-      # TODO: remove no-run
-      - name: cargo test --no-run
-        run: cargo test --locked --all-features --all-targets --no-run
+      - name: Create python venv with debugpy
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install debugpy
+      - name: cargo test
+        run: |
+          source .venv/bin/activate
+          cargo test --locked --all-features --all-targets
   # TODO
   # coverage:
   #   runs-on: ubuntu-latest
