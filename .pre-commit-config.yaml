@@ -1,0 +1,15 @@
+---
+repos:
+  - repo: local
+    hooks:
+      - id: cargo format
+        name: cargo format
+        entry: cargo fmt --check
+        language: system
+        always_run: false
+        pass_filenames: false
+        stages:
+          - commit
+        types:
+          - rust
+fail_fast: true
