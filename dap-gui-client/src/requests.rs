@@ -3,7 +3,9 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 
-use crate::types::{Seq, Source, SourceBreakpoint, StackFrameId, ThreadId, VariablesReference};
+use crate::types::{
+    Seq, Source, SourceBreakpoint, StackFrameFormat, StackFrameId, ThreadId, VariablesReference,
+};
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -34,10 +36,13 @@ pub enum RequestBody {
     Disconnect(Disconnect),
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct StackTrace {
     pub thread_id: ThreadId,
+    pub start_frame: Option<usize>,
+    pub levels: Option<usize>,
+    pub format: Option<StackFrameFormat>,
 }
 
 #[derive(Debug, Serialize, Clone)]

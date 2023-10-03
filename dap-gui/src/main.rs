@@ -104,11 +104,15 @@ impl AppState {
                 self.current_thread_id = Some(*thread_id);
                 self.debugger_status = DebuggerStatus::Paused;
 
+                // work out where to show the code window
                 send!(
                     client,
                     "stackTrace",
                     requests::RequestBody::StackTrace(requests::StackTrace {
                         thread_id: *thread_id,
+                        start_frame: Some(0),
+                        levels: Some(1),
+                        ..Default::default()
                     })
                 );
             }

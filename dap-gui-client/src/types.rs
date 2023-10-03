@@ -16,13 +16,32 @@ pub struct Thread {
     pub name: String,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum PresentationHint {
     Arguments,
     Locals,
     Registers,
     Other(String),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct StackFrameFormat {
+    /// Displays parameters for the stack frame
+    pub parameters: Option<bool>,
+    /// Displays the types of parameters for the stack frame
+    parameter_types: Option<bool>,
+    /// Displays the names of parameters for the stack frame
+    pub parameter_names: Option<bool>,
+    /// Displays the values of parameters for the stack frame
+    pub parameter_values: Option<bool>,
+    /// Displays the line number of the stack frame
+    pub line: Option<bool>,
+    /// Displays the module of the stack frame
+    pub module: Option<bool>,
+    /// Includes all stack frames, including those the debug adapter might otherwise hide
+    pub include_all: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
