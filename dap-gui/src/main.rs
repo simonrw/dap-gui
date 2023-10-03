@@ -298,14 +298,19 @@ impl AppState {
 
                     ui.heading("Stack Frames");
                     for frame in &self.stack_frames {
-                        // TODO: change position in the stack
-                        ui.label(format!("{} {}", frame.id, frame.name));
+                        if ui.button(format!("{} {}", frame.id, frame.name)).clicked() {
+                            self.contents = std::fs::read_to_string(
+                                frame.source.as_ref().unwrap().path.as_ref().unwrap(),
+                            )
+                            .unwrap();
+                            self.line = Some(frame.line);
+                            ctx.request_repaint();
+                            return;
+                        }
                     }
                 });
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.heading("Paused");
-
-                    // TODO: show the current breakpoint position
 
                     let breakpoint_positions: Vec<usize> = self
                         .breakpoints
