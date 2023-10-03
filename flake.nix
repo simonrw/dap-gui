@@ -53,6 +53,7 @@
                 cargo-flamegraph
                 custom-python
                 cargo-hack
+                act
               ] ++ lib.optionals stdenv.isDarwin apple-deps ++ lib.optionals stdenv.isLinux [
                 gdb
                 simplescreenrecorder
