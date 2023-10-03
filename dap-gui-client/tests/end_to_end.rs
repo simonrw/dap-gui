@@ -101,8 +101,9 @@ fn test_loop() -> Result<()> {
             .unwrap();
 
         // wait for initialized event
-        let _initialized_event =
-            wait_for_event(&rx, |e| matches!(e, events::Event::Initialized { .. }));
+        let _initialized_event = wait_for_event("initialized", &rx, |e| {
+            matches!(e, events::Event::Initialized { .. })
+        });
 
         // set function breakpoints
         let req = requests::RequestBody::SetFunctionBreakpoints(requests::SetFunctionBreakpoints {
@@ -111,14 +112,14 @@ fn test_loop() -> Result<()> {
             }],
         });
         client.send(req).unwrap();
-        let _ = wait_for_response(&rx, |r| {
+        let _ = wait_for_response("setFunctionBreakpoints", &rx, |r| {
             matches!(r, responses::ResponseBody::SetFunctionBreakpoints { .. })
         });
 
         // configuration done
         let req = requests::RequestBody::ConfigurationDone;
         client.send(req).unwrap();
-        let _ = wait_for_response(&rx, |r| {
+        let _ = wait_for_response("configurationDone", &rx, |r| {
             matches!(r, responses::ResponseBody::ConfigurationDone)
         });
 
@@ -128,7 +129,9 @@ fn test_loop() -> Result<()> {
             thread_id,
             hit_breakpoint_ids,
             ..
-        }) = wait_for_event(&rx, |e| matches!(e, events::Event::Stopped { .. }))
+        }) = wait_for_event("stopped", &rx, |e| {
+            matches!(e, events::Event::Stopped { .. })
+        })
         else {
             unreachable!();
         };
@@ -143,14 +146,16 @@ fn test_loop() -> Result<()> {
         // fetch thread info
         let req = requests::RequestBody::Threads;
         client.send(req).unwrap();
-        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::Threads(_)));
+        let _ = wait_for_response("threads", &rx, |r| {
+            matches!(r, responses::ResponseBody::Threads(_))
+        });
 
         // fetch stack info
         let req = requests::RequestBody::StackTrace(requests::StackTrace { thread_id });
         client.send(req).unwrap();
 
         let responses::ResponseBody::StackTrace(responses::StackTraceResponse { stack_frames }) =
-            wait_for_response(&rx, |r| {
+            wait_for_response("stackTrace", &rx, |r| {
                 matches!(
                     r,
                     responses::ResponseBody::StackTrace(responses::StackTraceResponse { .. })
@@ -166,7 +171,7 @@ fn test_loop() -> Result<()> {
             client.send(req).unwrap();
 
             let responses::ResponseBody::Scopes(responses::ScopesResponse { scopes }) =
-                wait_for_response(&rx, |r| {
+                wait_for_response("scopes", &rx, |r| {
                     matches!(
                         r,
                         responses::ResponseBody::Scopes(responses::ScopesResponse { .. })
@@ -184,7 +189,7 @@ fn test_loop() -> Result<()> {
                 client.send(req).unwrap();
 
                 let responses::ResponseBody::Variables(responses::VariablesResponse { .. }) =
-                    wait_for_response(&rx, |r| {
+                    wait_for_response("variables", &rx, |r| {
                         matches!(
                             r,
                             responses::ResponseBody::Variables(responses::VariablesResponse { .. })
@@ -203,28 +208,41 @@ fn test_loop() -> Result<()> {
         });
         tracing::debug!(?req, "sending continue request");
         client.send(req).unwrap();
-        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::Continue(_)));
+        let _ = wait_for_response("continue", &rx, |r| {
+            matches!(r, responses::ResponseBody::Continue(_))
+        });
 
-        wait_for_event(&rx, |e| matches!(e, events::Event::Terminated));
+        wait_for_event("terminated", &rx, |e| {
+            matches!(e, events::Event::Terminated)
+        });
 
         // terminate
         let req = requests::RequestBody::Terminate(requests::Terminate {
             restart: Some(false),
         });
         client.send(req).unwrap();
-        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::Terminate));
+        let _ = wait_for_response("terminate", &rx, |r| {
+            matches!(r, responses::ResponseBody::Terminate)
+        });
 
         // disconnect
         let req = requests::RequestBody::Disconnect(requests::Disconnect {
             terminate_debugee: true,
         });
         client.send(req).unwrap();
-        let _ = wait_for_response(&rx, |r| matches!(r, responses::ResponseBody::Disconnect));
+        let _ = wait_for_response("disconnect", &rx, |r| {
+            matches!(r, responses::ResponseBody::Disconnect)
+        });
         Ok(())
     })
 }
 
-fn wait_for_response<F>(rx: &mpsc::Receiver<Received>, pred: F) -> responses::ResponseBody
+#[tracing::instrument(skip(rx, pred))]
+fn wait_for_response<F>(
+    message: &str,
+    rx: &mpsc::Receiver<Received>,
+    pred: F,
+) -> responses::ResponseBody
 where
     F: Fn(&responses::ResponseBody) -> bool,
 {
@@ -248,7 +266,8 @@ where
     unreachable!()
 }
 
-fn wait_for_event<F>(rx: &mpsc::Receiver<Received>, pred: F) -> events::Event
+#[tracing::instrument(skip(rx, pred))]
+fn wait_for_event<F>(message: &str, rx: &mpsc::Receiver<Received>, pred: F) -> events::Event
 where
     F: Fn(&events::Event) -> bool,
 {
