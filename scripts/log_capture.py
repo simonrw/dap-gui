@@ -3,7 +3,7 @@
 import argparse
 import json
 
-from scapy.all import rdpcap
+from scapy.all import rdpcap, IP, TCP
 
 
 if __name__ == "__main__":
@@ -15,25 +15,31 @@ if __name__ == "__main__":
     a = rdpcap(args.file)
 
     combined = b""
-    pair: set[tuple[str, int, str, int]] | None = None
+    pair: set[tuple[str, int, str, int]] = set()
 
+    # first pass: get the DAP ip/port combinations
     for packet in a:
         if not hasattr(packet, "load"):
             continue
 
-        if not pair and b"Content-Length" in packet.load:
-            pair = set(
-                [
-                    (packet.src, packet.sport, packet.dst, packet.dport),
-                    (packet.dst, packet.dport, packet.src, packet.sport),
-                ]
-            )
-            combined += packet.load
+        ip = packet[IP]
+        tcp = packet[TCP]
 
-        if not pair:
+        if b"Content-Length" in packet.load:
+            # normal direction
+            pair.add((ip.src, tcp.sport, ip.dst, tcp.dport))
+            # reverse direction
+            pair.add((ip.dst, tcp.dport, ip.src, tcp.sport))
+
+    # second pass: extract content
+    for packet in a:
+        if not hasattr(packet, "load"):
             continue
 
-        if (packet.src, packet.sport, packet.dst, packet.dport) not in pair:
+        ip = packet[IP]
+        tcp = packet[TCP]
+        pair_key = (ip.src, tcp.sport, ip.dst, tcp.dport)
+        if pair_key not in pair:
             continue
 
         combined += packet.load
@@ -57,7 +63,6 @@ if __name__ == "__main__":
         content_length = int(length)
         # strip \r\n\r\n
         combined = combined[4:]
-
 
         json_str = combined[:content_length]
         combined = combined[content_length:]
