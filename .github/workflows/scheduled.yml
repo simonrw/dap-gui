@@ -27,6 +27,7 @@ jobs:
           python-version: "3.11"
       - name: Install nightly
         uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
       - name: cargo generate-lockfile
         if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
@@ -56,6 +57,7 @@ jobs:
       - name: Install beta
         if: hashFiles('Cargo.lock') != ''
         uses: dtolnay/rust-toolchain@beta
+      - uses: Swatinem/rust-cache@v2
       - name: cargo update
         if: hashFiles('Cargo.lock') != ''
         run: cargo update
