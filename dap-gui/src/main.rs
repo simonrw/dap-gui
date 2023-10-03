@@ -135,7 +135,7 @@ impl AppState {
                     requests::RequestBody::SetBreakpoints(requests::SetBreakpoints {
                         source: Source {
                             name: Some("test.py".to_string()),
-                            path: Some(PathBuf::from("/home/simon/dev/dap-gui/test.py")),
+                            path: Some(self.working_directory.join("test.py")),
                             ..Default::default()
                         },
                         // deprecated api
@@ -450,7 +450,7 @@ impl MyApp {
             launch_config: LaunchConfiguration::File {
                 filename: filename.clone(),
             },
-            working_directory: PathBuf::from("/home/simon/dev/dap-gui"),
+            working_directory: std::env::current_dir().unwrap(),
             contents: std::fs::read_to_string(&filename).unwrap(),
             line: None,
             current_thread_id: None,
