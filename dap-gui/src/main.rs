@@ -122,7 +122,7 @@ impl AppState {
                 self.debugger_status = DebuggerStatus::Initialized;
 
                 // configure
-                let breakpoints: Vec<_> = [3, 7]
+                let breakpoints: Vec<_> = [19, 10, 7, 3, 11, 12, 16]
                     .iter()
                     .map(|line| SourceBreakpoint {
                         line: *line,
