@@ -292,7 +292,11 @@ where
 }
 
 fn init_test_logger() {
-    if atty::is(atty::Stream::Stderr) {
+    let in_ci = std::env::var("CI")
+        .map(|val| val == "true")
+        .unwrap_or(false);
+
+    if atty::is(atty::Stream::Stderr) || in_ci {
         tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env())
             .init();
