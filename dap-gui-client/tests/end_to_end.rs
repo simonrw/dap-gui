@@ -151,7 +151,10 @@ fn test_loop() -> Result<()> {
         });
 
         // fetch stack info
-        let req = requests::RequestBody::StackTrace(requests::StackTrace { thread_id });
+        let req = requests::RequestBody::StackTrace(requests::StackTrace {
+            thread_id,
+            ..Default::default()
+        });
         client.send(req).unwrap();
 
         let responses::ResponseBody::StackTrace(responses::StackTraceResponse { stack_frames }) =
