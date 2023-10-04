@@ -127,6 +127,8 @@ pub struct DebugpyLaunchArguments {
     pub cwd: PathBuf,
     pub show_return_value: bool,
     pub debug_options: Vec<String>,
+    pub stop_on_entry: bool,
+    pub is_output_redirected: bool,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -192,6 +194,8 @@ mod tests {
                 cwd: std::env::current_dir().unwrap(),
                 show_return_value: true,
                 debug_options: vec!["DebugStdLib".to_string(), "ShowReturnValue".to_string()],
+                stop_on_entry: false,
+                is_output_redirected: false,
             })),
         });
 

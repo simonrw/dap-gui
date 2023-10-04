@@ -110,6 +110,8 @@ fn test_loop() -> Result<()> {
                     cwd: std::env::current_dir().unwrap().join(".."),
                     show_return_value: true,
                     debug_options: vec!["DebugStdLib".to_string(), "ShowReturnValue".to_string()],
+                    stop_on_entry: false,
+                    is_output_redirected: false,
                 })),
             }))
             .unwrap();
