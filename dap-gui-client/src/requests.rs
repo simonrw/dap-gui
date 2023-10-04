@@ -47,11 +47,19 @@ pub struct StackTrace {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub enum PathFormat {
+    Path,
+    Uri,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Initialize {
     #[serde(rename = "adapterID")]
     pub adapter_id: String,
     #[serde(rename = "linesStartAt1")]
     pub lines_start_at_one: Option<bool>,
+    pub path_format: PathFormat,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -106,8 +114,27 @@ pub struct Attach {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct DebugpyLaunchArguments {
+    pub just_my_code: bool,
+    // pub console: String,
+    pub cwd: PathBuf,
+    pub show_return_value: bool,
+    pub debug_options: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(untagged, rename_all = "camelCase")]
+pub enum LaunchArguments {
+    Debugpy(DebugpyLaunchArguments),
+}
+
+#[derive(Default, Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Launch {
     pub program: PathBuf,
+
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub launch_arguments: Option<LaunchArguments>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -142,4 +169,40 @@ pub struct Terminate {
 #[serde(rename_all = "camelCase")]
 pub struct Disconnect {
     pub terminate_debugee: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn launch_arguments() {
+        let body = RequestBody::Launch(Launch {
+            program: PathBuf::from("/"),
+            launch_arguments: Some(LaunchArguments::Debugpy(DebugpyLaunchArguments {
+                just_my_code: true,
+                // console: "integratedTerminal".to_string(),
+                cwd: std::env::current_dir().unwrap(),
+                show_return_value: true,
+                debug_options: vec!["DebugStdLib".to_string(), "ShowReturnValue".to_string()],
+            })),
+        });
+
+        let s = serde_json::to_string(&body).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&s).unwrap();
+
+        let just_my_code = v
+            .as_object()
+            .unwrap()
+            .get("arguments")
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .get("justMyCode")
+            .unwrap()
+            .as_bool()
+            .unwrap();
+
+        assert!(just_my_code);
+    }
 }

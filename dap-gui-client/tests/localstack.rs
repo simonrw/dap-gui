@@ -5,7 +5,7 @@ use tracing_subscriber::EnvFilter;
 
 use dap_gui_client::{
     bindings::get_random_tcp_port,
-    requests::{self, Attach, ConnectInfo, Initialize, PathMapping},
+    requests::{self, Attach, ConnectInfo, Initialize, PathFormat, PathMapping},
     responses, Received,
 };
 
@@ -26,6 +26,7 @@ fn localstack() -> Result<()> {
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
             lines_start_at_one: Some(false),
+            path_format: PathFormat::Path,
         });
         client.send(req).unwrap();
 

@@ -12,7 +12,7 @@ use tracing_subscriber::EnvFilter;
 use dap_gui_client::{
     bindings::get_random_tcp_port,
     events,
-    requests::{self, Initialize, Launch},
+    requests::{self, DebugpyLaunchArguments, Initialize, Launch, LaunchArguments, PathFormat},
     responses, Received,
 };
 
@@ -90,6 +90,7 @@ fn test_loop() -> Result<()> {
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
             lines_start_at_one: Some(false),
+            path_format: PathFormat::Path,
         });
         client.send(req).unwrap();
 
@@ -97,6 +98,14 @@ fn test_loop() -> Result<()> {
         client
             .send(requests::RequestBody::Launch(Launch {
                 program: PathBuf::from("./test.py"),
+                launch_arguments: Some(LaunchArguments::Debugpy(DebugpyLaunchArguments {
+                    just_my_code: true,
+                    // console: "integratedTerminal".to_string(),
+                    // tests are run from the package they are from
+                    cwd: std::env::current_dir().unwrap().join(".."),
+                    show_return_value: true,
+                    debug_options: vec!["DebugStdLib".to_string(), "ShowReturnValue".to_string()],
+                })),
             }))
             .unwrap();
 

@@ -16,7 +16,7 @@ use dap_gui::debug_server::{DebugServerConfig, PythonDebugServer};
 use dap_gui_client::{
     bindings::get_random_tcp_port,
     events::{self, OutputEventBody, StoppedEventBody},
-    requests::{self, Initialize},
+    requests::{self, Initialize, PathFormat},
     responses,
     types::{self, Source, SourceBreakpoint, ThreadId},
     Client, Received,
@@ -494,6 +494,7 @@ impl MyApp {
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
             lines_start_at_one: Some(false),
+            path_format: PathFormat::Path,
         });
         tracing::info!("initializing debug adapter");
         client.send(req).unwrap();
