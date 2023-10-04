@@ -22,7 +22,7 @@ pub enum Language {
     Python,
 }
 
-static SERVER_READY_TEXT: &str = "wait_for_client()";
+static SERVER_READY_TEXT: &str = "Listening for incoming Client connections";
 
 pub struct PythonDebugServer {
     child: Child,
@@ -34,12 +34,12 @@ impl PythonDebugServer {
         let mut child = std::process::Command::new("python")
             .args([
                 "-m",
-                "debugpy",
-                "--log-to-stderr",
-                "--wait-for-client",
-                "--listen",
-                &format!("127.0.0.1:{}", config.port),
-                &config.filename.display().to_string(),
+                "debugpy.adapter",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                &format!("{}", config.port),
+                "--log-stderr",
             ])
             .stderr(Stdio::piped())
             .current_dir(&config.working_dir)

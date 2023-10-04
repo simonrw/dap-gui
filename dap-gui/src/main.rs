@@ -212,17 +212,25 @@ impl AppState {
                     // send launch
                     send!(
                         client,
-                        "attach",
-                        requests::RequestBody::Attach(requests::Attach {
-                            connect: requests::ConnectInfo {
-                                host: "localhost".to_string(),
-                                port: 5678,
-                            },
-                            path_mappings: vec![],
-                            just_my_code: false,
-                            workspace_folder: self.working_directory.clone(),
+                        "launch",
+                        requests::RequestBody::Launch(requests::Launch {
+                            program: self.working_directory.join("test.py"),
+                            launch_arguments: None,
                         })
                     );
+                    // send!(
+                    //     client,
+                    //     "attach",
+                    //     requests::RequestBody::Attach(requests::Attach {
+                    //         connect: requests::ConnectInfo {
+                    //             host: "localhost".to_string(),
+                    //             port: 5678,
+                    //         },
+                    //         path_mappings: vec![],
+                    //         just_my_code: false,
+                    //         workspace_folder: self.working_directory.clone(),
+                    //     })
+                    // );
                 }
                 responses::ResponseBody::SetFunctionBreakpoints(_) => {
                     tracing::debug!("set function breakpoints response");
