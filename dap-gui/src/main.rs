@@ -597,7 +597,9 @@ fn main() -> Result<()> {
         options,
         Box::new(move |cc| {
             let ctx = cc.egui_ctx.clone();
-            if !light_mode {
+            if light_mode {
+                ctx.set_visuals(Visuals::light());
+            } else {
                 ctx.set_visuals(Visuals::dark());
             };
             Box::new(MyApp::new(ctx, client, rx))
