@@ -45,9 +45,10 @@ pub struct StackTrace {
     pub format: Option<StackFrameFormat>,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Default, Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum PathFormat {
+    #[default]
     Path,
     Uri,
 }
@@ -57,9 +58,15 @@ pub enum PathFormat {
 pub struct Initialize {
     #[serde(rename = "adapterID")]
     pub adapter_id: String,
-    #[serde(rename = "linesStartAt1")]
-    pub lines_start_at_one: Option<bool>,
     pub path_format: PathFormat,
+
+    #[serde(rename = "linesStartAt1")]
+    pub lines_start_at_one: bool,
+    pub supports_start_debugging_request: bool,
+    pub supports_variable_type: bool,
+    pub supports_variable_paging: bool,
+    pub supports_progress_reporting: bool,
+    pub supports_memory_event: bool,
 }
 
 #[derive(Debug, Serialize, Clone)]

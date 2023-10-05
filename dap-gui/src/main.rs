@@ -493,8 +493,13 @@ impl MyApp {
         // send initialize
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
-            lines_start_at_one: Some(false),
+            lines_start_at_one: false,
             path_format: PathFormat::Path,
+            supports_start_debugging_request: true,
+            supports_variable_type: true,
+            supports_variable_paging: true,
+            supports_progress_reporting: true,
+            supports_memory_event: true,
         });
         tracing::info!("initializing debug adapter");
         client.send(req).unwrap();
