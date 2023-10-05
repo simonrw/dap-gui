@@ -21,7 +21,7 @@ use dap_gui_client::{
     types::{self, Source, SourceBreakpoint, ThreadId},
     Client, Received,
 };
-use eframe::egui::{self, TextEdit};
+use eframe::egui::{self, TextEdit, Visuals};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "sentry")]
@@ -530,6 +530,9 @@ struct LaunchArguments {
     #[clap(short, long)]
     working_directory: Option<PathBuf>,
 
+    #[clap(long, default_value = "false")]
+    light: bool,
+
     #[clap(short, long)]
     file: PathBuf,
 }
@@ -548,6 +551,11 @@ fn main() -> Result<()> {
 
     // start debug server in the background
     let port = get_random_tcp_port().context("no free ports available")?;
+    let light_mode = match &args {
+        Arguments::Launch(LaunchArguments { light, .. }) => *light,
+        Arguments::Attach(_) => todo!(),
+    };
+
     let _debug_server = match args {
         Arguments::Launch(args @ LaunchArguments { .. }) => {
             PythonDebugServer::new(DebugServerConfig {
@@ -576,6 +584,9 @@ fn main() -> Result<()> {
         options,
         Box::new(move |cc| {
             let ctx = cc.egui_ctx.clone();
+            if !light_mode {
+                ctx.set_visuals(Visuals::dark());
+            };
             Box::new(MyApp::new(ctx, client, rx))
         }),
     );
