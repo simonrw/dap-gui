@@ -4,9 +4,13 @@
 
 Very early prototype of a general purpose GUI debugger based on the [DAP][dap] protocol and [egui]([url](https://github.com/emilk/egui)).
 
-https://github.com/simonrw/dap-gui/assets/59756/f548c4d1-7dcd-4dd3-a2b6-3469541e7b68
+https://github.com/simonrw/dap-gui/assets/59756/45a88f50-54ce-4ff7-9932-ed2cbc2501f0
 
-## Motivation
+
+## Motivat
+
+
+ion
 
 This repository exists because I do not like any of the debuggers I (currently) use day to day. I have tried:
 
