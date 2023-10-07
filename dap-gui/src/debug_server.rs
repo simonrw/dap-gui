@@ -54,7 +54,7 @@ impl PythonDebugServer {
         thread::spawn(move || {
             for line in reader.lines() {
                 let line = line.unwrap();
-                tracing::trace!(%line, "debugger line");
+                // tracing::trace!(%line, "debugger line");
                 if should_send && line.contains(SERVER_READY_TEXT) {
                     let _ = tx.send(());
                     should_send = false;
