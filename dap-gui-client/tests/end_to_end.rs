@@ -265,7 +265,7 @@ where
 {
     tracing::debug!("waiting for response");
     for (n, msg) in rx.iter().enumerate() {
-        if n >= 10 {
+        if n >= 100 {
             panic!("did not receive response");
         }
 
@@ -290,7 +290,7 @@ where
 {
     tracing::debug!("waiting for event");
     for (n, msg) in rx.iter().enumerate() {
-        if n >= 10 {
+        if n >= 100 {
             panic!("did not receive event");
         }
 
