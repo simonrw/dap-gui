@@ -153,17 +153,6 @@ impl AppState {
                         ..Default::default()
                     })
                 );
-                // send!(
-                //     client,
-                //     "setFunctionBreakpoints",
-                //     requests::RequestBody::SetFunctionBreakpoints(
-                //         requests::SetFunctionBreakpoints {
-                //             breakpoints: vec![requests::Breakpoint {
-                //                 name: "foo".to_string(),
-                //             }],
-                //         },
-                //     )
-                // );
 
                 if self
                     .capabilities

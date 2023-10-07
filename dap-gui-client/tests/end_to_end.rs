@@ -49,8 +49,6 @@ where
         let mut should_signal = true;
         for line in reader.lines() {
             let line = line.unwrap();
-            tracing::debug!(%line);
-
             if should_signal && line.contains("Listening for incoming Client connections") {
                 should_signal = false;
                 let _ = tx.send(());
@@ -231,6 +229,10 @@ fn test_loop() -> Result<()> {
             matches!(r, responses::ResponseBody::Continue(_))
         });
 
+        wait_for_event("continued", &rx, |e| {
+            matches!(e, events::Event::Continued(_))
+        });
+
         wait_for_event("terminated", &rx, |e| {
             matches!(e, events::Event::Terminated)
         });
@@ -267,7 +269,7 @@ where
 {
     tracing::debug!("waiting for response");
     for (n, msg) in rx.iter().enumerate() {
-        if n >= 10 {
+        if n >= 100 {
             panic!("did not receive response");
         }
 
@@ -277,6 +279,8 @@ where
                 if pred(&body) {
                     tracing::debug!(response = ?body, "received expected response");
                     return body;
+                } else {
+                    tracing::trace!(event = ?body, "non-matching event");
                 }
             }
         }
@@ -292,7 +296,7 @@ where
 {
     tracing::debug!("waiting for event");
     for (n, msg) in rx.iter().enumerate() {
-        if n >= 10 {
+        if n >= 100 {
             panic!("did not receive event");
         }
 
@@ -300,6 +304,8 @@ where
             if pred(&evt) {
                 tracing::debug!(event = ?evt, "received expected event");
                 return evt;
+            } else {
+                tracing::trace!(event = ?evt, "non-matching event");
             }
         }
     }
