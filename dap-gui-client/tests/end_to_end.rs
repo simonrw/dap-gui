@@ -275,6 +275,8 @@ where
                 if pred(&body) {
                     tracing::debug!(response = ?body, "received expected response");
                     return body;
+                } else {
+                    tracing::trace!(event = ?body, "non-matching event");
                 }
             }
         }
@@ -298,6 +300,8 @@ where
             if pred(&evt) {
                 tracing::debug!(event = ?evt, "received expected event");
                 return evt;
+            } else {
+                tracing::trace!(event = ?evt, "non-matching event");
             }
         }
     }
