@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     env::current_dir,
     net::TcpStream,
     path::PathBuf,
@@ -313,7 +314,7 @@ impl AppState {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.heading("Paused");
 
-                    let breakpoint_positions: Vec<usize> = self
+                    let mut breakpoint_positions: HashSet<usize> = self
                         .breakpoints
                         .iter()
                         .filter_map(|breakpoint| breakpoint.line.map(|line| line as usize))
@@ -324,16 +325,18 @@ impl AppState {
                             &self.contents,
                             *current_line,
                             true,
-                            breakpoint_positions.as_slice(),
+                            &mut breakpoint_positions,
                         ));
                     } else {
                         ui.add(CodeView::new(
                             &self.contents,
                             0,
                             false,
-                            breakpoint_positions.as_slice(),
+                            &mut breakpoint_positions,
                         ));
                     }
+
+                    // TODO: update our breakpoint positons
 
                     if ui.button("Continue").clicked() {
                         // TODO: how to trigger continue cleanly
