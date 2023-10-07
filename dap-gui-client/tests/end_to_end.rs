@@ -49,8 +49,6 @@ where
         let mut should_signal = true;
         for line in reader.lines() {
             let line = line.unwrap();
-            tracing::debug!(%line);
-
             if should_signal && line.contains("Listening for incoming Client connections") {
                 should_signal = false;
                 let _ = tx.send(());
