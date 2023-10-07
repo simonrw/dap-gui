@@ -7,10 +7,7 @@ Very early prototype of a general purpose GUI debugger based on the [DAP][dap] p
 https://github.com/simonrw/dap-gui/assets/59756/45a88f50-54ce-4ff7-9932-ed2cbc2501f0
 
 
-## Motivat
-
-
-ion
+## Motivation
 
 This repository exists because I do not like any of the debuggers I (currently) use day to day. I have tried:
 
