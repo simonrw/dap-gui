@@ -229,6 +229,10 @@ fn test_loop() -> Result<()> {
             matches!(r, responses::ResponseBody::Continue(_))
         });
 
+        wait_for_event("continued", &rx, |e| {
+            matches!(e, events::Event::Continued(_))
+        });
+
         wait_for_event("terminated", &rx, |e| {
             matches!(e, events::Event::Terminated)
         });
