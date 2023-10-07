@@ -7,10 +7,10 @@ use eframe::{
 pub struct CodeView<'a> {
     /// Read-only view into the text content
     content: &'a str,
-    /// Optionally highlight the line the debugger has stopped on
+    /// Optionally highlight the line the debugger has stopped on (1-indexed)
     current_line: usize,
     highlight_line: bool,
-    /// Line numbers to add breakpoint markers to
+    /// Line numbers to add breakpoint markers to (1-indexed)
     breakpoint_positions: &'a [usize],
 }
 
@@ -38,7 +38,7 @@ impl<'a> egui::Widget for CodeView<'a> {
             let mut layout_job = LayoutJob::default();
             let indent = 16.0;
             for (i, line) in s.lines().enumerate() {
-                if self.breakpoint_positions.contains(&i) {
+                if self.breakpoint_positions.contains(&(i + 1)) {
                     // marker
                     layout_job.append(
                         "•",
@@ -49,7 +49,7 @@ impl<'a> egui::Widget for CodeView<'a> {
                         },
                     );
                 };
-                if self.highlight_line && self.current_line == i {
+                if self.highlight_line && i == (self.current_line - 1) {
                     // highlighted line
                     layout_job.append(
                         line,

@@ -126,7 +126,7 @@ impl AppState {
                 self.debugger_status = DebuggerStatus::Initialized;
 
                 // configure
-                let breakpoints: Vec<_> = [19, 10, 7, 3, 11, 12, 16]
+                let breakpoints: Vec<_> = vec![1, 4, 8, 11, 20]
                     .iter()
                     .map(|line| SourceBreakpoint {
                         line: *line,
@@ -490,7 +490,7 @@ impl MyApp {
         // send initialize
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
-            lines_start_at_one: false,
+            lines_start_at_one: true,
             path_format: PathFormat::Path,
             supports_start_debugging_request: true,
             supports_variable_type: true,
