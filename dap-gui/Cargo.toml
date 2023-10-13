@@ -9,7 +9,7 @@ edition = "2021"
 anyhow = "1.0.71"
 eframe = "0.22.0"
 dap-gui-client = { path = "../dap-gui-client" }
-tracing = "0.1.37"
+tracing = "0.1.39"
 tracing-subscriber = "0.3.17"
 clap = { version = "4.3.19", features = ["derive"] }
 sentry = { version = "0.31.5", optional = true, default-features = false, features = [ "rustls", "backtrace", "contexts", "panic", "debug-images" ] }
