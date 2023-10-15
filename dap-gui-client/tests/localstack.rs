@@ -1,4 +1,7 @@
-use std::{net::TcpStream, path::PathBuf, process::Stdio, sync::mpsc, thread, time::Duration};
+use std::{
+    io::IsTerminal, net::TcpStream, path::PathBuf, process::Stdio, sync::mpsc, thread,
+    time::Duration,
+};
 
 use anyhow::{Context, Result};
 use tracing_subscriber::EnvFilter;
@@ -238,7 +241,7 @@ where
 */
 
 fn init_test_logger() {
-    if atty::is(atty::Stream::Stderr) {
+    if std::io::stderr().is_terminal() {
         tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env())
             .init();
