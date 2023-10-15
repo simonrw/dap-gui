@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use std::{
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, IsTerminal},
     net::TcpStream,
     path::PathBuf,
     process::Stdio,
@@ -318,7 +318,7 @@ fn init_test_logger() {
         .map(|val| val == "true")
         .unwrap_or(false);
 
-    if atty::is(atty::Stream::Stderr) || in_ci {
+    if std::io::stderr().is_terminal() || in_ci {
         tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env())
             .init();
