@@ -81,7 +81,7 @@ impl<'a> CodeView<'a> {
     fn update_breakpoints(&mut self, response: &Response) {
         if response.clicked_by(egui::PointerButton::Primary) {
             // unwrap ok because we know we were clicked
-            let pos = dbg!(response.interact_pointer_pos()).unwrap();
+            let pos = response.interact_pointer_pos().unwrap();
             // dbg!(&pos);
             if pos.x >= 0.0 && pos.x < 16.0 {
                 // click in the margin
