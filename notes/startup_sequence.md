@@ -18,4 +18,12 @@
 * Add "clear all" button to breakpoints
 * Do we want the debugger to remember previously opened files?
     * keep a persistent debugger instance open, probably not
+* What should the "trigger" message be?
+    * root directory
+    * if file mode:
+        * filename
+    * if module mode:
+        * ???
+    * if ??? mode:
+        * ???
 * Is Launch -> ConfigurationDone standard, or specific to debugpy?
