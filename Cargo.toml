@@ -3,7 +3,7 @@ resolver = "2"
 
 members = [
     "transport",
-    "dap-gui",
+    "gui",
 ]
 
 [profile.release]

@@ -12,9 +12,9 @@ use std::{
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use dap_gui::code_view::CodeView;
-use dap_gui::debug_server::{DebugServerConfig, PythonDebugServer};
 use eframe::egui::{self, TextEdit, Visuals};
+use gui::code_view::CodeView;
+use gui::debug_server::{DebugServerConfig, PythonDebugServer};
 use serde::{Deserialize, Serialize};
 use transport::{
     bindings::get_random_tcp_port,

@@ -2,7 +2,7 @@ use anyhow::Result;
 use eframe::egui;
 use std::collections::HashSet;
 
-use dap_gui::code_view::CodeView;
+use gui::code_view::CodeView;
 
 struct MyApp {
     content: &'static str,

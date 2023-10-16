@@ -1,5 +1,5 @@
 [package]
-name = "dap-gui"
+name = "gui"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,7 +9,6 @@ edition = "2021"
 anyhow = "1.0.71"
 eframe = "0.22.0"
 transport = { path = "../transport" }
-tracing = "0.1.37"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.17"
 clap = { version = "4.3.19", features = ["derive"] }
