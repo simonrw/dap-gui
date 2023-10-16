@@ -2,7 +2,7 @@
 resolver = "2"
 
 members = [
-    "dap-gui-client",
+    "transport",
     "dap-gui",
 ]
 

@@ -64,7 +64,7 @@
 
               RUST_SRC_PATH = "${rust-bin.beta.latest.rust-src}";
 
-              RUST_LOG = "dap_gui=trace,end_to_end=debug,dap_gui_ui=debug,dap_gui_client=debug";
+              RUST_LOG = "dap_gui=trace,end_to_end=debug,dap_gui_ui=debug,transport=debug,dap_gui_client=debug";
 
               LD_LIBRARY_PATH =
                 if stdenv.isLinux then

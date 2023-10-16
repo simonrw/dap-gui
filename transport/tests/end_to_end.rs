@@ -9,7 +9,7 @@ use std::{
 };
 use tracing_subscriber::EnvFilter;
 
-use dap_gui_client::{
+use transport::{
     bindings::get_random_tcp_port,
     events,
     requests::{self, DebugpyLaunchArguments, Initialize, Launch, LaunchArguments, PathFormat},
@@ -82,7 +82,7 @@ fn test_loop() -> Result<()> {
         let _guard = span.enter();
 
         let stream = TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
-        let client = dap_gui_client::Client::new(stream, tx).unwrap();
+        let client = transport::Client::new(stream, tx).unwrap();
 
         // initialize
         let req = requests::RequestBody::Initialize(Initialize {
