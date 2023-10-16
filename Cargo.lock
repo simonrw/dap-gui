@@ -780,6 +780,7 @@ name = "debugger"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "tracing",
  "transport",
 ]
 
