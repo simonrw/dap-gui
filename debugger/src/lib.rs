@@ -1,12 +1,9 @@
 use anyhow::Result;
 use std::{
-    sync::{
-        mpsc::{self, Receiver, Sender},
-        Arc, Mutex, RwLock,
-    },
+    sync::{mpsc::Receiver, Arc, Mutex},
     thread,
 };
-use transport::{Client, Received};
+use transport::{Client, Received, requests};
 
 #[derive(Default)]
 enum DebuggerState {
@@ -15,8 +12,7 @@ enum DebuggerState {
 }
 
 impl DebuggerState {
-    fn update_from(&mut self, r: &Received) {}
-    // fn on_event<F>(&mut self, _handler: F)
+    fn update_from(&mut self, _r: &Received) {}
 }
 
 pub struct Debugger<F> {
@@ -49,7 +45,23 @@ where
     }
 
     pub fn initialise(&mut self) -> Result<()> {
-        Ok(())
+        // send initialize
+        let req = requests::RequestBody::Initialize(requests::Initialize {
+            adapter_id: "dap gui".to_string(),
+            lines_start_at_one: false,
+            path_format: requests::PathFormat::Path,
+            supports_start_debugging_request: true,
+            supports_variable_type: true,
+            supports_variable_paging: true,
+            supports_progress_reporting: true,
+            supports_memory_event: true,
+        });
+        self.client.send(req).unwrap();
+
+        // send launch
+        let state = self.state.lock().unwrap();
+
+        todo!()
     }
 
     pub fn on_state_change(&mut self, handler: F) {
