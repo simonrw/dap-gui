@@ -15,32 +15,40 @@ enum DebuggerState {
 }
 
 impl DebuggerState {
-    fn update_from(&mut self, r: Received) {}
+    fn update_from(&mut self, r: &Received) {}
     // fn on_event<F>(&mut self, _handler: F)
 }
 
-pub struct Debugger {
+pub struct Debugger<F> {
     client: Client,
     state: Arc<Mutex<DebuggerState>>,
-    watchers: Vec<Sender<Received>>,
+    event_handler: Arc<Mutex<Option<Box<F>>>>,
 }
 
-impl Debugger {
+impl<F> Debugger<F>
+where
+    F: FnMut(&Received) + Send + Sync + 'static,
+{
     pub fn new(client: Client, rx: Receiver<Received>) -> Self {
         let state: Arc<Mutex<DebuggerState>> = Default::default();
+        let event_handler: Arc<Mutex<Option<Box<F>>>> = Arc::new(Mutex::new(None));
 
         // background watcher to poll for events
         let background_state = Arc::clone(&state);
+        let background_event_handler = Arc::clone(&event_handler);
         thread::spawn(move || {
             for msg in rx {
-                background_state.lock().unwrap().update_from(msg);
+                background_state.lock().unwrap().update_from(&msg);
+                if let Some(ref mut handler) = *background_event_handler.lock().unwrap() {
+                    handler(&msg)
+                }
             }
         });
 
         Self {
             client,
             state,
-            watchers: Vec::new(),
+            event_handler,
         }
     }
 
@@ -48,17 +56,7 @@ impl Debugger {
         Ok(())
     }
 
-    pub fn on_event<F>(&mut self, _handler: F) -> Result<()>
-    where
-        F: Fn(Received) -> Result<()>,
-    {
-        // let (tx, rx) = mpsc::channel();
-        // self.watchers.push(tx);
-
-        // thread::spawn(move || {
-
-        // });
-
-        todo!()
+    pub fn on_event(&mut self, handler: F) {
+        self.event_handler = Arc::new(Mutex::new(Some(Box::new(handler))));
     }
 }

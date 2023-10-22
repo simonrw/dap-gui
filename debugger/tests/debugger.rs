@@ -14,7 +14,7 @@ fn test_debugger() -> Result<()> {
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");
     let (tx, rx) = mpsc::channel();
-    let mut messages = Arc::new(Mutex::new(Vec::new()));
+    let messages = Arc::new(Mutex::new(Vec::new()));
     with_server(|port| {
         let span = tracing::debug_span!("with_server", %port);
         let _guard = span.enter();
@@ -24,12 +24,9 @@ fn test_debugger() -> Result<()> {
         let mut debugger = Debugger::new(client, rx);
 
         let background_messages = Arc::clone(&messages);
-        debugger
-            .on_event(move |r| {
-                background_messages.lock().unwrap().push(r);
-                Ok(())
-            })
-            .unwrap();
+        debugger.on_event(move |r| {
+            background_messages.lock().unwrap().push(r.clone());
+        });
 
         debugger.initialise().unwrap();
 
