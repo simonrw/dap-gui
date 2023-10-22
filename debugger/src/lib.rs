@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::{
     sync::{
         mpsc::{self, Receiver, Sender},
-        Arc, Mutex,
+        Arc, Mutex, RwLock,
     },
     thread,
 };
@@ -22,7 +22,7 @@ impl DebuggerState {
 pub struct Debugger<F> {
     client: Client,
     state: Arc<Mutex<DebuggerState>>,
-    event_handler: Arc<Mutex<Option<Box<F>>>>,
+    event_handlers: Arc<Mutex<Vec<Box<F>>>>,
 }
 
 impl<F> Debugger<F>
@@ -31,16 +31,17 @@ where
 {
     pub fn new(client: Client, rx: Receiver<Received>) -> Self {
         let state: Arc<Mutex<DebuggerState>> = Default::default();
-        let event_handler: Arc<Mutex<Option<Box<F>>>> = Arc::new(Mutex::new(None));
+        let event_handlers: Arc<Mutex<Vec<Box<F>>>> = Arc::new(Mutex::new(Vec::new()));
 
         // background watcher to poll for events
         let background_state = Arc::clone(&state);
-        let background_event_handler = Arc::clone(&event_handler);
+        let background_event_handlers = Arc::clone(&event_handlers);
         thread::spawn(move || {
             for msg in rx {
                 background_state.lock().unwrap().update_from(&msg);
-                if let Some(ref mut handler) = *background_event_handler.lock().unwrap() {
-                    handler(&msg)
+                let mut event_handlers = background_event_handlers.lock().unwrap();
+                for event_handler in event_handlers.iter_mut() {
+                    event_handler(&msg)
                 }
             }
         });
@@ -48,7 +49,7 @@ where
         Self {
             client,
             state,
-            event_handler,
+            event_handlers,
         }
     }
 
@@ -57,6 +58,7 @@ where
     }
 
     pub fn on_event(&mut self, handler: F) {
-        self.event_handler = Arc::new(Mutex::new(Some(Box::new(handler))));
+        let mut event_handlers = self.event_handlers.lock().unwrap();
+        event_handlers.push(Box::new(handler));
     }
 }
