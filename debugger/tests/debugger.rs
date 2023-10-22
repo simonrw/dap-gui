@@ -9,7 +9,6 @@ use transport::bindings::get_random_tcp_port;
 use debugger::*;
 
 #[test]
-#[ignore = "WIP"]
 fn test_debugger() -> Result<()> {
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");
@@ -24,7 +23,7 @@ fn test_debugger() -> Result<()> {
         let mut debugger = Debugger::new(client, rx);
 
         let background_messages = Arc::clone(&messages);
-        debugger.on_event(move |r| {
+        debugger.on_state_change(move |r| {
             background_messages.lock().unwrap().push(r.clone());
         });
 

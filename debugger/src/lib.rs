@@ -35,14 +35,9 @@ where
 
         // background watcher to poll for events
         let background_state = Arc::clone(&state);
-        let background_event_handlers = Arc::clone(&event_handlers);
         thread::spawn(move || {
             for msg in rx {
                 background_state.lock().unwrap().update_from(&msg);
-                let mut event_handlers = background_event_handlers.lock().unwrap();
-                for event_handler in event_handlers.iter_mut() {
-                    event_handler(&msg)
-                }
             }
         });
 
@@ -57,7 +52,7 @@ where
         Ok(())
     }
 
-    pub fn on_event(&mut self, handler: F) {
+    pub fn on_state_change(&mut self, handler: F) {
         let mut event_handlers = self.event_handlers.lock().unwrap();
         event_handlers.push(Box::new(handler));
     }
