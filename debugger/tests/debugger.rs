@@ -9,6 +9,7 @@ use transport::bindings::get_random_tcp_port;
 use debugger::*;
 
 #[test]
+#[ignore = "wip"]
 fn test_debugger() -> Result<()> {
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");

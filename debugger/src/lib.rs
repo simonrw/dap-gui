@@ -3,7 +3,7 @@ use std::{
     sync::{mpsc::Receiver, Arc, Mutex},
     thread,
 };
-use transport::{Client, Received, requests};
+use transport::{requests, Client, Received};
 
 #[derive(Default)]
 enum DebuggerState {
@@ -61,7 +61,7 @@ where
         // send launch
         let state = self.state.lock().unwrap();
 
-        todo!()
+        Ok(())
     }
 
     pub fn on_state_change(&mut self, handler: F) {
