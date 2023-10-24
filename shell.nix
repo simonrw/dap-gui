@@ -23,6 +23,9 @@ mkShell {
   buildInputs = [
     cargo
     rustc
+    rust-analyzer
+    rustfmt
+    clippy
     cargo-nextest
     cargo-flamegraph
     custom-python
