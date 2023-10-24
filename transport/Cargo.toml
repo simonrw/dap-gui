@@ -1,5 +1,5 @@
 [package]
-name = "dap-gui-client"
+name = "transport"
 version = "0.1.0"
 edition = "2021"
 

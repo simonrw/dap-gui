@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     env::current_dir,
     net::TcpStream,
     path::PathBuf,
@@ -11,9 +12,11 @@ use std::{
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use dap_gui::code_view::CodeView;
-use dap_gui::debug_server::{DebugServerConfig, PythonDebugServer};
-use dap_gui_client::{
+use eframe::egui::{self, TextEdit, Visuals};
+use gui::code_view::CodeView;
+use gui::debug_server::{DebugServerConfig, PythonDebugServer};
+use serde::{Deserialize, Serialize};
+use transport::{
     bindings::get_random_tcp_port,
     events::{self, OutputEventBody, StoppedEventBody},
     requests::{self, Initialize, PathFormat},
@@ -21,8 +24,6 @@ use dap_gui_client::{
     types::{self, Source, SourceBreakpoint, ThreadId},
     Client, Received,
 };
-use eframe::egui::{self, TextEdit, Visuals};
-use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "sentry")]
 macro_rules! setup_sentry {
@@ -313,7 +314,7 @@ impl AppState {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.heading("Paused");
 
-                    let breakpoint_positions: Vec<usize> = self
+                    let mut breakpoint_positions: HashSet<usize> = self
                         .breakpoints
                         .iter()
                         .filter_map(|breakpoint| breakpoint.line.map(|line| line as usize))
@@ -324,16 +325,18 @@ impl AppState {
                             &self.contents,
                             *current_line,
                             true,
-                            breakpoint_positions.as_slice(),
+                            &mut breakpoint_positions,
                         ));
                     } else {
                         ui.add(CodeView::new(
                             &self.contents,
                             0,
                             false,
-                            breakpoint_positions.as_slice(),
+                            &mut breakpoint_positions,
                         ));
                     }
+
+                    // TODO: update our breakpoint positons
 
                     if ui.button("Continue").clicked() {
                         // TODO: how to trigger continue cleanly
@@ -438,14 +441,14 @@ fn _control_worker(listener: TcpListener, state: Arc<Mutex<AppState>>) {
 
 #[allow(dead_code)]
 struct MyApp {
-    client: dap_gui_client::Client,
+    client: transport::Client,
     app_state: Arc<Mutex<AppState>>,
 }
 
 impl MyApp {
     pub fn new(
         ctx: egui::Context,
-        client: dap_gui_client::Client,
+        client: transport::Client,
         client_events: Receiver<Received>,
     ) -> Self {
         // set up background thread watching events
@@ -579,7 +582,7 @@ fn main() -> Result<()> {
     // TODO: connect to DAP server once language is known
     let (tx, rx) = mpsc::channel();
     let stream = TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
-    let client = dap_gui_client::Client::new(stream, tx).unwrap();
+    let client = transport::Client::new(stream, tx).unwrap();
 
     let res = eframe::run_native(
         "DAP GUI",

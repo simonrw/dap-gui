@@ -1,5 +1,7 @@
+use std::collections::HashSet;
+
 use eframe::{
-    egui::{self, TextEdit, TextFormat},
+    egui::{self, Response, TextEdit, TextFormat},
     epaint::{text::LayoutJob, Color32},
 };
 
@@ -11,7 +13,7 @@ pub struct CodeView<'a> {
     current_line: usize,
     highlight_line: bool,
     /// Line numbers to add breakpoint markers to (1-indexed)
-    breakpoint_positions: &'a [usize],
+    breakpoint_positions: &'a mut HashSet<usize>,
 }
 
 impl<'a> CodeView<'a> {
@@ -20,7 +22,7 @@ impl<'a> CodeView<'a> {
         content: &'a str,
         current_line: usize,
         highlight_line: bool,
-        breakpoint_positions: &'a [usize],
+        breakpoint_positions: &'a mut HashSet<usize>,
     ) -> Self {
         Self {
             content,
@@ -67,10 +69,33 @@ impl<'a> egui::Widget for CodeView<'a> {
 
             ui.fonts(|f| f.layout_job(layout_job))
         };
-        ui.add(
-            TextEdit::multiline(&mut self.content)
-                .interactive(false)
-                .layouter(&mut layouter),
-        )
+        let response = ui.add(TextEdit::multiline(&mut self.content).layouter(&mut layouter));
+
+        self.update_breakpoints(&response);
+
+        response
+    }
+}
+
+impl<'a> CodeView<'a> {
+    fn update_breakpoints(&mut self, response: &Response) {
+        if response.clicked_by(egui::PointerButton::Primary) {
+            // unwrap ok because we know we were clicked
+            let pos = response.interact_pointer_pos().unwrap();
+            // dbg!(&pos);
+            if pos.x >= 0.0 && pos.x < 16.0 {
+                // click in the margin
+                // TODO: calculate line height properly
+                // line number 1-indexed
+                let line = (pos.y / 16.0).floor() as usize;
+                if self.breakpoint_positions.contains(&line) {
+                    // remove the breakpoint
+                    self.breakpoint_positions.remove(&line);
+                } else {
+                    // add the breakpoint
+                    self.breakpoint_positions.insert(line);
+                }
+            }
+        }
     }
 }

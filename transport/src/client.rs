@@ -237,7 +237,7 @@ impl Reader {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Received {
     Event(events::Event),
     Response(requests::RequestBody, responses::Response),

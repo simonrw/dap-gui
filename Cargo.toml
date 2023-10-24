@@ -2,8 +2,9 @@
 resolver = "2"
 
 members = [
-    "dap-gui-client",
-    "dap-gui",
+    "transport",
+    "gui",
+    "debugger",
 ]
 
 [profile.release]

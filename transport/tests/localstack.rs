@@ -6,7 +6,7 @@ use std::{
 use anyhow::{Context, Result};
 use tracing_subscriber::EnvFilter;
 
-use dap_gui_client::{
+use transport::{
     bindings::get_random_tcp_port,
     requests::{self, Attach, ConnectInfo, Initialize, PathFormat, PathMapping},
     responses, Received,
@@ -23,7 +23,7 @@ fn localstack() -> Result<()> {
         let _guard = span.enter();
 
         let stream = TcpStream::connect(format!("127.0.0.1:{debug_port}")).unwrap();
-        let client = dap_gui_client::Client::new(stream, tx).unwrap();
+        let client = transport::Client::new(stream, tx).unwrap();
 
         // initialize
         let req = requests::RequestBody::Initialize(Initialize {
