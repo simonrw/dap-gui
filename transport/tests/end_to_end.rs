@@ -76,7 +76,7 @@ fn test_loop() -> Result<()> {
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");
 
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = spmc::channel();
     with_server(|port| {
         let span = tracing::debug_span!("with_server", %port);
         let _guard = span.enter();
@@ -261,14 +261,16 @@ fn test_loop() -> Result<()> {
 #[tracing::instrument(skip(rx, pred))]
 fn wait_for_response<F>(
     message: &str,
-    rx: &mpsc::Receiver<Received>,
+    rx: &spmc::Receiver<Received>,
     pred: F,
 ) -> responses::ResponseBody
 where
     F: Fn(&responses::ResponseBody) -> bool,
 {
     tracing::debug!("waiting for response");
-    for (n, msg) in rx.iter().enumerate() {
+    let mut n = 0;
+    loop {
+        let msg = rx.recv().unwrap();
         if n >= 100 {
             panic!("did not receive response");
         }
@@ -284,18 +286,19 @@ where
                 }
             }
         }
+        n += 1;
     }
-
-    unreachable!()
 }
 
 #[tracing::instrument(skip(rx, pred))]
-fn wait_for_event<F>(message: &str, rx: &mpsc::Receiver<Received>, pred: F) -> events::Event
+fn wait_for_event<F>(message: &str, rx: &spmc::Receiver<Received>, pred: F) -> events::Event
 where
     F: Fn(&events::Event) -> bool,
 {
     tracing::debug!("waiting for event");
-    for (n, msg) in rx.iter().enumerate() {
+    let mut n = 0;
+    loop {
+        let msg = rx.recv().unwrap();
         if n >= 100 {
             panic!("did not receive event");
         }
@@ -308,9 +311,8 @@ where
                 tracing::trace!(event = ?evt, "non-matching event");
             }
         }
+        n += 1;
     }
-
-    unreachable!()
 }
 
 fn init_test_logger() {

@@ -1,7 +1,6 @@
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::Duration;
 
@@ -48,7 +47,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(stream: TcpStream, responses: Sender<Received>) -> Result<Self> {
+    pub fn new(stream: TcpStream, responses: spmc::Sender<Received>) -> Result<Self> {
         // internal state
         let sequence_number = Arc::new(AtomicI64::new(0));
 
@@ -135,7 +134,7 @@ enum ClientState {
 struct Reader {
     input: BufReader<TcpStream>,
     store: RequestStore,
-    responses: Sender<Received>,
+    responses: spmc::Sender<Received>,
 }
 
 impl Reader {

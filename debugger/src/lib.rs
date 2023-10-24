@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::{
-    sync::{mpsc::Receiver, Arc, Mutex},
+    sync::{Arc, Mutex},
     thread,
 };
 use transport::{requests, Client, Received};
@@ -25,16 +25,15 @@ impl<F> Debugger<F>
 where
     F: FnMut(&Received) + Send + Sync + 'static,
 {
-    pub fn new(client: Client, rx: Receiver<Received>) -> Self {
+    pub fn new(client: Client, rx: spmc::Receiver<Received>) -> Self {
         let state: Arc<Mutex<DebuggerState>> = Default::default();
         let event_handlers: Arc<Mutex<Vec<Box<F>>>> = Arc::new(Mutex::new(Vec::new()));
 
         // background watcher to poll for events
         let background_state = Arc::clone(&state);
-        thread::spawn(move || {
-            for msg in rx {
-                background_state.lock().unwrap().update_from(&msg);
-            }
+        thread::spawn(move || loop {
+            let msg = rx.recv().unwrap();
+            background_state.lock().unwrap().update_from(&msg);
         });
 
         Self {
@@ -59,7 +58,7 @@ where
         self.client.send(req).unwrap();
 
         // send launch
-        let state = self.state.lock().unwrap();
+        let _state = self.state.lock().unwrap();
 
         Ok(())
     }

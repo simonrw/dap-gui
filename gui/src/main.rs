@@ -3,10 +3,7 @@ use std::{
     env::current_dir,
     net::TcpStream,
     path::PathBuf,
-    sync::{
-        mpsc::{self, Receiver},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
     thread,
 };
 
@@ -449,7 +446,7 @@ impl MyApp {
     pub fn new(
         ctx: egui::Context,
         client: transport::Client,
-        client_events: Receiver<Received>,
+        client_events: spmc::Receiver<Received>,
     ) -> Self {
         // set up background thread watching events
 
@@ -478,7 +475,8 @@ impl MyApp {
         let background_state = Arc::clone(&state);
         let background_client = client.clone();
         thread::spawn(move || {
-            for msg in client_events {
+            loop {
+                let msg = client_events.recv().unwrap();
                 if let HandleNext::Break =
                     handle_message(msg, &background_client, Arc::clone(&background_state))
                 {
@@ -580,7 +578,7 @@ fn main() -> Result<()> {
         ..Default::default()
     };
     // TODO: connect to DAP server once language is known
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = spmc::channel();
     let stream = TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
     let client = transport::Client::new(stream, tx).unwrap();
 

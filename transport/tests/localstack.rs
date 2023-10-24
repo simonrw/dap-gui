@@ -1,7 +1,4 @@
-use std::{
-    io::IsTerminal, net::TcpStream, path::PathBuf, process::Stdio, sync::mpsc, thread,
-    time::Duration,
-};
+use std::{io::IsTerminal, net::TcpStream, path::PathBuf, process::Stdio, thread, time::Duration};
 
 use anyhow::{Context, Result};
 use tracing_subscriber::EnvFilter;
@@ -17,7 +14,7 @@ use transport::{
 fn localstack() -> Result<()> {
     init_test_logger();
 
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = spmc::channel();
     with_launch_localstack(|edge_port, debug_port| {
         let span = tracing::debug_span!("with_launch_localstack", %edge_port, %debug_port);
         let _guard = span.enter();
@@ -192,12 +189,17 @@ where
     res
 }
 
-fn wait_for_response<F>(rx: &mpsc::Receiver<Received>, pred: F) -> Result<responses::ResponseBody>
+fn wait_for_response<F>(rx: &spmc::Receiver<Received>, pred: F) -> Result<responses::ResponseBody>
 where
     F: Fn(&responses::ResponseBody) -> bool,
 {
     tracing::debug!("waiting for response");
-    for msg in rx.iter().take(10) {
+    let mut n = 0;
+    loop {
+        let msg = rx.recv().unwrap();
+        if n >= 100 {
+            anyhow::bail!("did not receive message");
+        }
         if let Received::Response(_, response) = msg {
             assert!(response.success);
             if let Some(body) = response.body {
@@ -207,9 +209,8 @@ where
                 }
             }
         }
+        n += 1;
     }
-
-    anyhow::bail!("did not receive message");
 }
 
 /*

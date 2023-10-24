@@ -13,7 +13,7 @@ use debugger::*;
 fn test_debugger() -> Result<()> {
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = spmc::channel();
     let messages = Arc::new(Mutex::new(Vec::new()));
     with_server(|port| {
         let span = tracing::debug_span!("with_server", %port);
