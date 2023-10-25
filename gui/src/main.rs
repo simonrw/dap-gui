@@ -446,7 +446,7 @@ impl MyApp {
     pub fn new(
         ctx: egui::Context,
         client: transport::Client,
-        client_events: spmc::Receiver<Received>,
+        client_events: crossbeam_channel::Receiver<Received>,
     ) -> Self {
         // set up background thread watching events
 
@@ -578,7 +578,7 @@ fn main() -> Result<()> {
         ..Default::default()
     };
     // TODO: connect to DAP server once language is known
-    let (tx, rx) = spmc::channel();
+    let (tx, rx) = crossbeam_channel::unbounded();
     let stream = TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
     let client = transport::Client::new(stream, tx).unwrap();
 

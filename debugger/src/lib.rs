@@ -25,7 +25,7 @@ impl<F> Debugger<F>
 where
     F: FnMut(&Received) + Send + Sync + 'static,
 {
-    pub fn new(client: Client, rx: spmc::Receiver<Received>) -> Self {
+    pub fn new(client: Client, rx: crossbeam_channel::Receiver<Received>) -> Self {
         let state: Arc<Mutex<DebuggerState>> = Default::default();
         let event_handlers: Arc<Mutex<Vec<Box<F>>>> = Arc::new(Mutex::new(Vec::new()));
 

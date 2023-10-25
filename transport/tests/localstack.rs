@@ -14,7 +14,7 @@ use transport::{
 fn localstack() -> Result<()> {
     init_test_logger();
 
-    let (tx, rx) = spmc::channel();
+    let (tx, rx) = crossbeam_channel::unbounded();
     with_launch_localstack(|edge_port, debug_port| {
         let span = tracing::debug_span!("with_launch_localstack", %edge_port, %debug_port);
         let _guard = span.enter();
@@ -189,7 +189,7 @@ where
     res
 }
 
-fn wait_for_response<F>(rx: &spmc::Receiver<Received>, pred: F) -> Result<responses::ResponseBody>
+fn wait_for_response<F>(rx: &crossbeam_channel::Receiver<Received>, pred: F) -> Result<responses::ResponseBody>
 where
     F: Fn(&responses::ResponseBody) -> bool,
 {

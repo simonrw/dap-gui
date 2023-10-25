@@ -76,7 +76,7 @@ fn test_loop() -> Result<()> {
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");
 
-    let (tx, rx) = spmc::channel();
+    let (tx, rx) = crossbeam_channel::unbounded();
     with_server(|port| {
         let span = tracing::debug_span!("with_server", %port);
         let _guard = span.enter();
@@ -261,7 +261,7 @@ fn test_loop() -> Result<()> {
 #[tracing::instrument(skip(rx, pred))]
 fn wait_for_response<F>(
     message: &str,
-    rx: &spmc::Receiver<Received>,
+    rx: &crossbeam_channel::Receiver<Received>,
     pred: F,
 ) -> responses::ResponseBody
 where
@@ -291,7 +291,7 @@ where
 }
 
 #[tracing::instrument(skip(rx, pred))]
-fn wait_for_event<F>(message: &str, rx: &spmc::Receiver<Received>, pred: F) -> events::Event
+fn wait_for_event<F>(message: &str, rx: &crossbeam_channel::Receiver<Received>, pred: F) -> events::Event
 where
     F: Fn(&events::Event) -> bool,
 {

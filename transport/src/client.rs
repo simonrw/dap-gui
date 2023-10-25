@@ -47,7 +47,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(stream: TcpStream, responses: spmc::Sender<Received>) -> Result<Self> {
+    pub fn new(stream: TcpStream, responses: crossbeam_channel::Sender<Received>) -> Result<Self> {
         // internal state
         let sequence_number = Arc::new(AtomicI64::new(0));
 
@@ -134,7 +134,7 @@ enum ClientState {
 struct Reader {
     input: BufReader<TcpStream>,
     store: RequestStore,
-    responses: spmc::Sender<Received>,
+    responses: crossbeam_channel::Sender<Received>,
 }
 
 impl Reader {
