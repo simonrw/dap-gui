@@ -13,14 +13,6 @@ use eframe::egui::{self, TextEdit, Visuals};
 use gui::code_view::CodeView;
 use gui::debug_server::{DebugServerConfig, PythonDebugServer};
 use serde::{Deserialize, Serialize};
-use transport::{
-    bindings::get_random_tcp_port,
-    events::{self, OutputEventBody, StoppedEventBody},
-    requests::{self, Initialize, PathFormat},
-    responses,
-    types::{self, Source, SourceBreakpoint, ThreadId},
-    Client, Received,
-};
 
 #[cfg(feature = "sentry")]
 macro_rules! setup_sentry {
