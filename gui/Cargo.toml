@@ -13,7 +13,7 @@ tracing = "0.1.40"
 tracing-subscriber = "0.3.17"
 clap = { version = "4.3.19", features = ["derive"] }
 sentry = { version = "0.31.5", optional = true, default-features = false, features = [ "rustls", "backtrace", "contexts", "panic", "debug-images" ] }
-serde_json = "1.0.106"
+serde_json = "1.0.108"
 serde = { version = "1.0.188", features = ["derive"] }
 spmc = "0.3.0"
 
