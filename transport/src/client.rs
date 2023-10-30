@@ -87,10 +87,33 @@ impl Client {
     pub fn send(&self, body: requests::RequestBody) -> Result<()> {
         self.internals.lock().unwrap().send(body)
     }
+
+    #[tracing::instrument(skip(self, body))]
+    pub fn send_with_response(
+        &self,
+        body: requests::RequestBody,
+    ) -> Result<responses::ResponseBody> {
+        self.internals.lock().unwrap().send_with_response(body)
+    }
 }
 
 impl ClientInternals {
     pub fn send(&mut self, body: requests::RequestBody) -> Result<()> {
+        self.send_internal(body, false).map(|_ /* None */| ())
+    }
+
+    pub fn send_with_response(
+        &mut self,
+        body: requests::RequestBody,
+    ) -> Result<responses::ResponseBody> {
+        self.send_internal(body, true).map(|inner| inner.unwrap())
+    }
+
+    fn send_internal(
+        &mut self,
+        body: requests::RequestBody,
+        requires_response: bool,
+    ) -> Result<Option<responses::ResponseBody>> {
         self.sequence_number.fetch_add(1, Ordering::SeqCst);
         let message = requests::Request {
             seq: self.sequence_number.load(Ordering::SeqCst),
@@ -108,13 +131,23 @@ impl ClientInternals {
         .unwrap();
         self.output.flush().unwrap();
 
-        let waiting_request = WaitingRequest(body);
+        let (tx, rx) = oneshot::channel();
+        let mut waiting_request = WaitingRequest(body, None);
+        if requires_response {
+            waiting_request.1 = Some(tx);
+        }
 
         {
             let mut store = self.store.lock().unwrap();
             store.insert(message.seq, waiting_request);
         }
-        Ok(())
+
+        if !requires_response {
+            return Ok(None);
+        }
+
+        let response = rx.recv().unwrap();
+        Ok(Some(response))
     }
 }
 

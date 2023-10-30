@@ -6,10 +6,8 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use transport::bindings::get_random_tcp_port;
 
-use debugger::*;
-
 #[test]
-#[ignore = "wip"]
+// #[ignore = "wip"]
 fn test_debugger() -> Result<()> {
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");
@@ -21,14 +19,15 @@ fn test_debugger() -> Result<()> {
 
         let stream = TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
         let client = transport::Client::new(stream, tx).unwrap();
-        let mut debugger = Debugger::new(client, rx);
+        let mut debugger = debugger::initialise(client, rx);
 
         let background_messages = Arc::clone(&messages);
         debugger.on_state_change(move |r| {
+            dbg!("got state change");
             background_messages.lock().unwrap().push(r.clone());
         });
 
-        debugger.initialise().unwrap();
+        assert_eq!(messages.lock().unwrap().len(), 1);
 
         Ok(())
     })
