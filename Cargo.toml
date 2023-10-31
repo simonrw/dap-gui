@@ -15,6 +15,10 @@ sentry = { version = "0.31.5", optional = true, default-features = false, featur
 serde_json = "1.0.106"
 serde = { version = "1.0.188", features = ["derive"] }
 spmc = "0.3.0"
+helix-dap = { git = "https://github.com/helix-editor/helix", version = "0.6.0" }
+tokio = { version = "1.33.0", features = ["full"] }
+tokio-util = "0.7.10"
+tokio-stream = "0.1.14"
 
 [features]
 sentry = ["dep:sentry"]

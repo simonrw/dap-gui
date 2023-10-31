@@ -1,3 +1,50 @@
+use std::net::SocketAddr;
+
+use helix_dap::Payload;
+use tokio::sync::mpsc::{self, UnboundedReceiver};
+use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
+
+#[derive(Debug)]
+enum InputEvent {}
+
+struct Application {
+    input_stream: UnboundedReceiverStream<InputEvent>,
+    debugger_stream: UnboundedReceiverStream<Payload>,
+
+    frame_events: Vec<Payload>,
+}
+
+impl eframe::App for Application {
+    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
+        // handle debugger events
+        for event in self.frame_events {
+        }
+
+        // render
+
+        ctx.request_repaint();
+    }
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let addr: SocketAddr = "127.0.0.1:5678".parse().unwrap();
+    let (mut debugger, events) = helix_dap::Client::tcp(addr, 1).await.unwrap();
+
+    let (input_tx, input_rx) = mpsc::unbounded_channel();
+
+    let mut application = Application {
+        input_stream: UnboundedReceiverStream::new(input_rx),
+        debugger_stream: UnboundedReceiverStream::new(events),
+        frame_events: Vec::new(),
+    };
+
+    // eframe::run_simple_native("app", Default::default(), Box::new(
+
+    Ok(())
+}
+/*
+
 use std::{
     collections::HashSet,
     env::current_dir,
@@ -538,7 +585,7 @@ enum Arguments {
     Launch(LaunchArguments),
 }
 
-fn main() -> Result<()> {
+fn gui_main() -> Result<()> {
     setup_sentry!();
     tracing_subscriber::fmt::init();
 
@@ -596,3 +643,4 @@ fn main() -> Result<()> {
 
     Ok(())
 }
+*/
