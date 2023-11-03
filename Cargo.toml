@@ -3,9 +3,13 @@ resolver = "2"
 
 members = [
     "transport",
-    "gui",
     "debugger",
 ]
 
 [profile.release]
 debug = 1
+
+[workspace.dependencies]
+anyhow = "1.0.75"
+spmc = "0.3.0"
+tracing = "0.1.40"

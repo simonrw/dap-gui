@@ -1,42 +1,91 @@
-use anyhow::{Context, Result};
-use std::io::{BufRead, BufReader};
-use std::net::TcpStream;
-use std::process::Stdio;
-use std::sync::{mpsc, Arc, Mutex};
-use std::thread;
+use anyhow::Context;
+use debugger::Debugger;
+use std::{
+    io::{BufRead, BufReader, IsTerminal},
+    net::TcpStream,
+    process::Stdio,
+    sync::mpsc,
+    thread,
+};
+use tracing_subscriber::EnvFilter;
+
 use transport::bindings::get_random_tcp_port;
 
-use debugger::*;
-
 #[test]
-#[ignore = "wip"]
-fn test_debugger() -> Result<()> {
+fn test_debugger() -> anyhow::Result<()> {
+    init_test_logger();
+
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");
     let (tx, rx) = spmc::channel();
-    let messages = Arc::new(Mutex::new(Vec::new()));
     with_server(|port| {
         let span = tracing::debug_span!("with_server", %port);
         let _guard = span.enter();
 
-        let stream = TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
-        let client = transport::Client::new(stream, tx).unwrap();
-        let mut debugger = Debugger::new(client, rx);
+        let stream =
+            TcpStream::connect(format!("127.0.0.1:{port}")).context("connecting to server")?;
+        let client = transport::Client::new(stream, tx).context("creating transport client")?;
 
-        let background_messages = Arc::clone(&messages);
-        debugger.on_state_change(move |r| {
-            background_messages.lock().unwrap().push(r.clone());
+        let (dtx, drx) = spmc::channel();
+
+        let debugger = Debugger::new(client, rx, dtx).context("creating debugger")?;
+
+        let file_path = std::env::current_dir()
+            .unwrap()
+            .join("../test.py")
+            .canonicalize()
+            .context("invalid debug target")?;
+        debugger
+            .initialise(debugger::LaunchArguments {
+                // tests are run from the test subdirectory
+                program: file_path.clone(),
+                working_directory: None,
+                language: debugger::Language::DebugPy,
+            })
+            .context("initialising debugger")?;
+
+        wait_for_event("initialised event", &drx, |e| {
+            matches!(e, debugger::Event::Initialised)
         });
 
-        debugger.initialise().unwrap();
+        debugger.add_breakpoint(debugger::Breakpoint {
+            path: file_path.clone(),
+            line: 4,
+            ..Default::default()
+        });
+        debugger.launch().context("launching debugee")?;
+
+        wait_for_event("running event", &drx, |e| {
+            matches!(e, debugger::Event::Running { .. })
+        });
+
+        wait_for_event("paused event", &drx, |e| {
+            matches!(e, debugger::Event::Paused { .. })
+        });
+
+        debugger.with_current_source(|source| {
+            assert_eq!(
+                source,
+                Some(&debugger::FileSource {
+                    line: 4,
+                    contents: include_str!("../../test.py").to_string(),
+                })
+            );
+        });
+
+        debugger.r#continue().context("resuming debugee")?;
+
+        wait_for_event("terminated debuggee", &drx, |e| {
+            matches!(e, debugger::Event::Ended)
+        });
 
         Ok(())
     })
 }
 
-fn with_server<F>(f: F) -> Result<()>
+fn with_server<F>(f: F) -> anyhow::Result<()>
 where
-    F: FnOnce(u16) -> Result<()>,
+    F: FnOnce(u16) -> anyhow::Result<()>,
 {
     let port = get_random_tcp_port().context("finding random tcp port")?;
     let cwd = std::env::current_dir().unwrap();
@@ -79,4 +128,48 @@ where
     child.kill().context("killing background process")?;
     child.wait().context("waiting for server to exit")?;
     result
+}
+
+fn init_test_logger() {
+    let in_ci = std::env::var("CI")
+        .map(|val| val == "true")
+        .unwrap_or(false);
+
+    if std::io::stderr().is_terminal() || in_ci {
+        tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .init();
+    } else {
+        tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .json()
+            .init();
+    }
+}
+
+#[tracing::instrument(skip(rx, pred))]
+fn wait_for_event<F>(
+    message: &str,
+    rx: &spmc::Receiver<debugger::Event>,
+    pred: F,
+) -> debugger::Event
+where
+    F: Fn(&debugger::Event) -> bool,
+{
+    tracing::debug!("waiting for {message} event");
+    let mut n = 0;
+    loop {
+        let evt = rx.recv().unwrap();
+        if n >= 100 {
+            panic!("did not receive event");
+        }
+
+        if pred(&evt) {
+            tracing::debug!(event = ?evt, "received expected event");
+            return evt;
+        } else {
+            tracing::trace!(event = ?evt, "non-matching event");
+        }
+        n += 1;
+    }
 }

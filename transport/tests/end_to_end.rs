@@ -13,7 +13,7 @@ use transport::{
     bindings::get_random_tcp_port,
     events,
     requests::{self, DebugpyLaunchArguments, Initialize, Launch, LaunchArguments, PathFormat},
-    responses, Received,
+    responses,
 };
 
 // Function to start the server in the background
@@ -99,7 +99,7 @@ fn test_loop() -> Result<()> {
 
         // launch
         client
-            .send(requests::RequestBody::Launch(Launch {
+            .execute(requests::RequestBody::Launch(Launch {
                 program: PathBuf::from("./test.py"),
                 launch_arguments: Some(LaunchArguments::Debugpy(DebugpyLaunchArguments {
                     just_my_code: true,
@@ -125,17 +125,11 @@ fn test_loop() -> Result<()> {
                 name: "main".to_string(),
             }],
         });
-        client.send(req).unwrap();
-        let _ = wait_for_response("setFunctionBreakpoints", &rx, |r| {
-            matches!(r, responses::ResponseBody::SetFunctionBreakpoints { .. })
-        });
+        let _ = client.send(req).unwrap();
 
         // configuration done
         let req = requests::RequestBody::ConfigurationDone;
-        client.send(req).unwrap();
-        let _ = wait_for_response("configurationDone", &rx, |r| {
-            matches!(r, responses::ResponseBody::ConfigurationDone)
-        });
+        let _ = client.send(req).unwrap();
 
         // wait for stopped event
         let events::Event::Stopped(events::StoppedEventBody {
@@ -159,25 +153,16 @@ fn test_loop() -> Result<()> {
 
         // fetch thread info
         let req = requests::RequestBody::Threads;
-        client.send(req).unwrap();
-        let _ = wait_for_response("threads", &rx, |r| {
-            matches!(r, responses::ResponseBody::Threads(_))
-        });
+        let _ = client.send(req).unwrap();
 
         // fetch stack info
         let req = requests::RequestBody::StackTrace(requests::StackTrace {
             thread_id,
             ..Default::default()
         });
-        client.send(req).unwrap();
-
-        let responses::ResponseBody::StackTrace(responses::StackTraceResponse { stack_frames }) =
-            wait_for_response("stackTrace", &rx, |r| {
-                matches!(
-                    r,
-                    responses::ResponseBody::StackTrace(responses::StackTraceResponse { .. })
-                )
-            })
+        let Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+            stack_frames,
+        })) = client.send(req).unwrap()
         else {
             unreachable!()
         };
@@ -185,15 +170,9 @@ fn test_loop() -> Result<()> {
         for frame in stack_frames {
             // scopes
             let req = requests::RequestBody::Scopes(requests::Scopes { frame_id: frame.id });
-            client.send(req).unwrap();
 
-            let responses::ResponseBody::Scopes(responses::ScopesResponse { scopes }) =
-                wait_for_response("scopes", &rx, |r| {
-                    matches!(
-                        r,
-                        responses::ResponseBody::Scopes(responses::ScopesResponse { .. })
-                    )
-                })
+            let Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })) =
+                client.send(req).unwrap()
             else {
                 unreachable!()
             };
@@ -203,18 +182,8 @@ fn test_loop() -> Result<()> {
                 let req = requests::RequestBody::Variables(requests::Variables {
                     variables_reference: scope.variables_reference,
                 });
-                client.send(req).unwrap();
 
-                let responses::ResponseBody::Variables(responses::VariablesResponse { .. }) =
-                    wait_for_response("variables", &rx, |r| {
-                        matches!(
-                            r,
-                            responses::ResponseBody::Variables(responses::VariablesResponse { .. })
-                        )
-                    })
-                else {
-                    unreachable!()
-                };
+                let _ = client.send(req).unwrap();
             }
         }
 
@@ -224,10 +193,7 @@ fn test_loop() -> Result<()> {
             single_thread: false,
         });
         tracing::debug!(?req, "sending continue request");
-        client.send(req).unwrap();
-        let _ = wait_for_response("continue", &rx, |r| {
-            matches!(r, responses::ResponseBody::Continue(_))
-        });
+        let _ = client.send(req).unwrap();
 
         wait_for_event("continued", &rx, |e| {
             matches!(e, events::Event::Continued(_))
@@ -241,75 +207,35 @@ fn test_loop() -> Result<()> {
         let req = requests::RequestBody::Terminate(requests::Terminate {
             restart: Some(false),
         });
-        client.send(req).unwrap();
-        let _ = wait_for_response("terminate", &rx, |r| {
-            matches!(r, responses::ResponseBody::Terminate)
-        });
+        let _ = client.send(req).unwrap();
 
         // disconnect
         let req = requests::RequestBody::Disconnect(requests::Disconnect {
             terminate_debugee: true,
         });
-        client.send(req).unwrap();
-        let _ = wait_for_response("disconnect", &rx, |r| {
-            matches!(r, responses::ResponseBody::Disconnect)
-        });
+        let _ = client.send(req).unwrap();
         Ok(())
     })
 }
 
 #[tracing::instrument(skip(rx, pred))]
-fn wait_for_response<F>(
-    message: &str,
-    rx: &spmc::Receiver<Received>,
-    pred: F,
-) -> responses::ResponseBody
-where
-    F: Fn(&responses::ResponseBody) -> bool,
-{
-    tracing::debug!("waiting for response");
-    let mut n = 0;
-    loop {
-        let msg = rx.recv().unwrap();
-        if n >= 100 {
-            panic!("did not receive response");
-        }
-
-        if let Received::Response(_, response) = msg {
-            assert!(response.success);
-            if let Some(body) = response.body {
-                if pred(&body) {
-                    tracing::debug!(response = ?body, "received expected response");
-                    return body;
-                } else {
-                    tracing::trace!(event = ?body, "non-matching event");
-                }
-            }
-        }
-        n += 1;
-    }
-}
-
-#[tracing::instrument(skip(rx, pred))]
-fn wait_for_event<F>(message: &str, rx: &spmc::Receiver<Received>, pred: F) -> events::Event
+fn wait_for_event<F>(message: &str, rx: &spmc::Receiver<events::Event>, pred: F) -> events::Event
 where
     F: Fn(&events::Event) -> bool,
 {
     tracing::debug!("waiting for event");
     let mut n = 0;
     loop {
-        let msg = rx.recv().unwrap();
+        let evt = rx.recv().unwrap();
         if n >= 100 {
             panic!("did not receive event");
         }
 
-        if let Received::Event(evt) = msg {
-            if pred(&evt) {
-                tracing::debug!(event = ?evt, "received expected event");
-                return evt;
-            } else {
-                tracing::trace!(event = ?evt, "non-matching event");
-            }
+        if pred(&evt) {
+            tracing::debug!(event = ?evt, "received expected event");
+            return evt;
+        } else {
+            tracing::trace!(event = ?evt, "non-matching event");
         }
         n += 1;
     }

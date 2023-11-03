@@ -1,5 +1,12 @@
-{ pkgs ? import <nixpkgs> { } }:
+let
+  overlays = [
+    (import (builtins.fetchTarball "https://github.com/oxalica/rust-overlay/archive/master.tar.gz"))
+  ];
+in
+
+{ pkgs ? import <nixpkgs> { inherit overlays; } }:
 with pkgs;
+
 let
   apple-frameworks = with darwin.apple_sdk.frameworks; [
     OpenGL
@@ -21,11 +28,8 @@ let
 in
 mkShell {
   buildInputs = [
-    cargo
-    rustc
+    rust-bin.beta.latest.default
     rust-analyzer
-    rustfmt
-    clippy
     cargo-nextest
     cargo-flamegraph
     custom-python
@@ -40,7 +44,7 @@ mkShell {
 
   RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
 
-  RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug";
+  RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug";
 
   LD_LIBRARY_PATH =
     if stdenv.isLinux then

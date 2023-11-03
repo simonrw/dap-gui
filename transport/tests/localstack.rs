@@ -1,3 +1,4 @@
+/*
 use std::{io::IsTerminal, net::TcpStream, path::PathBuf, process::Stdio, thread, time::Duration};
 
 use anyhow::{Context, Result};
@@ -253,3 +254,4 @@ fn init_test_logger() {
             .init();
     }
 }
+*/

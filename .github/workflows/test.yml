@@ -37,7 +37,6 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install debugpy
-          .venv/bin/python -m debugpy --version
       # https://twitter.com/jonhoo/status/1571290371124260865
       - name: cargo test --locked
         run: |
@@ -45,7 +44,9 @@ jobs:
           cargo test --locked --all-features --all-targets
       # https://github.com/rust-lang/cargo/issues/6669
       - name: cargo test --doc
-        run: cargo test --locked --all-features --doc
+        run: |
+          source .venv/bin/activate
+          cargo test --locked --all-features --doc
   minimal:
     runs-on: ubuntu-latest
     name: ubuntu / stable / minimal-versions
@@ -63,8 +64,8 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
       - name: rustup default stable
         run: rustup default stable
-      - name: cargo update -Zminimal-versions
-        run: cargo +nightly update -Zminimal-versions
+      - name: cargo update -Zdirect-minimal-versions
+        run: cargo +nightly update -Zdirect-minimal-versions
       - name: Create python venv with debugpy
         run: |
           python -m venv .venv
