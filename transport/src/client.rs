@@ -6,11 +6,12 @@ use std::time::Duration;
 
 use oneshot::Receiver;
 use serde::Deserialize;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 // TODO: use internal error type
 use anyhow::{Context, Result};
 
 use crate::request_store::{RequestStore, WaitingRequest};
+use crate::responses::ResponseBody;
 use crate::{events, requests, responses};
 
 #[derive(Debug)]
@@ -47,7 +48,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(stream: TcpStream, responses: spmc::Sender<Received>) -> Result<Self> {
+    pub fn new(stream: TcpStream, responses: spmc::Sender<events::Event>) -> Result<Self> {
         // internal state
         let sequence_number = Arc::new(AtomicI64::new(0));
 
@@ -84,13 +85,37 @@ impl Client {
     }
 
     #[tracing::instrument(skip(self, body))]
-    pub fn send(&self, body: requests::RequestBody) -> Result<()> {
-        self.internals.lock().unwrap().send(body)
+    pub fn send(&self, body: requests::RequestBody) -> Result<Option<ResponseBody>> {
+        with_lock(
+            "Client.internals",
+            self.internals.as_ref(),
+            |mut internals| internals.send(body),
+        )
+    }
+
+    #[tracing::instrument(skip(self, body))]
+    pub fn execute(&self, body: requests::RequestBody) -> Result<()> {
+        with_lock(
+            "Client.internals",
+            self.internals.as_ref(),
+            |mut internals| internals.execute(body),
+        )
     }
 }
 
+fn with_lock<T, F, R>(name: &str, lock: &Mutex<T>, f: F) -> R
+where
+    F: FnOnce(MutexGuard<'_, T>) -> R,
+{
+    tracing::trace!(%name, "taking lock");
+    let inner = lock.lock().unwrap();
+    let res = f(inner);
+    tracing::trace!(%name, "releasing lock");
+    res
+}
+
 impl ClientInternals {
-    pub fn send(&mut self, body: requests::RequestBody) -> Result<()> {
+    pub fn send(&mut self, body: requests::RequestBody) -> Result<Option<ResponseBody>> {
         self.sequence_number.fetch_add(1, Ordering::SeqCst);
         let message = requests::Request {
             seq: self.sequence_number.load(Ordering::SeqCst),
@@ -108,12 +133,36 @@ impl ClientInternals {
         .unwrap();
         self.output.flush().unwrap();
 
-        let waiting_request = WaitingRequest(body);
+        let (tx, rx) = oneshot::channel();
+        let waiting_request = WaitingRequest(body, tx);
 
-        {
-            let mut store = self.store.lock().unwrap();
+        with_lock("ClientInternals.store", self.store.as_ref(), |mut store| {
             store.insert(message.seq, waiting_request);
-        }
+        });
+
+        let res = rx.recv().expect("sender dropped");
+        Ok(res)
+    }
+
+    /// Execute a call on the client but do not wait for a response
+    pub fn execute(&mut self, body: requests::RequestBody) -> Result<()> {
+        self.sequence_number.fetch_add(1, Ordering::SeqCst);
+        let message = requests::Request {
+            seq: self.sequence_number.load(Ordering::SeqCst),
+            r#type: "request".to_string(),
+            body: body.clone(),
+        };
+        let resp_json = serde_json::to_string(&message).unwrap();
+        tracing::debug!(request = ?message, "sending message");
+        write!(
+            self.output,
+            "Content-Length: {}\r\n\r\n{}",
+            resp_json.len(),
+            resp_json
+        )
+        .unwrap();
+        self.output.flush().unwrap();
+
         Ok(())
     }
 }
@@ -134,7 +183,7 @@ enum ClientState {
 struct Reader {
     input: BufReader<TcpStream>,
     store: RequestStore,
-    responses: spmc::Sender<Received>,
+    responses: spmc::Sender<events::Event>,
 }
 
 impl Reader {
@@ -212,18 +261,19 @@ impl Reader {
             match self.poll_message(&shutdown) {
                 Ok(Some(msg)) => match msg {
                     Message::Event(evt) => {
-                        let _ = self.responses.send(Received::Event(evt));
+                        let _ = self.responses.send(evt);
                     }
                     Message::Response(r) => {
-                        let mut store = self.store.lock().unwrap();
-                        match store.remove(&r.request_seq) {
-                            Some(request) => {
-                                let _ = self.responses.send(Received::Response(request.0, r));
+                        with_lock("Reader.store", self.store.as_ref(), |mut store| match store
+                            .remove(&r.request_seq)
+                        {
+                            Some(WaitingRequest(_, tx)) => {
+                                let _ = tx.send(r.body);
                             }
                             None => {
                                 tracing::warn!(response = ?r, "no message in request store")
                             }
-                        }
+                        });
                     }
                 },
                 Ok(None) => {

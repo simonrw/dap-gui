@@ -1,70 +1,10 @@
-use anyhow::Result;
-use std::{
-    sync::{Arc, Mutex},
-    thread,
-};
-use transport::{requests, Client, Received};
+mod debugger;
+mod internals;
+mod persistence;
+pub(crate) mod state;
+mod types;
 
-#[derive(Default)]
-enum DebuggerState {
-    #[default]
-    Initialising,
-}
-
-impl DebuggerState {
-    fn update_from(&mut self, _r: &Received) {}
-}
-
-pub struct Debugger<F> {
-    client: Client,
-    state: Arc<Mutex<DebuggerState>>,
-    event_handlers: Arc<Mutex<Vec<Box<F>>>>,
-}
-
-impl<F> Debugger<F>
-where
-    F: FnMut(&Received) + Send + Sync + 'static,
-{
-    pub fn new(client: Client, rx: spmc::Receiver<Received>) -> Self {
-        let state: Arc<Mutex<DebuggerState>> = Default::default();
-        let event_handlers: Arc<Mutex<Vec<Box<F>>>> = Arc::new(Mutex::new(Vec::new()));
-
-        // background watcher to poll for events
-        let background_state = Arc::clone(&state);
-        thread::spawn(move || loop {
-            let msg = rx.recv().unwrap();
-            background_state.lock().unwrap().update_from(&msg);
-        });
-
-        Self {
-            client,
-            state,
-            event_handlers,
-        }
-    }
-
-    pub fn initialise(&mut self) -> Result<()> {
-        // send initialize
-        let req = requests::RequestBody::Initialize(requests::Initialize {
-            adapter_id: "dap gui".to_string(),
-            lines_start_at_one: false,
-            path_format: requests::PathFormat::Path,
-            supports_start_debugging_request: true,
-            supports_variable_type: true,
-            supports_variable_paging: true,
-            supports_progress_reporting: true,
-            supports_memory_event: true,
-        });
-        self.client.send(req).unwrap();
-
-        // send launch
-        let _state = self.state.lock().unwrap();
-
-        Ok(())
-    }
-
-    pub fn on_state_change(&mut self, handler: F) {
-        let mut event_handlers = self.event_handlers.lock().unwrap();
-        event_handlers.push(Box::new(handler));
-    }
-}
+pub use debugger::Debugger;
+pub use internals::FileSource;
+pub use state::{Event, Language, LaunchArguments};
+pub use types::Breakpoint;

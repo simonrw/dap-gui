@@ -82,7 +82,8 @@ jobs:
     # https://docs.github.com/en/actions/learn-github-actions/contexts#context-availability
     strategy:
       matrix:
-        msrv: ["1.70.0"]
+        # MSRV set by https://github.com/rust-lang/rust/pull/112086/
+        msrv: ["1.72.0"]
     name: ubuntu / ${{ matrix.msrv }}
     steps:
       - uses: actions/checkout@v4

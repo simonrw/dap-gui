@@ -6,7 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.75"
-spmc = "0.3.0"
-tracing = "0.1.39"
+anyhow.workspace = true
+spmc.workspace = true
+tracing.workspace = true
 transport = { path = "../transport" }
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3.17", features = ["json", "env-filter"] }
