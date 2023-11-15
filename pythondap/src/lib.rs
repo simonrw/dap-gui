@@ -1,5 +1,19 @@
 use pyo3::prelude::*;
 
+#[pyclass]
+struct Debugger {
+    #[pyo3(get)]
+    value: i32,
+}
+
+#[pymethods]
+impl Debugger {
+    #[new]
+    fn new(value: i32) -> PyResult<Self> {
+        Ok(Self { value })
+    }
+}
+
 /// Formats the sum of two numbers as string.
 #[pyfunction]
 fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
@@ -10,5 +24,6 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 #[pymodule]
 fn pythondap(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
+    m.add_class::<Debugger>()?;
     Ok(())
 }
