@@ -18,13 +18,6 @@ let
   ];
 
   apple-deps = apple-frameworks ++ apple-libs;
-
-  custom-python = python3.withPackages (ps: with ps; [
-    debugpy
-    black
-    scapy
-    structlog
-  ]);
 in
 mkShell rec {
   buildInputs = [
@@ -32,7 +25,6 @@ mkShell rec {
     rust-analyzer
     cargo-nextest
     cargo-flamegraph
-    custom-python
     cargo-hack
     act
     maturin
@@ -50,6 +42,13 @@ mkShell rec {
 
   venvDir = ".venv";
   VIRTUAL_ENV = venvDir;
+
+  postVenvCreation = ''
+  python -m pip install \
+    debugpy \
+    pytest \
+    ipython
+  '';
 
   LD_LIBRARY_PATH =
     if stdenv.isLinux then
