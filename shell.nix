@@ -26,7 +26,7 @@ let
     structlog
   ]);
 in
-mkShell {
+mkShell rec {
   buildInputs = [
     rust-bin.beta.latest.default
     rust-analyzer
@@ -35,6 +35,8 @@ mkShell {
     custom-python
     cargo-hack
     act
+    maturin
+    python3Packages.venvShellHook
   ] ++ lib.optionals stdenv.isDarwin apple-deps ++ lib.optionals stdenv.isLinux [
     gdb
     simplescreenrecorder
@@ -45,6 +47,9 @@ mkShell {
   RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
 
   RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug";
+
+  venvDir = ".venv";
+  VIRTUAL_ENV = venvDir;
 
   LD_LIBRARY_PATH =
     if stdenv.isLinux then
