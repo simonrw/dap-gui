@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 struct Debugger {
     internal: debugger::Debugger,
     events: Arc<Mutex<Vec<Event>>>,
+    launched: bool,
 }
 
 #[pymethods]
@@ -48,15 +49,27 @@ impl Debugger {
         Ok(Self {
             internal: debugger,
             events,
+            launched: false,
         })
     }
 
     fn resume(&mut self) -> PyResult<()> {
+        if !self.launched {
+            self.launched = true;
+            self.internal
+                .launch()
+                .map_err(|e| PyRuntimeError::new_err(format!("launching debugger: {e}")))?;
+        } else {
+            self.internal
+                .r#continue()
+                .map_err(|e| PyRuntimeError::new_err(format!("continuing execution: {e}")))?;
+        }
+
         self.internal
             .r#continue()
             .map_err(|e| PyRuntimeError::new_err(format!("continuing execution: {e}")))?;
 
-        // wait for stopped event 
+        // wait for stopped event
         Ok(())
     }
 }
