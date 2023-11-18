@@ -17,6 +17,7 @@ use crate::{
 };
 
 pub struct Debugger {
+    events: spmc::Receiver<transport::events::Event>,
     internals: Arc<Mutex<DebuggerInternals>>,
 }
 
@@ -33,6 +34,8 @@ impl Debugger {
             let _ = tx.send(Event::Uninitialised);
         }
 
+        let events2 = events.clone();
+
         let internals = Arc::new(Mutex::new(DebuggerInternals::new(client, publisher)));
 
         // background thread reading transport events, and handling the event with our internal state
@@ -41,7 +44,10 @@ impl Debugger {
             let event = events.recv().unwrap();
             background_internals.lock().unwrap().on_event(event);
         });
-        Ok(Self { internals })
+        Ok(Self {
+            events: events2,
+            internals,
+        })
     }
 
     fn emit(&self, event: Event) {
@@ -115,6 +121,27 @@ impl Debugger {
 
     fn execute(&self, body: requests::RequestBody) -> anyhow::Result<()> {
         self.internals.lock().unwrap().client.execute(body)
+    }
+
+    pub fn wait_for_transport_event<F>(&self, pred: F) -> transport::events::Event
+    where
+        F: Fn(&transport::events::Event) -> bool,
+    {
+        let mut n = 0;
+        loop {
+            let evt = self.events.recv().unwrap();
+            if n >= 100 {
+                panic!("did not receive event");
+            }
+
+            if pred(&evt) {
+                tracing::debug!(event = ?evt, "received expected event");
+                return evt;
+            } else {
+                tracing::trace!(event = ?evt, "non-matching event");
+            }
+            n += 1;
+        }
     }
 }
 
