@@ -28,7 +28,7 @@ fn test_debugger() -> anyhow::Result<()> {
 
         let (dtx, drx) = spmc::channel();
 
-        let debugger = Debugger::new(client, rx, dtx).context("creating debugger")?;
+        let debugger = Debugger::new(client, rx, Some(dtx)).context("creating debugger")?;
 
         let file_path = std::env::current_dir()
             .unwrap()

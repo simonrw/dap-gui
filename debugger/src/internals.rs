@@ -21,7 +21,7 @@ pub struct FileSource {
 pub(crate) struct DebuggerInternals {
     pub(crate) _state: DebuggerState,
     pub(crate) client: Client,
-    pub(crate) publisher: spmc::Sender<Event>,
+    pub(crate) publisher: Option<spmc::Sender<Event>>,
 
     // debugger specific details
     pub(crate) current_thread_id: Option<ThreadId>,
@@ -32,13 +32,19 @@ pub(crate) struct DebuggerInternals {
 }
 
 impl DebuggerInternals {
-    pub(crate) fn new(client: Client, publisher: spmc::Sender<Event>) -> Self {
+    pub(crate) fn new(client: Client, publisher: Option<spmc::Sender<Event>>) -> Self {
         Self::with_breakpoints(client, publisher, HashMap::new())
+    }
+
+    pub(crate) fn emit(&mut self, event: Event) {
+        if let Some(ref mut tx) = self.publisher {
+            let _ = tx.send(event);
+        }
     }
 
     pub(crate) fn with_breakpoints(
         client: Client,
-        publisher: spmc::Sender<Event>,
+        publisher: Option<spmc::Sender<Event>>,
         existing_breakpoints: impl Into<HashMap<BreakpointId, Breakpoint>>,
     ) -> Self {
         let breakpoints = existing_breakpoints.into();
@@ -203,6 +209,6 @@ impl DebuggerInternals {
 
     pub(crate) fn set_state(&mut self, new_state: DebuggerState) {
         let event = Event::from(&new_state);
-        let _ = self.publisher.send(event);
+        self.emit(event);
     }
 }

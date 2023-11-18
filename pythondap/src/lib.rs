@@ -33,7 +33,7 @@ impl Debugger {
             background_events.lock().unwrap().push(msg);
         });
 
-        let debugger = debugger::Debugger::new(client, rx, dtx)
+        let debugger = debugger::Debugger::new(client, rx, Some(dtx))
             .map_err(|e| PyRuntimeError::new_err(format!("creating debugger: {e}")))?;
 
         if let Some(file_path) = file {

@@ -25,11 +25,13 @@ impl Debugger {
     pub fn new(
         client: Client,
         events: Receiver<transport::events::Event>,
-        mut publisher: spmc::Sender<Event>,
+        mut publisher: Option<spmc::Sender<Event>>,
     ) -> anyhow::Result<Self> {
         tracing::debug!("creating new client");
 
-        let _ = publisher.send(Event::Uninitialised);
+        if let Some(ref mut tx) = publisher {
+            let _ = tx.send(Event::Uninitialised);
+        }
 
         let internals = Arc::new(Mutex::new(DebuggerInternals::new(client, publisher)));
 
@@ -40,6 +42,10 @@ impl Debugger {
             background_internals.lock().unwrap().on_event(event);
         });
         Ok(Self { internals })
+    }
+
+    fn emit(&self, event: Event) {
+        self.internals.lock().unwrap().emit(event)
     }
 
     pub fn initialise(&self, launch_arguments: state::LaunchArguments) -> anyhow::Result<()> {
