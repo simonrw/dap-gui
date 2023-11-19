@@ -26,13 +26,6 @@ impl Debugger {
 
         let events = Arc::new(Mutex::new(Vec::new()));
 
-        let (dtx, drx) = spmc::channel();
-        let background_events = Arc::clone(&events);
-        std::thread::spawn(move || loop {
-            let msg = drx.recv().unwrap();
-            background_events.lock().unwrap().push(msg);
-        });
-
         let debugger = debugger::Debugger::new(client, rx)
             .map_err(|e| PyRuntimeError::new_err(format!("creating debugger: {e}")))?;
 
