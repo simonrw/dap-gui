@@ -37,6 +37,16 @@ impl Debugger {
                     language: debugger::Language::DebugPy,
                 })
                 .map_err(|e| PyRuntimeError::new_err(format!("initialising debugger: {e}")))?;
+
+            // breakpoints
+            for &line in &breakpoints {
+                let breakpoint = debugger::Breakpoint {
+                    name: None,
+                    path: file_path.clone(),
+                    line,
+                };
+                debugger.add_breakpoint(breakpoint);
+            }
         }
 
         Ok(Self {
