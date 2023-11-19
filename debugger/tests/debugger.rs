@@ -26,9 +26,8 @@ fn test_debugger() -> anyhow::Result<()> {
             TcpStream::connect(format!("127.0.0.1:{port}")).context("connecting to server")?;
         let client = transport::Client::new(stream, tx).context("creating transport client")?;
 
-        let (dtx, drx) = spmc::channel();
-
-        let debugger = Debugger::new(client, rx, Some(dtx)).context("creating debugger")?;
+        let debugger = Debugger::new(client, rx).context("creating debugger")?;
+        let drx = debugger.events();
 
         let file_path = std::env::current_dir()
             .unwrap()

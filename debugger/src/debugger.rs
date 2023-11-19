@@ -4,7 +4,6 @@ use std::{
 };
 
 use anyhow::Context;
-use spmc::Receiver;
 use transport::{
     requests::{self, Disconnect, Initialize, PathFormat},
     Client,
@@ -17,37 +16,39 @@ use crate::{
 };
 
 pub struct Debugger {
-    events: spmc::Receiver<transport::events::Event>,
     internals: Arc<Mutex<DebuggerInternals>>,
+    rx: spmc::Receiver<Event>,
 }
 
 impl Debugger {
-    #[tracing::instrument(skip(client, events, publisher))]
+    #[tracing::instrument(skip(client, events))]
     pub fn new(
         client: Client,
-        events: Receiver<transport::events::Event>,
-        mut publisher: Option<spmc::Sender<Event>>,
+        events: spmc::Receiver<transport::events::Event>,
     ) -> anyhow::Result<Self> {
         tracing::debug!("creating new client");
 
-        if let Some(ref mut tx) = publisher {
-            let _ = tx.send(Event::Uninitialised);
-        }
+        let (mut tx, rx) = spmc::channel();
+        let _ = tx.send(Event::Uninitialised);
 
-        let events2 = events.clone();
-
-        let internals = Arc::new(Mutex::new(DebuggerInternals::new(client, publisher)));
+        let internals_rx = rx.clone();
+        let internals = Arc::new(Mutex::new(DebuggerInternals::new(client, tx)));
 
         // background thread reading transport events, and handling the event with our internal state
         let background_internals = Arc::clone(&internals);
+        let background_events = events.clone();
         thread::spawn(move || loop {
-            let event = events.recv().unwrap();
+            let event = background_events.recv().unwrap();
             background_internals.lock().unwrap().on_event(event);
         });
         Ok(Self {
-            events: events2,
             internals,
+            rx: internals_rx,
         })
+    }
+
+    pub fn events(&self) -> spmc::Receiver<Event> {
+        self.rx.clone()
     }
 
     fn emit(&self, event: Event) {
@@ -123,13 +124,13 @@ impl Debugger {
         self.internals.lock().unwrap().client.execute(body)
     }
 
-    pub fn wait_for_transport_event<F>(&self, pred: F) -> transport::events::Event
+    pub fn wait_for_event<F>(&self, pred: F) -> Event
     where
-        F: Fn(&transport::events::Event) -> bool,
+        F: Fn(&Event) -> bool,
     {
         let mut n = 0;
         loop {
-            let evt = self.events.recv().unwrap();
+            let evt = self.rx.recv().unwrap();
             if n >= 100 {
                 panic!("did not receive event");
             }
