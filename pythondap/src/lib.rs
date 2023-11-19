@@ -68,11 +68,14 @@ impl Debugger {
                 .map_err(|e| PyRuntimeError::new_err(format!("continuing execution: {e}")))?;
         }
 
-        self.internal
-            .r#continue()
-            .map_err(|e| PyRuntimeError::new_err(format!("continuing execution: {e}")))?;
-
         // wait for stopped event
+        let Event::Paused { stack, source } = self
+            .internal
+            .wait_for_event(|evt| matches!(evt, Event::Paused { .. }))
+        else {
+            unreachable!()
+        };
+        eprintln!("Stopped {stack:?} {source:?}");
         Ok(())
     }
 }
