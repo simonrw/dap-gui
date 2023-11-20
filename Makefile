@@ -15,3 +15,11 @@ run-server:     ## Run the DAP server
 
 run: 			## Run the debugger
 	cargo run --bin dap-gui-ui -- $(RUN_ARGS)
+
+.PHONY: repl
+repl: python-develop ## Open ipython repl with debugger loaded
+	ipython -c "import pythondap; d = pythondap.Debugger([4], file='./test.py')" -i
+
+.PHOHY: python-develop
+python-develop: ## Compile and install a development version of the debugger
+	maturin develop --manifest-path pythondap/Cargo.toml
