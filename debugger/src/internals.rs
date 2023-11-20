@@ -19,7 +19,6 @@ pub struct FileSource {
 }
 
 pub(crate) struct DebuggerInternals {
-    pub(crate) _state: DebuggerState,
     pub(crate) client: Client,
     pub(crate) publisher: spmc::Sender<Event>,
 
@@ -49,7 +48,6 @@ impl DebuggerInternals {
         let current_breakpoint_id = *breakpoints.keys().max().unwrap_or(&0);
 
         Self {
-            _state: DebuggerState::Running,
             client,
             publisher,
             current_thread_id: None,
