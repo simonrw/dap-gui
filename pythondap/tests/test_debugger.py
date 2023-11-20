@@ -7,4 +7,6 @@ def test_debugger_lifecycle():
         breakpoints=[4],
     )
     d.resume()
+    # hit breakpoint
     d.resume()
+    # program ended
