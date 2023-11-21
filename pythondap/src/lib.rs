@@ -1,9 +1,24 @@
-use debugger::Event;
-use pyo3::exceptions::PyRuntimeError;
+use debugger::{Event, FileSource};
+use pyo3::exceptions::{PyRuntimeError, PySystemExit};
 use pyo3::prelude::*;
 use std::net::TcpStream;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use transport::types::StackFrame;
+
+#[pyclass]
+struct ProgramState {
+    stack: Vec<StackFrame>,
+    source: FileSource,
+}
+
+#[pymethods]
+impl ProgramState {
+    fn __getattr__(&self, py: Python, name: PyObject) -> PyResult<impl IntoPy<PyObject>> {
+        let name: String = name.extract(py)?;
+        Ok(name)
+    }
+}
 
 #[pyclass]
 struct Debugger {
@@ -56,7 +71,7 @@ impl Debugger {
         })
     }
 
-    fn resume(&mut self) -> PyResult<()> {
+    fn resume(&mut self) -> PyResult<ProgramState> {
         if !self.launched {
             self.launched = true;
             self.internal
@@ -72,11 +87,12 @@ impl Debugger {
         match self.internal.wait_for_event(|evt| {
             matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
         }) {
-            Event::Paused { stack, source } => {
-                eprintln!("Stopped {stack:?} {source:?}");
-                Ok(())
+            Event::Paused { stack, source } => Ok(ProgramState { stack, source }),
+            Event::Ended => {
+                eprintln!("Debugee ended");
+                // exit the interpreter
+                std::process::exit(0);
             }
-            Event::Ended => Ok(()),
             _ => unreachable!(),
         }
     }
@@ -85,5 +101,6 @@ impl Debugger {
 #[pymodule]
 fn pythondap(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Debugger>()?;
+    m.add_class::<ProgramState>()?;
     Ok(())
 }
