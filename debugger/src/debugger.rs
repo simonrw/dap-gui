@@ -51,9 +51,9 @@ impl Debugger {
         self.rx.clone()
     }
 
-    fn emit(&self, event: Event) {
-        self.internals.lock().unwrap().emit(event)
-    }
+    // fn emit(&self, event: Event) {
+    //     self.internals.lock().unwrap().emit(event)
+    // }
 
     pub fn initialise(&self, launch_arguments: state::LaunchArguments) -> anyhow::Result<()> {
         // initialise

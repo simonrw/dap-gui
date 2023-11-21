@@ -1,5 +1,5 @@
 use debugger::{Event, FileSource};
-use pyo3::exceptions::{PyRuntimeError, PySystemExit};
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::net::TcpStream;
 use std::path::PathBuf;
@@ -8,8 +8,8 @@ use transport::types::StackFrame;
 
 #[pyclass]
 struct ProgramState {
-    stack: Vec<StackFrame>,
-    source: FileSource,
+    _stack: Vec<StackFrame>,
+    _source: FileSource,
 }
 
 #[pymethods]
@@ -23,7 +23,7 @@ impl ProgramState {
 #[pyclass]
 struct Debugger {
     internal: debugger::Debugger,
-    events: Arc<Mutex<Vec<Event>>>,
+    _events: Arc<Mutex<Vec<Event>>>,
     launched: bool,
 }
 
@@ -34,7 +34,7 @@ impl Debugger {
     fn new(breakpoints: Vec<usize>, file: Option<PathBuf>) -> PyResult<Self> {
         // TODO: start server
         let (tx, rx) = spmc::channel();
-        let stream = TcpStream::connect(format!("127.0.0.1:5678"))
+        let stream = TcpStream::connect("127.0.0.1:5678")
             .map_err(|e| PyRuntimeError::new_err(format!("connecting to DAP server: {e}")))?;
         let client = transport::Client::new(stream, tx)
             .map_err(|e| PyRuntimeError::new_err(format!("creating transport client: {e}")))?;
@@ -66,7 +66,7 @@ impl Debugger {
 
         Ok(Self {
             internal: debugger,
-            events,
+            _events: events,
             launched: false,
         })
     }
@@ -87,7 +87,10 @@ impl Debugger {
         match self.internal.wait_for_event(|evt| {
             matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
         }) {
-            Event::Paused { stack, source } => Ok(ProgramState { stack, source }),
+            Event::Paused { stack, source } => Ok(ProgramState {
+                _stack: stack,
+                _source: source,
+            }),
             Event::Ended => {
                 eprintln!("Debugee ended");
                 // exit the interpreter
