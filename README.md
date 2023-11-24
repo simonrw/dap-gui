@@ -25,4 +25,27 @@ My hope with this project is to create a general purpose GUI on top of the [DAP]
 * stable
 * TBD
 
+## Internals
+
+WIP
+
+```mermaid
+---
+title: State machine
+---
+
+stateDiagram-v2
+    [*] --> Initialized: [1]
+    Initialized --> Running: [2]
+    Running --> Paused: [2]
+    Paused --> Running: [3]
+    Running --> Terminated: [5]
+    Terminated --> [*]
+```
+
+1. Initializing
+    * Set up initial state
+
+
 [dap]: https://microsoft.github.io/debug-adapter-protocol/
+
