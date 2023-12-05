@@ -71,7 +71,7 @@ impl Debugger {
         })
     }
 
-    fn resume(&mut self) -> PyResult<ProgramState> {
+    fn resume(&mut self) -> PyResult<Option<ProgramState>> {
         if !self.launched {
             self.launched = true;
             self.internal
@@ -87,14 +87,13 @@ impl Debugger {
         match self.internal.wait_for_event(|evt| {
             matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
         }) {
-            Event::Paused { stack, source } => Ok(ProgramState {
+            Event::Paused { stack, source } => Ok(Some(ProgramState {
                 _stack: stack,
                 _source: source,
-            }),
+            })),
             Event::Ended => {
                 eprintln!("Debugee ended");
-                // exit the interpreter
-                std::process::exit(0);
+                return Ok(None);
             }
             _ => unreachable!(),
         }
