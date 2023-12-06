@@ -4,7 +4,6 @@ use std::{
 };
 
 use anyhow::Context;
-use spmc::Receiver;
 use transport::{
     requests::{self, Disconnect, Initialize, PathFormat},
     Client,
@@ -18,29 +17,43 @@ use crate::{
 
 pub struct Debugger {
     internals: Arc<Mutex<DebuggerInternals>>,
+    rx: spmc::Receiver<Event>,
 }
 
 impl Debugger {
-    #[tracing::instrument(skip(client, events, publisher))]
+    #[tracing::instrument(skip(client, events))]
     pub fn new(
         client: Client,
-        events: Receiver<transport::events::Event>,
-        mut publisher: spmc::Sender<Event>,
+        events: spmc::Receiver<transport::events::Event>,
     ) -> anyhow::Result<Self> {
         tracing::debug!("creating new client");
 
-        let _ = publisher.send(Event::Uninitialised);
+        let (mut tx, rx) = spmc::channel();
+        let _ = tx.send(Event::Uninitialised);
 
-        let internals = Arc::new(Mutex::new(DebuggerInternals::new(client, publisher)));
+        let internals_rx = rx.clone();
+        let internals = Arc::new(Mutex::new(DebuggerInternals::new(client, tx)));
 
         // background thread reading transport events, and handling the event with our internal state
         let background_internals = Arc::clone(&internals);
+        let background_events = events.clone();
         thread::spawn(move || loop {
-            let event = events.recv().unwrap();
+            let event = background_events.recv().unwrap();
             background_internals.lock().unwrap().on_event(event);
         });
-        Ok(Self { internals })
+        Ok(Self {
+            internals,
+            rx: internals_rx,
+        })
     }
+
+    pub fn events(&self) -> spmc::Receiver<Event> {
+        self.rx.clone()
+    }
+
+    // fn emit(&self, event: Event) {
+    //     self.internals.lock().unwrap().emit(event)
+    // }
 
     pub fn initialise(&self, launch_arguments: state::LaunchArguments) -> anyhow::Result<()> {
         // initialise
@@ -109,6 +122,27 @@ impl Debugger {
 
     fn execute(&self, body: requests::RequestBody) -> anyhow::Result<()> {
         self.internals.lock().unwrap().client.execute(body)
+    }
+
+    pub fn wait_for_event<F>(&self, pred: F) -> Event
+    where
+        F: Fn(&Event) -> bool,
+    {
+        let mut n = 0;
+        loop {
+            let evt = self.rx.recv().unwrap();
+            if n >= 100 {
+                panic!("did not receive event");
+            }
+
+            if pred(&evt) {
+                tracing::debug!(event = ?evt, "received expected event");
+                return evt;
+            } else {
+                tracing::trace!(event = ?evt, "non-matching event");
+            }
+            n += 1;
+        }
     }
 }
 
