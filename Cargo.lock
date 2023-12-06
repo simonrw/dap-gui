@@ -43,6 +43,7 @@ name = "debugger"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "server",
  "spmc",
  "tracing",
  "tracing-subscriber",
@@ -404,6 +405,7 @@ dependencies = [
  "oneshot",
  "serde",
  "serde_json",
+ "server",
  "spmc",
  "tracing",
  "tracing-subscriber",
