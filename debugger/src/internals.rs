@@ -1,5 +1,5 @@
 use anyhow::Context;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 use transport::{
     requests, responses,
     types::{Source, SourceBreakpoint, ThreadId},
@@ -156,32 +156,44 @@ impl DebuggerInternals {
             return Ok(());
         }
 
-        let first_breakpoint = self.breakpoints.values().next().unwrap();
+        // group breakpoints by source file and send in multiple batches
+        let breakpoints_by_source = self.breakpoints_by_source();
 
-        let req = requests::RequestBody::SetBreakpoints(requests::SetBreakpoints {
-            source: Source {
-                name: first_breakpoint.name.clone(),
-                path: Some(first_breakpoint.path.clone()),
+        for (source, breakpoints) in &breakpoints_by_source {
+            let req = requests::RequestBody::SetBreakpoints(requests::SetBreakpoints {
+                source: Source {
+                    name: Some(source.display().to_string()),
+                    path: Some(source.clone()),
+                    ..Default::default()
+                },
+                lines: Some(breakpoints.iter().map(|b| b.line).collect()),
+                breakpoints: Some(
+                    breakpoints
+                        .iter()
+                        .map(|b| SourceBreakpoint {
+                            line: b.line,
+                            ..Default::default()
+                        })
+                        .collect(),
+                ),
                 ..Default::default()
-            },
-            lines: Some(self.breakpoints.values().map(|b| b.line).collect()),
-            breakpoints: Some(
-                self.breakpoints
-                    .values()
-                    .map(|b| SourceBreakpoint {
-                        line: b.line,
-                        ..Default::default()
-                    })
-                    .collect(),
-            ),
-            ..Default::default()
-        });
+            });
 
-        let _ = self
-            .client
-            .send(req)
-            .context("broadcasting breakpoints to debugee")?;
+            let _ = self
+                .client
+                .send(req)
+                .context("broadcasting breakpoints to debugee")?;
+        }
         Ok(())
+    }
+
+    fn breakpoints_by_source(&self) -> HashMap<PathBuf, Vec<Breakpoint>> {
+        let mut out = HashMap::new();
+        for breakpoint in self.breakpoints.values() {
+            let file_breakpoints = out.entry(breakpoint.path.clone()).or_insert(Vec::new());
+            file_breakpoints.push(breakpoint.clone());
+        }
+        out
     }
 
     fn next_id(&mut self) -> BreakpointId {
