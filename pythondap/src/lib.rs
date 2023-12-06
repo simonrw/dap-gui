@@ -31,11 +31,33 @@ struct Debugger {
 impl Debugger {
     #[new]
     #[pyo3(signature = (/, breakpoints, file=None))]
-    fn new(breakpoints: Vec<usize>, file: Option<PathBuf>) -> PyResult<Self> {
-        // TODO: start server
+    pub fn new(breakpoints: Vec<usize>, file: Option<PathBuf>) -> PyResult<Self> {
+        Self::internal_new(None, breakpoints, file)
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (/, port, breakpoints, file=None))]
+    pub fn new_on_port(
+        port: u16,
+        breakpoints: Vec<usize>,
+        file: Option<PathBuf>,
+    ) -> PyResult<Self> {
+        Self::internal_new(Some(port), breakpoints, file)
+    }
+}
+
+impl Debugger {
+    fn internal_new(
+        port: Option<u16>,
+        breakpoints: Vec<usize>,
+        file: Option<PathBuf>,
+    ) -> PyResult<Self> {
         let (tx, rx) = spmc::channel();
-        let stream = TcpStream::connect("127.0.0.1:5678")
+        let port = dbg!(port.unwrap_or(5678));
+        eprintln!("connecting to server");
+        let stream = TcpStream::connect(&format!("127.0.0.1:{port}"))
             .map_err(|e| PyRuntimeError::new_err(format!("connecting to DAP server: {e}")))?;
+        eprintln!("creating client");
         let client = transport::Client::new(stream, tx)
             .map_err(|e| PyRuntimeError::new_err(format!("creating transport client: {e}")))?;
 
@@ -71,7 +93,7 @@ impl Debugger {
         })
     }
 
-    fn resume(&mut self) -> PyResult<Option<ProgramState>> {
+    pub fn resume(&mut self) -> PyResult<Option<ProgramState>> {
         if !self.launched {
             self.launched = true;
             self.internal
