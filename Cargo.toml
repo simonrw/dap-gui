@@ -4,7 +4,9 @@ resolver = "2"
 members = [
     "transport",
     "debugger",
-    "server", "pcaplog",
+    "server",
+    "pcaplog",
+    "gui",
 ]
 
 [profile.release]
@@ -18,3 +20,5 @@ ctor = "0.2.6"
 crossbeam-channel = "0.5.11"
 tracing = "0.1.40"
 serde = { version = "1.0.195", features = ["derive"] }
+clap = { version = "4.4.11", features = ["derive"] }
+tracing-subscriber = { version = "0.3.17", features = ["json", "env-filter"] }

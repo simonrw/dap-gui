@@ -1,0 +1,23 @@
+[package]
+name = "gui"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+eframe = "0.24.1"
+crossbeam-channel.workspace = true
+eyre.workspace = true
+tracing.workspace = true
+clap.workspace = true
+debugger = { path = "../debugger" }
+tracing-subscriber.workspace = true
+sentry = { version = "0.31.5", optional = true, default-features = false, features = [ "rustls", "backtrace", "contexts", "panic", "debug-images" ] }
+# TODO: should not need this
+transport = { path = "../transport" }
+server = { path = "../server" }
+color-eyre.workspace = true
+
+[features]
+sentry = ["dep:sentry"]

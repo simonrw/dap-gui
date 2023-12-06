@@ -11,5 +11,5 @@ tracing.workspace = true
 transport = { path = "../transport" }
 
 [dev-dependencies]
-tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"] }
 color-eyre.workspace = true
+tracing-subscriber.workspace = true
