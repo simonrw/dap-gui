@@ -33,6 +33,8 @@ in
       RUST_BACKTRACE = "1";
       RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug";
       RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
+      # disable annoying frozen modules warning
+      PYDEVD_DISABLE_FILE_VALIDATION = "1";
 
       LD_LIBRARY_PATH =
         if stdenv.isLinux
