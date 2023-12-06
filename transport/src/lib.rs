@@ -11,3 +11,6 @@ pub mod types;
 
 pub use client::Client;
 pub use client::Received;
+
+/// The default port the DAP protocol listens on
+pub const DEFAULT_DAP_PORT: u16 = 5678;

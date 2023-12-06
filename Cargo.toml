@@ -4,6 +4,7 @@ resolver = "2"
 members = [
     "transport",
     "debugger",
+    "server",
 ]
 
 [profile.release]
