@@ -193,13 +193,13 @@ fn init_test_logger() {
         .unwrap_or(false);
 
     if std::io::stderr().is_terminal() || in_ci {
-        tracing_subscriber::fmt()
+        let _ = tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env())
-            .init();
+            .try_init();
     } else {
-        tracing_subscriber::fmt()
+        let _ = tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env())
             .json()
-            .init();
+            .try_init();
     }
 }
