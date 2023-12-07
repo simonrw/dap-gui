@@ -1,10 +1,94 @@
 use anyhow::Context;
 use debugger::Debugger;
 use server::for_implementation_on_port;
-use std::{io::IsTerminal, net::TcpStream};
+use std::{io::IsTerminal, net::TcpStream, thread, time::Duration};
 use tracing_subscriber::EnvFilter;
 
 use transport::bindings::get_random_tcp_port;
+
+#[test]
+fn test_remote_attach() -> anyhow::Result<()> {
+    init_test_logger();
+
+    let cwd = std::env::current_dir().unwrap();
+    tracing::warn!(current_dir = ?cwd, "current_dir");
+
+    let port = get_random_tcp_port().context("getting free port")?;
+
+    // run background process
+    let mut child = std::process::Command::new("python")
+        .args(&[
+            "-Xfrozen_modules=off",
+            "../attach.py",
+            "-p",
+            &format!("{port}"),
+        ])
+        .spawn()
+        .context("running python process")?;
+
+    // TODO
+    thread::sleep(Duration::from_secs(1));
+
+    let (tx, rx) = spmc::channel();
+    let stream = TcpStream::connect(format!("127.0.0.1:{port}")).context("connecting to server")?;
+    let client = transport::Client::new(stream, tx).context("creating transport client")?;
+
+    let debugger = Debugger::new(client, rx).context("creating debugger")?;
+    let drx = debugger.events();
+
+    let file_path = std::env::current_dir()
+        .unwrap()
+        .join("../attach.py")
+        .canonicalize()
+        .context("invalid debug target")?;
+    debugger
+        .initialise(debugger::AttachArguments {
+            working_directory: cwd.clone(),
+            port: Some(port),
+            language: debugger::Language::DebugPy,
+        })
+        .context("initialising debugger")?;
+
+    wait_for_event("initialised event", &drx, |e| {
+        matches!(e, debugger::Event::Initialised)
+    });
+
+    debugger.add_breakpoint(debugger::Breakpoint {
+        path: file_path.clone(),
+        line: 9,
+        ..Default::default()
+    });
+    debugger.launch().context("launching debugee")?;
+
+    wait_for_event("running event", &drx, |e| {
+        matches!(e, debugger::Event::Running { .. })
+    });
+
+    wait_for_event("paused event", &drx, |e| {
+        matches!(e, debugger::Event::Paused { .. })
+    });
+
+    debugger.with_current_source(|source| {
+        assert_eq!(
+            source,
+            Some(&debugger::FileSource {
+                line: 9,
+                contents: include_str!("../../attach.py").to_string(),
+            })
+        );
+    });
+
+    debugger.r#continue().context("resuming debugee")?;
+
+    wait_for_event("terminated debuggee", &drx, |e| {
+        matches!(e, debugger::Event::Ended)
+    });
+
+    let status = child.wait().context("waiting for child")?;
+    assert_eq!(status.code().unwrap(), 0);
+
+    Ok(())
+}
 
 #[test]
 fn test_debugger() -> anyhow::Result<()> {

@@ -15,6 +15,23 @@ use crate::{
     types, Event,
 };
 
+pub enum InitializeArguments {
+    Launch(state::LaunchArguments),
+    Attach(state::AttachArguments),
+}
+
+impl From<state::LaunchArguments> for InitializeArguments {
+    fn from(value: state::LaunchArguments) -> Self {
+        Self::Launch(value)
+    }
+}
+
+impl From<state::AttachArguments> for InitializeArguments {
+    fn from(value: state::AttachArguments) -> Self {
+        Self::Attach(value)
+    }
+}
+
 pub struct Debugger {
     internals: Arc<Mutex<DebuggerInternals>>,
     rx: spmc::Receiver<Event>,
@@ -55,7 +72,10 @@ impl Debugger {
     //     self.internals.lock().unwrap().emit(event)
     // }
 
-    pub fn initialise(&self, launch_arguments: state::LaunchArguments) -> anyhow::Result<()> {
+    pub fn initialise(
+        &self,
+        launch_arguments: impl Into<InitializeArguments>,
+    ) -> anyhow::Result<()> {
         // initialise
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
@@ -73,9 +93,17 @@ impl Debugger {
         // TODO: deal with capabilities from the response
         let _ = client.send(req).context("sending initialize event")?;
 
-        // send launch event
-        let req = launch_arguments.to_request();
-        client.execute(req).context("sending launch request")?;
+        match launch_arguments.into() {
+            InitializeArguments::Launch(launch_arguments) => {
+                // send launch event
+                let req = launch_arguments.to_request();
+                client.execute(req).context("sending launch request")?;
+            }
+            InitializeArguments::Attach(attach_arguments) => {
+                let req = attach_arguments.to_request();
+                client.execute(req).context("sending attach request")?;
+            }
+        }
         Ok(())
     }
 

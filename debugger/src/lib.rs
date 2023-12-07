@@ -6,5 +6,5 @@ mod types;
 
 pub use debugger::Debugger;
 pub use internals::FileSource;
-pub use state::{Event, Language, LaunchArguments};
+pub use state::{AttachArguments, Event, Language, LaunchArguments};
 pub use types::Breakpoint;

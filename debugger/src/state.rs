@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
-use transport::requests::{self, DebugpyLaunchArguments};
+use transport::{
+    requests::{self, DebugpyLaunchArguments},
+    DEFAULT_DAP_PORT,
+};
 
 use crate::types;
 
@@ -42,6 +45,28 @@ impl<'a> From<&'a DebuggerState> for Event {
 
 pub enum Language {
     DebugPy,
+}
+
+pub struct AttachArguments {
+    pub working_directory: PathBuf,
+    pub port: Option<u16>,
+    pub language: Language,
+}
+
+impl AttachArguments {
+    pub fn to_request(self) -> requests::RequestBody {
+        match self.language {
+            Language::DebugPy => requests::RequestBody::Attach(requests::Attach {
+                connect: requests::ConnectInfo {
+                    host: "localhost".to_string(),
+                    port: self.port.unwrap_or(DEFAULT_DAP_PORT),
+                },
+                path_mappings: Vec::new(),
+                just_my_code: false,
+                workspace_folder: self.working_directory,
+            }),
+        }
+    }
 }
 
 pub struct LaunchArguments {
