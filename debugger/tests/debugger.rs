@@ -1,7 +1,6 @@
 use anyhow::Context;
 use debugger::Debugger;
-use server::for_implementation_on_port;
-use std::{io::IsTerminal, net::TcpStream, thread, time::Duration};
+use std::{io::IsTerminal, thread, time::Duration};
 use tracing_subscriber::EnvFilter;
 
 use transport::bindings::get_random_tcp_port;
@@ -29,11 +28,13 @@ fn test_remote_attach() -> anyhow::Result<()> {
     // TODO
     thread::sleep(Duration::from_secs(1));
 
-    let (tx, rx) = spmc::channel();
-    let stream = TcpStream::connect(format!("127.0.0.1:{port}")).context("connecting to server")?;
-    let client = transport::Client::new(stream, tx).context("creating transport client")?;
+    let launch_args = debugger::AttachArguments {
+        working_directory: cwd.clone(),
+        port: Some(port),
+        language: debugger::Language::DebugPy,
+    };
 
-    let debugger = Debugger::new(client, rx).context("creating debugger")?;
+    let debugger = Debugger::on_port(port, launch_args).context("creating debugger")?;
     let drx = debugger.events();
 
     let file_path = std::env::current_dir()
@@ -41,13 +42,6 @@ fn test_remote_attach() -> anyhow::Result<()> {
         .join("../attach.py")
         .canonicalize()
         .context("invalid debug target")?;
-    debugger
-        .initialise(debugger::AttachArguments {
-            working_directory: cwd.clone(),
-            port: Some(port),
-            language: debugger::Language::DebugPy,
-        })
-        .context("initialising debugger")?;
 
     wait_for_event("initialised event", &drx, |e| {
         matches!(e, debugger::Event::Initialised)
@@ -97,32 +91,21 @@ fn test_debugger() -> anyhow::Result<()> {
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");
     let port = get_random_tcp_port().context("getting free port")?;
-    let _server = for_implementation_on_port(server::Implementation::Debugpy, port)
-        .context("creating server process")?;
-
-    let (tx, rx) = spmc::channel();
-    let span = tracing::debug_span!("with_server", %port);
-    let _guard = span.enter();
-
-    let stream = TcpStream::connect(format!("127.0.0.1:{port}")).context("connecting to server")?;
-    let client = transport::Client::new(stream, tx).context("creating transport client")?;
-
-    let debugger = Debugger::new(client, rx).context("creating debugger")?;
-    let drx = debugger.events();
 
     let file_path = std::env::current_dir()
         .unwrap()
         .join("../test.py")
         .canonicalize()
         .context("invalid debug target")?;
-    debugger
-        .initialise(debugger::LaunchArguments {
-            // tests are run from the test subdirectory
-            program: file_path.clone(),
-            working_directory: None,
-            language: debugger::Language::DebugPy,
-        })
-        .context("initialising debugger")?;
+
+    let launch_args = debugger::LaunchArguments {
+        // tests are run from the test subdirectory
+        program: file_path.clone(),
+        working_directory: None,
+        language: debugger::Language::DebugPy,
+    };
+    let debugger = Debugger::on_port(port, launch_args).context("creating debugger")?;
+    let drx = debugger.events();
 
     wait_for_event("initialised event", &drx, |e| {
         matches!(e, debugger::Event::Initialised)

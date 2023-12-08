@@ -1,12 +1,14 @@
 use std::{
+    net::TcpStream,
     sync::{Arc, Mutex},
     thread,
 };
 
 use anyhow::Context;
+use server::Implementation;
 use transport::{
-    requests::{self, Disconnect, Initialize, PathFormat},
-    Client,
+    requests::{self, Disconnect},
+    DEFAULT_DAP_PORT,
 };
 
 use crate::{
@@ -15,18 +17,18 @@ use crate::{
     types, Event,
 };
 
-pub enum InitializeArguments {
+pub enum InitialiseArguments {
     Launch(state::LaunchArguments),
     Attach(state::AttachArguments),
 }
 
-impl From<state::LaunchArguments> for InitializeArguments {
+impl From<state::LaunchArguments> for InitialiseArguments {
     fn from(value: state::LaunchArguments) -> Self {
         Self::Launch(value)
     }
 }
 
-impl From<state::AttachArguments> for InitializeArguments {
+impl From<state::AttachArguments> for InitialiseArguments {
     fn from(value: state::AttachArguments) -> Self {
         Self::Attach(value)
     }
@@ -38,18 +40,53 @@ pub struct Debugger {
 }
 
 impl Debugger {
-    #[tracing::instrument(skip(client, events))]
-    pub fn new(
-        client: Client,
-        events: spmc::Receiver<transport::events::Event>,
+    #[tracing::instrument(skip(initialise_arguments))]
+    pub fn on_port(
+        port: u16,
+        initialise_arguments: impl Into<InitialiseArguments>,
     ) -> anyhow::Result<Self> {
         tracing::debug!("creating new client");
 
+        // notify our subscribers
         let (mut tx, rx) = spmc::channel();
         let _ = tx.send(Event::Uninitialised);
 
+        let args: InitialiseArguments = initialise_arguments.into();
         let internals_rx = rx.clone();
-        let internals = Arc::new(Mutex::new(DebuggerInternals::new(client, tx)));
+        let (mut internals, events) = match &args {
+            InitialiseArguments::Launch(state::LaunchArguments { language, .. }) => {
+                let implementation: Implementation = match language {
+                    crate::Language::DebugPy => Implementation::Debugpy,
+                };
+
+                let s = server::for_implementation_on_port(implementation, port)
+                    .context("creating background server process")?;
+                let stream = TcpStream::connect(format!("127.0.0.1:{port}"))
+                    .context("connecting to server")?;
+
+                let (ttx, trx) = spmc::channel();
+                let client =
+                    transport::Client::new(stream, ttx).context("creating transport client")?;
+
+                let internals = DebuggerInternals::new(client, tx, Some(s));
+                (internals, trx)
+            }
+            InitialiseArguments::Attach(_) => {
+                let stream = TcpStream::connect(format!("127.0.0.1:{port}"))
+                    .context("connecting to server")?;
+
+                let (ttx, trx) = spmc::channel();
+                let client =
+                    transport::Client::new(stream, ttx).context("creating transport client")?;
+
+                let internals = DebuggerInternals::new(client, tx, None);
+                (internals, trx)
+            }
+        };
+
+        internals.initialise(args).context("initialising")?;
+
+        let internals = Arc::new(Mutex::new(internals));
 
         // background thread reading transport events, and handling the event with our internal state
         let background_internals = Arc::clone(&internals);
@@ -58,53 +95,19 @@ impl Debugger {
             let event = background_events.recv().unwrap();
             background_internals.lock().unwrap().on_event(event);
         });
+
         Ok(Self {
             internals,
             rx: internals_rx,
         })
     }
+    #[tracing::instrument(skip(initialise_arguments))]
+    pub fn new(initialise_arguments: impl Into<InitialiseArguments>) -> anyhow::Result<Self> {
+        Self::on_port(DEFAULT_DAP_PORT, initialise_arguments)
+    }
 
     pub fn events(&self) -> spmc::Receiver<Event> {
         self.rx.clone()
-    }
-
-    // fn emit(&self, event: Event) {
-    //     self.internals.lock().unwrap().emit(event)
-    // }
-
-    pub fn initialise(
-        &self,
-        launch_arguments: impl Into<InitializeArguments>,
-    ) -> anyhow::Result<()> {
-        // initialise
-        let req = requests::RequestBody::Initialize(Initialize {
-            adapter_id: "dap gui".to_string(),
-            lines_start_at_one: false,
-            path_format: PathFormat::Path,
-            supports_start_debugging_request: true,
-            supports_variable_type: true,
-            supports_variable_paging: true,
-            supports_progress_reporting: true,
-            supports_memory_event: true,
-        });
-
-        let DebuggerInternals { ref client, .. } = *self.internals.lock().unwrap();
-
-        // TODO: deal with capabilities from the response
-        let _ = client.send(req).context("sending initialize event")?;
-
-        match launch_arguments.into() {
-            InitializeArguments::Launch(launch_arguments) => {
-                // send launch event
-                let req = launch_arguments.to_request();
-                client.execute(req).context("sending launch request")?;
-            }
-            InitializeArguments::Attach(attach_arguments) => {
-                let req = attach_arguments.to_request();
-                client.execute(req).context("sending attach request")?;
-            }
-        }
-        Ok(())
     }
 
     pub fn add_breakpoint(&self, breakpoint: types::Breakpoint) -> types::BreakpointId {

@@ -20,14 +20,16 @@ pub trait Server {
     }
 }
 
-pub fn for_implementation(implementation: Implementation) -> anyhow::Result<Box<dyn Server>> {
+pub fn for_implementation(
+    implementation: Implementation,
+) -> anyhow::Result<Box<dyn Server + Send>> {
     for_implementation_on_port(implementation, DEFAULT_DAP_PORT)
 }
 
 pub fn for_implementation_on_port(
     implementation: Implementation,
     port: impl Into<u16>,
-) -> anyhow::Result<Box<dyn Server>> {
+) -> anyhow::Result<Box<dyn Server + Send>> {
     match implementation {
         Implementation::Debugpy => {
             let server = crate::debugpy::DebugpyServer::on_port(port).context("creating server")?;

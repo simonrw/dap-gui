@@ -1,12 +1,15 @@
 use anyhow::Context;
+use server::Server;
 use std::{collections::HashMap, path::PathBuf};
 use transport::{
-    requests, responses,
+    requests::{self, Initialize, PathFormat},
+    responses,
     types::{Source, SourceBreakpoint, ThreadId},
     Client,
 };
 
 use crate::{
+    debugger::InitialiseArguments,
     state::DebuggerState,
     types::{Breakpoint, BreakpointId},
     Event,
@@ -28,21 +31,58 @@ pub(crate) struct DebuggerInternals {
 
     current_breakpoint_id: BreakpointId,
     pub(crate) current_source: Option<FileSource>,
+
+    pub(crate) _server: Option<Box<dyn Server + Send>>,
 }
 
 impl DebuggerInternals {
-    pub(crate) fn new(client: Client, publisher: spmc::Sender<Event>) -> Self {
-        Self::with_breakpoints(client, publisher, HashMap::new())
+    pub(crate) fn new(
+        client: Client,
+        publisher: spmc::Sender<Event>,
+        server: Option<Box<dyn Server + Send>>,
+    ) -> Self {
+        Self::with_breakpoints(client, publisher, HashMap::new(), server)
     }
 
     pub(crate) fn emit(&mut self, event: Event) {
         let _ = self.publisher.send(event);
     }
 
+    pub(crate) fn initialise(&mut self, arguments: InitialiseArguments) -> anyhow::Result<()> {
+        let req = requests::RequestBody::Initialize(Initialize {
+            adapter_id: "dap gui".to_string(),
+            lines_start_at_one: false,
+            path_format: PathFormat::Path,
+            supports_start_debugging_request: true,
+            supports_variable_type: true,
+            supports_variable_paging: true,
+            supports_progress_reporting: true,
+            supports_memory_event: true,
+        });
+
+        // TODO: deal with capabilities from the response
+        let _ = self.client.send(req).context("sending initialize event")?;
+
+        match arguments {
+            InitialiseArguments::Launch(launch_arguments) => {
+                // send launch event
+                let req = launch_arguments.to_request();
+                self.client.execute(req).context("sending launch request")?;
+            }
+            InitialiseArguments::Attach(attach_arguments) => {
+                let req = attach_arguments.to_request();
+                self.client.execute(req).context("sending attach request")?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn with_breakpoints(
         client: Client,
         publisher: spmc::Sender<Event>,
         existing_breakpoints: impl Into<HashMap<BreakpointId, Breakpoint>>,
+        server: Option<Box<dyn Server + Send>>,
     ) -> Self {
         let breakpoints = existing_breakpoints.into();
         let current_breakpoint_id = *breakpoints.keys().max().unwrap_or(&0);
@@ -54,6 +94,7 @@ impl DebuggerInternals {
             breakpoints,
             current_breakpoint_id,
             current_source: None,
+            _server: server,
         }
     }
 
