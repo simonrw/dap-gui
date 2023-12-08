@@ -110,7 +110,10 @@ impl Debugger {
         self.rx.clone()
     }
 
-    pub fn add_breakpoint(&self, breakpoint: types::Breakpoint) -> types::BreakpointId {
+    pub fn add_breakpoint(
+        &self,
+        breakpoint: types::Breakpoint,
+    ) -> anyhow::Result<types::BreakpointId> {
         let mut internals = self.internals.lock().unwrap();
         internals.add_breakpoint(breakpoint)
     }

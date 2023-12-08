@@ -111,11 +111,13 @@ fn test_debugger() -> anyhow::Result<()> {
         matches!(e, debugger::Event::Initialised)
     });
 
-    debugger.add_breakpoint(debugger::Breakpoint {
-        path: file_path.clone(),
-        line: 4,
-        ..Default::default()
-    });
+    debugger
+        .add_breakpoint(debugger::Breakpoint {
+            path: file_path.clone(),
+            line: 4,
+            ..Default::default()
+        })
+        .context("adding breakpoint")?;
     debugger.launch().context("launching debugee")?;
 
     wait_for_event("running event", &drx, |e| {

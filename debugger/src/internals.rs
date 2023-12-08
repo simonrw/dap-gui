@@ -176,13 +176,16 @@ impl DebuggerInternals {
     }
 
     #[tracing::instrument(skip(self))]
-    pub(crate) fn add_breakpoint(&mut self, breakpoint: Breakpoint) -> BreakpointId {
+    pub(crate) fn add_breakpoint(
+        &mut self,
+        breakpoint: Breakpoint,
+    ) -> anyhow::Result<BreakpointId> {
         tracing::debug!("adding breakpoint");
         let id = self.next_id();
         self.breakpoints.insert(id, breakpoint.clone());
         self.broadcast_breakpoints()
-            .expect("updating breakpoints with debugee");
-        id
+            .context("updating breakpoints with debugee")?;
+        Ok(id)
     }
 
     #[tracing::instrument(skip(self))]
