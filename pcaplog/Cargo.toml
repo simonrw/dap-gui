@@ -9,6 +9,8 @@ edition = "2021"
 anyhow.workspace = true
 clap = { version = "4.4.11", features = ["derive"] }
 etherparse = "0.13.0"
-pcap-parser = "0.14.1"
+pcap-file = "2.0.0"
+serde_json = "1.0.108"
 tracing.workspace = true
-tracing-subscriber = "0.3.18"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+transport = { path = "../transport" }
