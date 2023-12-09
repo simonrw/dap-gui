@@ -49,22 +49,20 @@ where
                     match state {
                         ReaderState::Header => {
                             let parts: Vec<&str> = buffer.trim_end().split(':').collect();
-                            if parts.len() == 2 {
-                                match parts[0] {
-                                    "Content-Length" => {
-                                        content_length = match parts[1].trim().parse() {
-                                            Ok(val) => val,
-                                            Err(_) => {
-                                                anyhow::bail!("failed to parse content length")
-                                            }
-                                        };
-                                        buffer.clear();
-                                        buffer.reserve(content_length);
-                                        state = ReaderState::Content;
-                                    }
-                                    other => {
-                                        anyhow::bail!("header {} not implemented", other);
-                                    }
+                            match parts[0] {
+                                "Content-Length" => {
+                                    content_length = match parts[1].trim().parse() {
+                                        Ok(val) => val,
+                                        Err(_) => {
+                                            anyhow::bail!("failed to parse content length")
+                                        }
+                                    };
+                                    buffer.clear();
+                                    buffer.reserve(content_length);
+                                    state = ReaderState::Content;
+                                }
+                                other => {
+                                    anyhow::bail!("header {} not implemented", other);
                                 }
                             }
                         }
@@ -91,5 +89,48 @@ where
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{BufReader, Cursor, IsTerminal};
+
+    use tracing_subscriber::EnvFilter;
+
+    use crate::{events::Event, Message};
+
+    use super::Reader;
+
+    fn init_test_logger() {
+        let in_ci = std::env::var("CI")
+            .map(|val| val == "true")
+            .unwrap_or(false);
+
+        if std::io::stderr().is_terminal() || in_ci {
+            let _ = tracing_subscriber::fmt()
+                .with_env_filter(EnvFilter::from_default_env())
+                .try_init();
+        } else {
+            let _ = tracing_subscriber::fmt()
+                .with_env_filter(EnvFilter::from_default_env())
+                .json()
+                .try_init();
+        }
+    }
+
+    #[test]
+    fn empty_messsage() {
+        init_test_logger();
+        let message = Cursor::new(
+            "Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}\n",
+        );
+
+        let mut reader = Reader::new(BufReader::new(message));
+
+        let (_sender, shutdown) = oneshot::channel();
+
+        let message = reader.poll_message(&shutdown).unwrap().unwrap();
+        assert!(matches!(message, Message::Event(Event::Terminated)));
     }
 }
