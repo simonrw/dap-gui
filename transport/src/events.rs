@@ -1,9 +1,9 @@
 //! Events emitted by a DAP server
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::types::{BreakpointId, Module, Source, ThreadId};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event", content = "body", rename_all = "camelCase")]
 #[non_exhaustive]
 pub enum Event {
@@ -21,7 +21,7 @@ pub enum Event {
     Module(ModuleEventBody),
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutputEventBody {
     // pub category: Option<OutputEventCategory>,
     pub output: String,
@@ -33,7 +33,7 @@ pub struct OutputEventBody {
     // pub data: Option<Value>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum StoppedReason {
     #[serde(rename = "step")]
@@ -43,7 +43,7 @@ pub enum StoppedReason {
     Other(String),
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StoppedEventBody {
     pub reason: StoppedReason,
@@ -53,31 +53,31 @@ pub struct StoppedEventBody {
     pub text: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadEventBody {
     pub reason: String,
     pub thread_id: ThreadId,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProcessEventBody {
     pub name: String,
     pub start_method: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExitedEventBody {}
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContinuedEventBody {
     pub thread_id: ThreadId,
     pub all_threads_continued: Option<bool>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModuleEventBody {
     // TODO: enum

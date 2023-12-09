@@ -62,7 +62,7 @@ where
                             let content =
                                 std::str::from_utf8(content.as_slice()).context("invalid utf8")?;
                             let message = serde_json::from_str(content).with_context(|| {
-                                format!("could not construct message from: {content:?}")
+                                format!("could not construct message from: {content}")
                             })?;
                             return Ok(Some(message));
                         }

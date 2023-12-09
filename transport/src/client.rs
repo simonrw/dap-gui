@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
 use std::time::Duration;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex, MutexGuard};
 // TODO: use internal error type
 use anyhow::Result;
@@ -19,12 +19,13 @@ pub struct Reply {
     pub request: Option<requests::Request>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub enum Message {
     Event(events::Event),
     Response(responses::Response),
+    Request(requests::Request),
 }
 
 pub struct ClientInternals {
@@ -77,25 +78,26 @@ impl Client {
                 }
 
                 match reader.poll_message() {
-                    Ok(Some(msg)) => {
-                        match msg {
-                            Message::Event(evt) => {
-                                let _ = responses.send(evt);
-                            }
-                            Message::Response(r) => {
-                                with_lock("Reader.store", store_clone.as_ref(), |mut store| {
-                                    match store.remove(&r.request_seq) {
-                                        Some(WaitingRequest(_, tx)) => {
-                                            let _ = tx.send(r.body);
-                                        }
-                                        None => {
-                                            tracing::warn!(response = ?r, "no message in request store")
-                                        }
-                                    }
-                                });
-                            }
+                    Ok(Some(msg)) => match msg {
+                        Message::Event(evt) => {
+                            let _ = responses.send(evt);
                         }
-                    }
+                        Message::Response(r) => {
+                            with_lock(
+                                "Reader.store",
+                                store_clone.as_ref(),
+                                |mut store| match store.remove(&r.request_seq) {
+                                    Some(WaitingRequest(_, tx)) => {
+                                        let _ = tx.send(r.body);
+                                    }
+                                    None => {
+                                        tracing::warn!(response = ?r, "no message in request store")
+                                    }
+                                },
+                            );
+                        }
+                        Message::Request(_) => unreachable!("we should not be parsing requests"),
+                    },
                     Ok(None) => {
                         tracing::debug!("ok none");
                         return;

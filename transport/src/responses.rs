@@ -1,8 +1,8 @@
 //! Responses in reply to [`crate::requests`] from a DAP server
 use crate::types::{self, Scope, StackFrame, Thread, Variable};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Response {
     #[serde(rename = "request_seq")]
@@ -12,7 +12,7 @@ pub struct Response {
     pub body: Option<ResponseBody>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", content = "body", rename_all = "camelCase")]
 #[non_exhaustive]
 pub enum ResponseBody {
@@ -29,7 +29,7 @@ pub enum ResponseBody {
     Disconnect,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Capabilities {
     pub supports_configuration_done_request: Option<bool>,
@@ -73,43 +73,43 @@ pub struct Capabilities {
     pub supports_single_thread_execution_requests: Option<bool>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetFunctionBreakpointsResponse {
     pub breakpoints: Vec<types::Breakpoint>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetBreakpoints {
     pub breakpoints: Vec<types::Breakpoint>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContinueResponse {
     pub all_threads_continued: Option<bool>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadsResponse {
     pub threads: Vec<Thread>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StackTraceResponse {
     pub stack_frames: Vec<StackFrame>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScopesResponse {
     pub scopes: Vec<Scope>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VariablesResponse {
     pub variables: Vec<Variable>,
