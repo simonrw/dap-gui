@@ -1,4 +1,4 @@
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
@@ -48,7 +48,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(stream: TcpStream, responses: spmc::Sender<events::Event>) -> Result<Self> {
+    pub fn new(stream: TcpStream, mut responses: spmc::Sender<events::Event>) -> Result<Self> {
         // internal state
         let sequence_number = Arc::new(AtomicI64::new(0));
 
@@ -60,15 +60,39 @@ impl Client {
         let store = RequestStore::default();
         let store_clone = Arc::clone(&store);
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
+
         thread::spawn(move || {
             let input = BufReader::new(input_stream);
-            let mut reader = Reader {
-                input,
-                store: store_clone,
-                responses,
-            };
-            if let Err(e) = reader.run_poll_loop(shutdown_rx) {
-                tracing::warn!(error = ?e, "running poll loop");
+            let mut reader = Reader { input };
+
+            // poll loop
+            loop {
+                match reader.poll_message(&shutdown_rx) {
+                    Ok(Some(msg)) => {
+                        match msg {
+                            Message::Event(evt) => {
+                                let _ = responses.send(evt);
+                            }
+                            Message::Response(r) => {
+                                with_lock("Reader.store", store_clone.as_ref(), |mut store| {
+                                    match store.remove(&r.request_seq) {
+                                        Some(WaitingRequest(_, tx)) => {
+                                            let _ = tx.send(r.body);
+                                        }
+                                        None => {
+                                            tracing::warn!(response = ?r, "no message in request store")
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    }
+                    Ok(None) => {
+                        tracing::debug!("ok none");
+                        return;
+                    }
+                    Err(e) => eprintln!("reader error: {e}"),
+                }
             }
         });
 
@@ -182,8 +206,6 @@ enum ClientState {
 
 struct Reader<R> {
     input: R,
-    store: RequestStore,
-    responses: spmc::Sender<events::Event>,
 }
 
 impl<R> Reader<R>
@@ -255,35 +277,6 @@ where
                     }
                     return Err(anyhow::anyhow!("error reading from buffer: {e:?}"));
                 }
-            }
-        }
-    }
-
-    fn run_poll_loop(&mut self, shutdown: Receiver<()>) -> Result<()> {
-        loop {
-            match self.poll_message(&shutdown) {
-                Ok(Some(msg)) => match msg {
-                    Message::Event(evt) => {
-                        let _ = self.responses.send(evt);
-                    }
-                    Message::Response(r) => {
-                        with_lock("Reader.store", self.store.as_ref(), |mut store| match store
-                            .remove(&r.request_seq)
-                        {
-                            Some(WaitingRequest(_, tx)) => {
-                                let _ = tx.send(r.body);
-                            }
-                            None => {
-                                tracing::warn!(response = ?r, "no message in request store")
-                            }
-                        });
-                    }
-                },
-                Ok(None) => {
-                    tracing::debug!("ok none");
-                    return Ok(());
-                }
-                Err(e) => eprintln!("reader error: {e}"),
             }
         }
     }
