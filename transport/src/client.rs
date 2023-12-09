@@ -66,7 +66,17 @@ impl Client {
 
             // poll loop
             loop {
-                match reader.poll_message(&shutdown_rx) {
+                // check for shutdown
+                match shutdown_rx.try_recv() {
+                    Ok(_) => return,
+                    Err(oneshot::TryRecvError::Empty) => {}
+                    Err(e) => {
+                        tracing::error!(error = %e, "shutdown sender closed");
+                        return;
+                    }
+                }
+
+                match reader.poll_message() {
                     Ok(Some(msg)) => {
                         match msg {
                             Message::Event(evt) => {

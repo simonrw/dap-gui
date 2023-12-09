@@ -21,25 +21,12 @@ where
         Self { input }
     }
 
-    pub fn poll_message(
-        &mut self,
-        shutdown: &oneshot::Receiver<()>,
-    ) -> anyhow::Result<Option<Message>> {
+    pub fn poll_message(&mut self) -> anyhow::Result<Option<Message>> {
         let mut state = ReaderState::Header;
         let mut buffer = String::new();
         let mut content_length: usize = 0;
 
         loop {
-            // check for shutdown
-            match shutdown.try_recv() {
-                Ok(_) => return Ok(None),
-                Err(oneshot::TryRecvError::Empty) => {}
-                Err(e) => {
-                    tracing::error!(error = %e, "shutdown sender closed");
-                    anyhow::bail!("shutdown sender closed");
-                }
-            }
-
             match self.input.read_line(&mut buffer) {
                 Ok(read_size) => {
                     if read_size == 0 {
@@ -128,9 +115,7 @@ mod tests {
 
         let mut reader = Reader::new(BufReader::new(message));
 
-        let (_sender, shutdown) = oneshot::channel();
-
-        let message = reader.poll_message(&shutdown).unwrap().unwrap();
+        let message = reader.poll_message().unwrap().unwrap();
         assert!(matches!(message, Message::Event(Event::Terminated)));
     }
 }
