@@ -180,13 +180,16 @@ enum ClientState {
     Content,
 }
 
-struct Reader {
-    input: BufReader<TcpStream>,
+struct Reader<R> {
+    input: R,
     store: RequestStore,
     responses: spmc::Sender<events::Event>,
 }
 
-impl Reader {
+impl<R> Reader<R>
+where
+    R: BufRead,
+{
     fn poll_message(&mut self, shutdown: &Receiver<()>) -> Result<Option<Message>> {
         let mut state = ClientState::Header;
         let mut buffer = String::new();
