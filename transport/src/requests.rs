@@ -27,6 +27,7 @@ pub enum RequestBody {
     Continue(Continue),
     SetFunctionBreakpoints(SetFunctionBreakpoints),
     SetBreakpoints(SetBreakpoints),
+    SetExceptionBreakpoints(SetExceptionBreakpoints),
     Attach(Attach),
     Launch(Launch),
     Scopes(Scopes),
@@ -95,6 +96,12 @@ pub struct SetBreakpoints {
     pub breakpoints: Option<Vec<SourceBreakpoint>>,
     pub lines: Option<Vec<usize>>,
     pub source_modified: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SetExceptionBreakpoints {
+    pub filters: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
