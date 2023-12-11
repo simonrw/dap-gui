@@ -10,13 +10,13 @@ pub type StackFrameId = i64;
 pub type VariablesReference = i64;
 pub type SourceReference = i64;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Thread {
     pub id: ThreadId,
     pub name: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum PresentationHint {
     Arguments,
@@ -25,7 +25,7 @@ pub enum PresentationHint {
     Other(String),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct StackFrameFormat {
     /// Displays parameters for the stack frame
@@ -44,7 +44,7 @@ pub struct StackFrameFormat {
     pub include_all: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Scope {
     pub name: String,
@@ -60,7 +60,7 @@ pub struct Scope {
     pub end_column: Option<i64>,
 }
 
-#[derive(Default, Serialize, Deserialize, Debug, Clone)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Source {
     pub name: Option<String>,
     pub path: Option<PathBuf>,
@@ -72,7 +72,7 @@ pub struct Source {
     pub sources: Option<Vec<Source>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Breakpoint {
     pub id: Option<BreakpointId>,
     pub verified: bool,
@@ -86,7 +86,7 @@ pub struct Breakpoint {
     pub offset: Option<i64>,
 }
 
-#[derive(Default, Serialize, Deserialize, Debug, Clone)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceBreakpoint {
     /// The source line of the breakpoint or logpoint.
@@ -113,7 +113,7 @@ pub struct SourceBreakpoint {
     pub log_message: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct StackFrame {
     pub id: StackFrameId,
@@ -128,7 +128,7 @@ pub struct StackFrame {
     pub presentation_hint: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct VariablePresentationHint {
     pub kind: Option<String>,
@@ -137,7 +137,7 @@ pub struct VariablePresentationHint {
     pub lazy: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Variable {
     pub name: String,
@@ -147,13 +147,13 @@ pub struct Variable {
     pub presentation_hint: Option<VariablePresentationHint>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum ModuleId {
     Number(i64),
     String(String),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Module {
     pub id: i64,
     pub name: String,

@@ -7,17 +7,15 @@ use crate::types::{
     Seq, Source, SourceBreakpoint, StackFrameFormat, StackFrameId, ThreadId, VariablesReference,
 };
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Request {
     pub seq: Seq,
-    #[serde(skip_deserializing)]
-    pub r#type: String,
     #[serde(flatten)]
     pub body: RequestBody,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(tag = "command", content = "arguments", rename_all = "camelCase")]
 pub enum RequestBody {
     StackTrace(StackTrace),
@@ -36,9 +34,27 @@ pub enum RequestBody {
     LoadedSources,
     Terminate(Terminate),
     Disconnect(Disconnect),
+<<<<<<< Updated upstream
+||||||| Stash base
+    Next(Next),
 }
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Next {
+    pub thread_id: ThreadId,
+=======
+    Next(Next),
+}
+
+#[derive(Debug, Deserialize, Serialize, Default, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Next {
+    pub thread_id: ThreadId,
+>>>>>>> Stashed changes
+}
+
+#[derive(Debug, Deserialize, Serialize, Default, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct StackTrace {
     pub thread_id: ThreadId,
@@ -47,7 +63,7 @@ pub struct StackTrace {
     pub format: Option<StackFrameFormat>,
 }
 
-#[derive(Default, Debug, Deserialize, Serialize, Clone)]
+#[derive(Default, Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum PathFormat {
     #[default]
@@ -55,7 +71,7 @@ pub enum PathFormat {
     Uri,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Initialize {
     #[serde(rename = "adapterID")]
@@ -71,25 +87,25 @@ pub struct Initialize {
     pub supports_memory_event: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Continue {
     pub thread_id: ThreadId,
     pub single_thread: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct Breakpoint {
     pub name: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SetFunctionBreakpoints {
     pub breakpoints: Vec<Breakpoint>,
 }
 
-#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SetBreakpoints {
     pub source: Source,
@@ -98,27 +114,27 @@ pub struct SetBreakpoints {
     pub source_modified: Option<bool>,
 }
 
-#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SetExceptionBreakpoints {
     pub filters: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectInfo {
     pub host: String,
     pub port: u16,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PathMapping {
     pub local_root: String,
     pub remote_root: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Attach {
     pub connect: ConnectInfo,
@@ -127,7 +143,7 @@ pub struct Attach {
     pub workspace_folder: PathBuf,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DebugpyLaunchArguments {
     pub just_my_code: bool,
@@ -139,13 +155,13 @@ pub struct DebugpyLaunchArguments {
     pub is_output_redirected: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(untagged, rename_all = "camelCase")]
 pub enum LaunchArguments {
     Debugpy(DebugpyLaunchArguments),
 }
 
-#[derive(Default, Debug, Deserialize, Serialize, Clone)]
+#[derive(Default, Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Launch {
     pub program: PathBuf,
@@ -154,19 +170,19 @@ pub struct Launch {
     pub launch_arguments: Option<LaunchArguments>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Scopes {
     pub frame_id: StackFrameId,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Variables {
     pub variables_reference: VariablesReference,
 }
 
-#[derive(Default, Debug, Deserialize, Serialize, Clone)]
+#[derive(Default, Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct BreakpointLocations {
     pub source: Source,
@@ -176,13 +192,14 @@ pub struct BreakpointLocations {
     pub end_column: Option<usize>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Terminate {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub restart: Option<bool>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Disconnect {
     pub terminate_debugee: bool,

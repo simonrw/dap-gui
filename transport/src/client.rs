@@ -19,13 +19,33 @@ pub struct Reply {
     pub request: Option<requests::Request>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub enum Message {
     Event(events::Event),
     Response(responses::Response),
     Request(requests::Request),
+}
+
+// handy From implementations
+
+impl From<events::Event> for Message {
+    fn from(value: events::Event) -> Self {
+        Self::Event(value)
+    }
+}
+
+impl From<responses::Response> for Message {
+    fn from(value: responses::Response) -> Self {
+        Self::Response(value)
+    }
+}
+
+impl From<requests::Request> for Message {
+    fn from(value: requests::Request) -> Self {
+        Self::Request(value)
+    }
 }
 
 pub struct ClientInternals {
@@ -151,14 +171,13 @@ where
 
 impl ClientInternals {
     pub fn send(&mut self, body: requests::RequestBody) -> Result<Option<ResponseBody>> {
-        self.sequence_number.fetch_add(1, Ordering::SeqCst);
-        let message = requests::Request {
-            seq: self.sequence_number.load(Ordering::SeqCst),
-            r#type: "request".to_string(),
+        let seq = self.sequence_number.fetch_add(1, Ordering::SeqCst);
+        let message = Message::Request(requests::Request {
+            seq,
             body: body.clone(),
-        };
+        });
         let resp_json = serde_json::to_string(&message).unwrap();
-        tracing::debug!(request = ?message, "sending message");
+        tracing::debug!(request = ?message, json = %resp_json, "sending message");
         write!(
             self.output,
             "Content-Length: {}\r\n\r\n{}",
@@ -172,9 +191,10 @@ impl ClientInternals {
         let waiting_request = WaitingRequest(body, tx);
 
         with_lock("ClientInternals.store", self.store.as_ref(), |mut store| {
-            store.insert(message.seq, waiting_request);
+            store.insert(seq, waiting_request);
         });
 
+        tracing::debug!(seq, "waiting for response");
         let res = rx.recv().expect("sender dropped");
         Ok(res)
     }
@@ -184,7 +204,6 @@ impl ClientInternals {
         self.sequence_number.fetch_add(1, Ordering::SeqCst);
         let message = requests::Request {
             seq: self.sequence_number.load(Ordering::SeqCst),
-            r#type: "request".to_string(),
             body: body.clone(),
         };
         let resp_json = serde_json::to_string(&message).unwrap();

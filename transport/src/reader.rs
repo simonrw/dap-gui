@@ -36,21 +36,25 @@ where
                     match state {
                         ReaderState::Header => {
                             let parts: Vec<&str> = buffer.trim_end().split(':').collect();
-                            match parts[0] {
-                                "Content-Length" => {
-                                    content_length = match parts[1].trim().parse() {
-                                        Ok(val) => val,
-                                        Err(_) => {
-                                            anyhow::bail!("failed to parse content length")
-                                        }
-                                    };
-                                    buffer.clear();
-                                    buffer.reserve(content_length);
-                                    state = ReaderState::Content;
+                            if parts.len() == 2 {
+                                match parts[0] {
+                                    "Content-Length" => {
+                                        content_length = match parts[1].trim().parse() {
+                                            Ok(val) => val,
+                                            Err(_) => {
+                                                anyhow::bail!("failed to parse content length")
+                                            }
+                                        };
+                                        buffer.clear();
+                                        buffer.reserve(content_length);
+                                        state = ReaderState::Content;
+                                    }
+                                    other => {
+                                        anyhow::bail!("header {} not implemented", other);
+                                    }
                                 }
-                                other => {
-                                    anyhow::bail!("header {} not implemented", other);
-                                }
+                            } else {
+                                anyhow::bail!("error parsing header: {buffer}");
                             }
                         }
                         ReaderState::Content => {
@@ -85,7 +89,9 @@ mod tests {
 
     use tracing_subscriber::EnvFilter;
 
-    use crate::{events::Event, Message};
+    use crate::{
+        requests::Request, requests::RequestBody, requests::Terminate, Message,
+    };
 
     use super::Reader;
 
@@ -107,15 +113,54 @@ mod tests {
     }
 
     #[test]
-    fn empty_messsage() {
+    fn single_message() {
         init_test_logger();
-        let message = Cursor::new(
-            "Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}\n",
-        );
 
-        let mut reader = Reader::new(BufReader::new(message));
+        let input = Request {
+            seq: 1,
+            body: RequestBody::Terminate(Terminate { restart: None }),
+        }
+        .into();
+
+        let message = build_message(&input);
+
+        let mut reader = Reader::new(BufReader::new(Cursor::new(message)));
 
         let message = reader.poll_message().unwrap().unwrap();
-        assert!(matches!(message, Message::Event(Event::Terminated)));
+        assert_eq!(message, input);
+    }
+
+    #[test]
+    fn mutliple_messages() {
+        init_test_logger();
+
+        let input1 = Request {
+            seq: 1,
+            body: RequestBody::Terminate(Terminate { restart: None }),
+        }
+        .into();
+
+        let input2 = Request {
+            seq: 2,
+            body: RequestBody::Threads,
+        }
+        .into();
+
+        let m1 = build_message(&input1);
+        let m2 = build_message(&input2);
+
+        let message = format!("{m1}{m2}");
+
+        let mut reader = Reader::new(BufReader::new(Cursor::new(message)));
+
+        let got1 = reader.poll_message().unwrap().unwrap();
+        assert_eq!(got1, input1);
+        let got2 = reader.poll_message().unwrap().unwrap();
+        assert_eq!(got2, input2);
+    }
+
+    fn build_message(message: &Message) -> String {
+        let serialised = serde_json::to_string(message).unwrap();
+        format!("Content-Length: {}\r\n\r\n{}", serialised.len(), serialised)
     }
 }
