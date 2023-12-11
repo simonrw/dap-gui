@@ -36,6 +36,13 @@ pub enum RequestBody {
     LoadedSources,
     Terminate(Terminate),
     Disconnect(Disconnect),
+    Next(Next),
+}
+
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Next {
+    pub thread_id: ThreadId,
 }
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
