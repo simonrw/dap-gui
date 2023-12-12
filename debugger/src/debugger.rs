@@ -55,8 +55,10 @@ impl Debugger {
         let internals_rx = rx.clone();
         let (mut internals, events) = match &args {
             InitialiseArguments::Launch(state::LaunchArguments { language, .. }) => {
+                // let implementation = language.into();
                 let implementation: Implementation = match language {
                     crate::Language::DebugPy => Implementation::Debugpy,
+                    crate::Language::Delve => Implementation::Delve,
                 };
 
                 let s = server::for_implementation_on_port(implementation, port)

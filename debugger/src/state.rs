@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, str::FromStr};
 
 use transport::{
     requests::{self, DebugpyLaunchArguments},
@@ -43,8 +43,22 @@ impl<'a> From<&'a DebuggerState> for Event {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum Language {
     DebugPy,
+    Delve,
+}
+
+impl FromStr for Language {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "debugpy" => Ok(Self::DebugPy),
+            "delve" => Ok(Self::Delve),
+            other => Err(anyhow::anyhow!("invalid language {other}")),
+        }
+    }
 }
 
 pub struct AttachArguments {
@@ -56,7 +70,7 @@ pub struct AttachArguments {
 impl AttachArguments {
     pub fn to_request(self) -> requests::RequestBody {
         match self.language {
-            Language::DebugPy => requests::RequestBody::Attach(requests::Attach {
+            _ => requests::RequestBody::Attach(requests::Attach {
                 connect: requests::ConnectInfo {
                     host: "localhost".to_string(),
                     port: self.port.unwrap_or(DEFAULT_DAP_PORT),
@@ -115,6 +129,7 @@ impl LaunchArguments {
                     },
                 )),
             }),
+            Language::Delve => todo!(),
         }
     }
 }
