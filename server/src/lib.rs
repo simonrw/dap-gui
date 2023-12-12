@@ -2,9 +2,11 @@ use anyhow::Context;
 use transport::DEFAULT_DAP_PORT;
 
 pub mod debugpy;
+pub mod delve;
 
 pub enum Implementation {
     Debugpy,
+    Delve,
 }
 
 pub trait Server {
@@ -33,6 +35,10 @@ pub fn for_implementation_on_port(
     match implementation {
         Implementation::Debugpy => {
             let server = crate::debugpy::DebugpyServer::on_port(port).context("creating server")?;
+            Ok(Box::new(server))
+        }
+        Implementation::Delve => {
+            let server = crate::delve::DelveServer::on_port(port).context("creating server")?;
             Ok(Box::new(server))
         }
     }

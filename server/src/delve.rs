@@ -9,42 +9,37 @@ use anyhow::Context;
 
 use crate::Server;
 
-pub struct DebugpyServer {
+pub struct DelveServer {
     child: Child,
 }
 
-impl Server for DebugpyServer {
-    fn on_port(port: impl Into<u16>) -> anyhow::Result<Self> {
+impl Server for DelveServer {
+    fn on_port(port: impl Into<u16>) -> anyhow::Result<Self>
+    where
+        Self: Sized,
+    {
         let port = port.into();
 
         tracing::debug!(port = ?port, "starting server process");
         let cwd = std::env::current_dir().unwrap();
-        let mut child = std::process::Command::new("python")
-            .args([
-                "-m",
-                "debugpy.adapter",
-                "--host",
-                "127.0.0.1",
-                "--port",
-                &format!("{port}"),
-                "--log-stderr",
-            ])
-            .stderr(Stdio::piped())
+        let mut child = std::process::Command::new("dlv")
+            .args(&["dap", "--listen", &format!("127.0.0.1:{port}")])
+            .stdout(Stdio::piped())
             .current_dir(cwd.join("..").canonicalize().unwrap())
             .spawn()
             .context("spawning background process")?;
 
         // wait until server is ready
         tracing::debug!("waiting until server is ready");
-        let stderr = child.stderr.take().unwrap();
+        let stderr = child.stdout.take().unwrap();
         let reader = BufReader::new(stderr);
 
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
             let mut should_signal = true;
             for line in reader.lines() {
-                let line = line.unwrap();
-                if should_signal && line.contains("Listening for incoming Client connections") {
+                let line = dbg!(line.unwrap());
+                if should_signal && line.contains("DAP server listening") {
                     should_signal = false;
                     let _ = tx.send(());
                 }
@@ -57,7 +52,7 @@ impl Server for DebugpyServer {
     }
 }
 
-impl Drop for DebugpyServer {
+impl Drop for DelveServer {
     fn drop(&mut self) {
         tracing::debug!("terminating server");
         match self.child.kill() {
@@ -103,7 +98,7 @@ mod tests {
 
         let port = get_random_tcp_port().context("reserving custom port")?;
         let _server =
-            for_implementation_on_port(Implementation::Debugpy, port).context("creating server")?;
+            for_implementation_on_port(Implementation::Delve, port).context("creating server")?;
 
         // server should be running
         tracing::info!("making connection");
