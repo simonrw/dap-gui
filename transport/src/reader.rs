@@ -5,6 +5,7 @@ use crate::Message;
 
 pub struct Reader<R> {
     input: R,
+    buffer: String,
 }
 
 impl<R> Reader<R>
@@ -12,30 +13,33 @@ where
     R: BufRead,
 {
     pub fn new(input: R) -> Self {
-        Self { input }
+        Self {
+            input,
+            buffer: String::new(),
+        }
     }
 
     pub fn poll_message(&mut self) -> anyhow::Result<Option<Message>> {
-        let mut buffer = String::new();
         loop {
-            if !buffer.is_empty() {
+            if !self.buffer.is_empty() {
                 // try to parse from the buffer
-                match parse_message(&buffer) {
+                match parse_message(&self.buffer) {
                     Ok((input, message)) => {
                         tracing::trace!(rest = %input, "parsed message");
-                        buffer = input.to_owned();
+                        // overwrite the buffer with the remaining input from parsing the message
+                        self.buffer = input.to_owned();
                         return Ok(Some(message));
                     }
                     Err(nom::Err::Incomplete(why)) => {
                         tracing::trace!(?why, "incomplete input");
                     }
                     Err(nom::Err::Failure(e)) | Err(nom::Err::Error(e)) => {
-                        tracing::trace!(error = %e, %buffer, "error parsing message");
+                        tracing::trace!(error = %e, %self.buffer, "error parsing message");
                     }
                 }
             }
 
-            match self.input.read_line(&mut buffer) {
+            match self.input.read_line(&mut self.buffer) {
                 Ok(read_size) => {
                     if read_size == 0 {
                         return Ok(None);
