@@ -1,13 +1,7 @@
 use std::io::{self, BufRead};
 
-use anyhow::Context;
-
+use crate::parse::parse_message;
 use crate::Message;
-
-enum ReaderState {
-    Header,
-    Content,
-}
 
 pub struct Reader<R> {
     input: R,
@@ -22,51 +16,32 @@ where
     }
 
     pub fn poll_message(&mut self) -> anyhow::Result<Option<Message>> {
-        let mut state = ReaderState::Header;
         let mut buffer = String::new();
-        let mut content_length: usize = 0;
-
         loop {
+            if !buffer.is_empty() {
+                // try to parse from the buffer
+                match parse_message(&buffer) {
+                    Ok((input, message)) => {
+                        tracing::trace!(rest = %input, "parsed message");
+                        buffer = input.to_owned();
+                        return Ok(Some(message));
+                    }
+                    Err(nom::Err::Incomplete(why)) => {
+                        tracing::trace!(?why, "incomplete input");
+                    }
+                    Err(nom::Err::Failure(e)) | Err(nom::Err::Error(e)) => {
+                        tracing::trace!(error = %e, %buffer, "error parsing message");
+                    }
+                }
+            }
+
             match self.input.read_line(&mut buffer) {
                 Ok(read_size) => {
                     if read_size == 0 {
                         return Ok(None);
                     }
 
-                    match state {
-                        ReaderState::Header => {
-                            let parts: Vec<&str> = buffer.trim_end().split(':').collect();
-                            match parts[0] {
-                                "Content-Length" => {
-                                    content_length = match parts[1].trim().parse() {
-                                        Ok(val) => val,
-                                        Err(_) => {
-                                            anyhow::bail!("failed to parse content length")
-                                        }
-                                    };
-                                    buffer.clear();
-                                    buffer.reserve(content_length);
-                                    state = ReaderState::Content;
-                                }
-                                other => {
-                                    anyhow::bail!("header {} not implemented", other);
-                                }
-                            }
-                        }
-                        ReaderState::Content => {
-                            buffer.clear();
-                            let mut content = vec![0; content_length];
-                            self.input
-                                .read_exact(content.as_mut_slice())
-                                .map_err(|e| anyhow::anyhow!("failed to read: {:?}", e))?;
-                            let content =
-                                std::str::from_utf8(content.as_slice()).context("invalid utf8")?;
-                            let message = serde_json::from_str(content).with_context(|| {
-                                format!("could not construct message from: {content}")
-                            })?;
-                            return Ok(Some(message));
-                        }
-                    }
+                    tracing::trace!(read_size, "read bytes from socket");
                 }
                 Err(e) => {
                     if e.kind() == io::ErrorKind::WouldBlock {
@@ -114,6 +89,22 @@ mod tests {
         );
 
         let mut reader = Reader::new(BufReader::new(message));
+
+        let message = reader.poll_message().unwrap().unwrap();
+        assert!(matches!(message, Message::Event(Event::Terminated)));
+    }
+
+    #[test]
+    fn multiple_messages() {
+        init_test_logger();
+        let message = Cursor::new(
+            "Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}\nContent-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}\n",
+        );
+
+        let mut reader = Reader::new(BufReader::new(message));
+
+        let message = reader.poll_message().unwrap().unwrap();
+        assert!(matches!(message, Message::Event(Event::Terminated)));
 
         let message = reader.poll_message().unwrap().unwrap();
         assert!(matches!(message, Message::Event(Event::Terminated)));

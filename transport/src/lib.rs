@@ -4,6 +4,7 @@
 pub mod bindings;
 mod client;
 pub mod events;
+mod parse;
 mod reader;
 mod request_store;
 pub mod requests;
