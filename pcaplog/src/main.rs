@@ -3,12 +3,16 @@ use std::path::PathBuf;
 use anyhow::Context;
 use clap::Parser;
 use pcaplog::extract_messages;
+use serde::Serialize;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Parser)]
 struct Args {
     file: PathBuf,
 }
+
+#[derive(Serialize)]
+struct Messages(Vec<transport::Message>);
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -18,13 +22,11 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     tracing::debug!(?args, "parsed command line arguments");
 
-    let messages = extract_messages(&args.file).context("extracting messages")?;
-    for message in messages {
-        println!(
-            "{}",
-            serde_json::to_string(&message).context("serialising messages")?
-        );
-    }
+    let messages = Messages(extract_messages(&args.file).context("extracting messages")?);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&messages).context("serializing messages")?
+    );
 
     Ok(())
 }

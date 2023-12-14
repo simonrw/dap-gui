@@ -416,6 +416,7 @@ dependencies = [
  "glob",
  "pcap-file",
  "rstest",
+ "serde",
  "serde_json",
  "tracing",
  "tracing-subscriber",

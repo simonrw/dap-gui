@@ -14,3 +14,4 @@ debug = 1
 anyhow = "1.0.75"
 spmc = "0.3.0"
 tracing = "0.1.40"
+serde = { version = "1.0.193", features = ["derive"] }
