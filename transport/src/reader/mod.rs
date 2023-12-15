@@ -3,9 +3,9 @@ use crate::Message;
 use std::io::BufRead;
 
 #[cfg(not(nom))]
-pub(crate) mod hand_written_reader;
+pub mod hand_written_reader;
 #[cfg(nom)]
-pub(crate) mod nom_reader;
+pub mod nom_reader;
 
 pub trait Reader<R> {
     fn new(input: R) -> Self;
