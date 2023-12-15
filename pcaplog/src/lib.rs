@@ -58,7 +58,7 @@ pub fn extract_messages(path: impl AsRef<Path>) -> anyhow::Result<Vec<Message>> 
                 }
             }
 
-            let mut reader = Reader::new(BufReader::new(messages.as_slice()));
+            let mut reader = transport::NomReader::new(BufReader::new(messages.as_slice()));
             loop {
                 match reader.poll_message() {
                     Ok(Some(message)) => {

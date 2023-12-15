@@ -7,7 +7,7 @@ pub fn parser_benchmark(c: &mut Criterion) {
     let message =
         Cursor::new("Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}\n");
 
-    let mut reader = Reader::new(BufReader::new(message));
+    let mut reader = transport::NomReader::new(BufReader::new(message));
 
     c.bench_function("poll message", |b| b.iter(|| reader.poll_message()));
 }

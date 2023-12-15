@@ -3,12 +3,16 @@ use std::io::{self, BufRead};
 use crate::parse::parse_message;
 use crate::Message;
 
-pub struct Reader<R> {
+pub trait Reader {
+    fn poll_message(&mut self) -> anyhow::Result<Option<Message>>;
+}
+
+pub struct NomReader<R> {
     input: R,
     buffer: String,
 }
 
-impl<R> Reader<R>
+impl<R> NomReader<R>
 where
     R: BufRead,
 {
@@ -18,8 +22,12 @@ where
             buffer: String::new(),
         }
     }
-
-    pub fn poll_message(&mut self) -> anyhow::Result<Option<Message>> {
+}
+impl<R> Reader for NomReader<R>
+where
+    R: BufRead,
+{
+    fn poll_message(&mut self) -> anyhow::Result<Option<Message>> {
         loop {
             if !self.buffer.is_empty() {
                 // try to parse from the buffer
@@ -66,7 +74,7 @@ mod tests {
 
     use crate::{events::Event, Message};
 
-    use super::Reader;
+    use super::NomReader;
 
     fn init_test_logger() {
         let in_ci = std::env::var("CI")
@@ -92,7 +100,7 @@ mod tests {
             "Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}\n",
         );
 
-        let mut reader = Reader::new(BufReader::new(message));
+        let mut reader = NomReader::new(BufReader::new(message));
 
         let message = reader.poll_message().unwrap().unwrap();
         assert!(matches!(message, Message::Event(Event::Terminated)));
@@ -105,7 +113,7 @@ mod tests {
             "Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}\nContent-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}\n",
         );
 
-        let mut reader = Reader::new(BufReader::new(message));
+        let mut reader = NomReader::new(BufReader::new(message));
 
         let message = reader.poll_message().unwrap().unwrap();
         assert!(matches!(message, Message::Event(Event::Terminated)));
