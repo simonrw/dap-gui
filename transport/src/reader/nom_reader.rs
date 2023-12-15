@@ -1,11 +1,6 @@
 use std::io::{self, BufRead};
 
-use crate::parse::parse_message;
-use crate::Message;
-
-pub trait Reader {
-    fn poll_message(&mut self) -> anyhow::Result<Option<Message>>;
-}
+use crate::{parse::parse_message, Message, Reader};
 
 pub struct NomReader<R> {
     input: R,
@@ -72,7 +67,7 @@ mod tests {
 
     use tracing_subscriber::EnvFilter;
 
-    use crate::{events::Event, Message};
+    use crate::{events::Event, Message, Reader};
 
     use super::NomReader;
 

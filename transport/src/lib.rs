@@ -14,7 +14,9 @@ pub mod types;
 pub use client::Client;
 pub use client::Message;
 pub use client::Received;
-pub use reader::{NomReader, Reader};
+pub use reader::hand_written_reader::HandWrittenReader;
+pub use reader::nom_reader::NomReader;
+pub use reader::Reader;
 
 /// The default port the DAP protocol listens on
 pub const DEFAULT_DAP_PORT: u16 = 5678;
