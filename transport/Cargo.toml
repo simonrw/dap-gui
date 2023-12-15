@@ -19,3 +19,7 @@ nom = "7.1.3"
 tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"] }
 server = { path = "../server" }
 criterion = "0.5.1"
+
+[[bench]]
+name = "parser"
+harness = false

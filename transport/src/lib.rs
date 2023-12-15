@@ -5,7 +5,7 @@ pub mod bindings;
 mod client;
 pub mod events;
 mod parse;
-mod reader;
+pub(crate) mod reader;
 mod request_store;
 pub mod requests;
 pub mod responses;
