@@ -4,8 +4,9 @@
 pub mod bindings;
 mod client;
 pub mod events;
+#[cfg(nom)]
 mod parse;
-pub(crate) mod reader;
+pub mod reader;
 mod request_store;
 pub mod requests;
 pub mod responses;
@@ -14,8 +15,6 @@ pub mod types;
 pub use client::Client;
 pub use client::Message;
 pub use client::Received;
-pub use reader::hand_written_reader::HandWrittenReader;
-pub use reader::nom_reader::NomReader;
 pub use reader::Reader;
 
 /// The default port the DAP protocol listens on

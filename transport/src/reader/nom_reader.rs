@@ -7,21 +7,17 @@ pub struct NomReader<R> {
     buffer: String,
 }
 
-impl<R> NomReader<R>
+impl<R> Reader<R> for NomReader<R>
 where
     R: BufRead,
 {
-    pub fn new(input: R) -> Self {
+    fn new(input: R) -> Self {
         Self {
             input,
             buffer: String::new(),
         }
     }
-}
-impl<R> Reader for NomReader<R>
-where
-    R: BufRead,
-{
+
     fn poll_message(&mut self) -> anyhow::Result<Option<Message>> {
         loop {
             if !self.buffer.is_empty() {

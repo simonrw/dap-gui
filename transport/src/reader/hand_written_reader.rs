@@ -8,21 +8,19 @@ pub struct HandWrittenReader<R> {
     input: R,
 }
 
-impl<R> HandWrittenReader<R> {
-    pub fn new(input: R) -> Self {
-        Self { input }
-    }
-}
-
 enum ReaderState {
     Header,
     Content,
 }
 
-impl<R> Reader for HandWrittenReader<R>
+impl<R> Reader<R> for HandWrittenReader<R>
 where
     R: BufRead,
 {
+    fn new(input: R) -> Self {
+        Self { input }
+    }
+
     fn poll_message(&mut self) -> anyhow::Result<Option<crate::Message>> {
         let mut state = ReaderState::Header;
         let mut buffer = String::new();
