@@ -4,7 +4,9 @@
 pub mod bindings;
 mod client;
 pub mod events;
-mod reader;
+#[cfg(nom)]
+mod parse;
+pub mod reader;
 mod request_store;
 pub mod requests;
 pub mod responses;

@@ -2,26 +2,26 @@ use std::io::{self, BufRead};
 
 use anyhow::Context;
 
-use crate::Message;
+use crate::Reader;
+
+pub struct HandWrittenReader<R> {
+    input: R,
+}
 
 enum ReaderState {
     Header,
     Content,
 }
 
-pub struct Reader<R> {
-    input: R,
-}
-
-impl<R> Reader<R>
+impl<R> Reader<R> for HandWrittenReader<R>
 where
     R: BufRead,
 {
-    pub fn new(input: R) -> Self {
+    fn new(input: R) -> Self {
         Self { input }
     }
 
-    pub fn poll_message(&mut self) -> anyhow::Result<Option<Message>> {
+    fn poll_message(&mut self) -> anyhow::Result<Option<crate::Message>> {
         let mut state = ReaderState::Header;
         let mut buffer = String::new();
         let mut content_length: usize = 0;
@@ -76,46 +76,5 @@ where
                 }
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::io::{BufReader, Cursor, IsTerminal};
-
-    use tracing_subscriber::EnvFilter;
-
-    use crate::{events::Event, Message};
-
-    use super::Reader;
-
-    fn init_test_logger() {
-        let in_ci = std::env::var("CI")
-            .map(|val| val == "true")
-            .unwrap_or(false);
-
-        if std::io::stderr().is_terminal() || in_ci {
-            let _ = tracing_subscriber::fmt()
-                .with_env_filter(EnvFilter::from_default_env())
-                .try_init();
-        } else {
-            let _ = tracing_subscriber::fmt()
-                .with_env_filter(EnvFilter::from_default_env())
-                .json()
-                .try_init();
-        }
-    }
-
-    #[test]
-    fn empty_messsage() {
-        init_test_logger();
-        let message = Cursor::new(
-            "Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}\n",
-        );
-
-        let mut reader = Reader::new(BufReader::new(message));
-
-        let message = reader.poll_message().unwrap().unwrap();
-        assert!(matches!(message, Message::Event(Event::Terminated)));
     }
 }

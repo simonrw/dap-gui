@@ -9,9 +9,11 @@ use std::sync::{Arc, Mutex, MutexGuard};
 // TODO: use internal error type
 use anyhow::Result;
 
+#[cfg(nom)]
+use crate::reader::nom_reader::NomReader;
 use crate::request_store::{RequestStore, WaitingRequest};
 use crate::responses::ResponseBody;
-use crate::{events, requests, responses, Reader};
+use crate::{events, reader, requests, responses, Reader};
 
 #[derive(Debug)]
 pub struct Reply {
@@ -63,7 +65,7 @@ impl Client {
 
         thread::spawn(move || {
             let input = BufReader::new(input_stream);
-            let mut reader = Reader::new(input);
+            let mut reader = reader::get(input);
 
             // poll loop
             loop {
