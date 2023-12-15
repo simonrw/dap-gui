@@ -17,7 +17,6 @@ in
       [
         rust-bin.beta.latest.default
         rust-analyzer
-        cargo-nextest
         cargo-flamegraph
         custom-python
         cargo-hack
