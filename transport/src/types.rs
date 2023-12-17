@@ -119,7 +119,7 @@ pub struct StackFrame {
     pub id: StackFrameId,
     pub name: String,
     pub source: Option<Source>,
-    pub line: isize,
+    pub line: usize,
     pub column: isize,
     pub end_line: Option<usize>,
     pub end_column: Option<usize>,

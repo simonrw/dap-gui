@@ -17,8 +17,8 @@ use crate::{
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FileSource {
-    pub line: isize,
-    pub contents: String,
+    pub line: usize,
+    pub file_path: Option<PathBuf>,
 }
 
 pub(crate) struct DebuggerInternals {
@@ -134,10 +134,12 @@ impl DebuggerInternals {
                 }
 
                 let source = stack_frames[0].source.as_ref().unwrap();
-                let contents = std::fs::read_to_string(source.path.as_ref().unwrap()).unwrap();
                 let line = stack_frames[0].line;
 
-                let current_source = FileSource { contents, line };
+                let current_source = FileSource {
+                    line,
+                    file_path: source.path.clone(),
+                };
                 self.current_source = Some(current_source.clone());
 
                 let Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {

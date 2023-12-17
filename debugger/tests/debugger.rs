@@ -47,10 +47,11 @@ fn test_remote_attach() -> anyhow::Result<()> {
         matches!(e, debugger::Event::Initialised)
     });
 
+    let breakpoint_line = 9;
     debugger
         .add_breakpoint(debugger::Breakpoint {
             path: file_path.clone(),
-            line: 9,
+            line: breakpoint_line,
             ..Default::default()
         })
         .context("adding breakpoint")?;
@@ -60,19 +61,13 @@ fn test_remote_attach() -> anyhow::Result<()> {
         matches!(e, debugger::Event::Running { .. })
     });
 
-    wait_for_event("paused event", &drx, |e| {
+    let debugger::Event::Paused { source, .. } = wait_for_event("paused event", &drx, |e| {
         matches!(e, debugger::Event::Paused { .. })
-    });
+    }) else {
+        unreachable!();
+    };
 
-    debugger.with_current_source(|source| {
-        assert_eq!(
-            source,
-            Some(&debugger::FileSource {
-                line: 9,
-                contents: include_str!("../../attach.py").to_string(),
-            })
-        );
-    });
+    assert_eq!(source.line, breakpoint_line);
 
     debugger.r#continue().context("resuming debugee")?;
 
@@ -113,10 +108,11 @@ fn test_debugger() -> anyhow::Result<()> {
         matches!(e, debugger::Event::Initialised)
     });
 
+    let breakpoint_line = 4;
     debugger
         .add_breakpoint(debugger::Breakpoint {
             path: file_path.clone(),
-            line: 4,
+            line: breakpoint_line,
             ..Default::default()
         })
         .context("adding breakpoint")?;
@@ -126,19 +122,13 @@ fn test_debugger() -> anyhow::Result<()> {
         matches!(e, debugger::Event::Running { .. })
     });
 
-    wait_for_event("paused event", &drx, |e| {
+    let debugger::Event::Paused { source, .. } = wait_for_event("paused event", &drx, |e| {
         matches!(e, debugger::Event::Paused { .. })
-    });
+    }) else {
+        unreachable!()
+    };
 
-    debugger.with_current_source(|source| {
-        assert_eq!(
-            source,
-            Some(&debugger::FileSource {
-                line: 4,
-                contents: include_str!("../../test.py").to_string(),
-            })
-        );
-    });
+    assert_eq!(source.line, breakpoint_line);
 
     debugger.r#continue().context("resuming debugee")?;
 
