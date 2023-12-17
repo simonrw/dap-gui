@@ -1,5 +1,5 @@
 use anyhow::Context;
-use debugger::Debugger;
+use debugger::{Debugger, FileSource};
 use std::{io::IsTerminal, thread, time::Duration};
 use tracing_subscriber::EnvFilter;
 
@@ -67,7 +67,13 @@ fn test_remote_attach() -> anyhow::Result<()> {
         unreachable!();
     };
 
-    assert_eq!(source.line, breakpoint_line);
+    assert_eq!(
+        source,
+        FileSource {
+            line: breakpoint_line,
+            file_path: Some(file_path.clone()),
+        }
+    );
 
     debugger.r#continue().context("resuming debugee")?;
 
@@ -128,7 +134,13 @@ fn test_debugger() -> anyhow::Result<()> {
         unreachable!()
     };
 
-    assert_eq!(source.line, breakpoint_line);
+    assert_eq!(
+        source,
+        FileSource {
+            line: breakpoint_line,
+            file_path: Some(file_path.clone()),
+        }
+    );
 
     debugger.r#continue().context("resuming debugee")?;
 
