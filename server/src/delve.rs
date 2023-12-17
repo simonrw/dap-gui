@@ -23,7 +23,7 @@ impl Server for DelveServer {
         tracing::debug!(port = ?port, "starting server process");
         let cwd = std::env::current_dir().unwrap();
         let mut child = std::process::Command::new("dlv")
-            .args(&["dap", "--listen", &format!("127.0.0.1:{port}")])
+            .args(["dap", "--listen", &format!("127.0.0.1:{port}")])
             .stdout(Stdio::piped())
             .current_dir(cwd.join("..").canonicalize().unwrap())
             .spawn()

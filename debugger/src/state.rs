@@ -69,17 +69,15 @@ pub struct AttachArguments {
 
 impl AttachArguments {
     pub fn to_request(self) -> requests::RequestBody {
-        match self.language {
-            _ => requests::RequestBody::Attach(requests::Attach {
-                connect: requests::ConnectInfo {
-                    host: "localhost".to_string(),
-                    port: self.port.unwrap_or(DEFAULT_DAP_PORT),
-                },
-                path_mappings: Vec::new(),
-                just_my_code: false,
-                workspace_folder: self.working_directory,
-            }),
-        }
+        requests::RequestBody::Attach(requests::Attach {
+            connect: requests::ConnectInfo {
+                host: "localhost".to_string(),
+                port: self.port.unwrap_or(DEFAULT_DAP_PORT),
+            },
+            path_mappings: Vec::new(),
+            just_my_code: false,
+            workspace_folder: self.working_directory,
+        })
     }
 }
 

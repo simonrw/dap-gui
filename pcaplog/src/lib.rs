@@ -27,11 +27,12 @@ pub fn extract_messages(path: impl AsRef<Path>) -> anyhow::Result<Vec<Message>> 
             loop {
                 match pcap_parser.next_block(src) {
                     Ok((rem, block)) => {
-                        match block {
-                            pcap_file::pcapng::Block::EnhancedPacket(EnhancedPacketBlock {
-                                data,
-                                ..
-                            }) => match SlicedPacket::from_ethernet(&data) {
+                        if let pcap_file::pcapng::Block::EnhancedPacket(EnhancedPacketBlock {
+                            data,
+                            ..
+                        }) = block
+                        {
+                            match SlicedPacket::from_ethernet(&data) {
                                 Ok(value) => {
                                     let payload = value.payload;
                                     if payload.is_empty() {
@@ -45,8 +46,7 @@ pub fn extract_messages(path: impl AsRef<Path>) -> anyhow::Result<Vec<Message>> 
                                     tracing::warn!(error = %e, "error parsing package as ethernet frame");
                                     continue;
                                 }
-                            },
-                            _ => {}
+                            }
                         }
 
                         src = rem;
