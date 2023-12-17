@@ -78,3 +78,52 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        io::{BufReader, Write},
+        net::{TcpListener, TcpStream},
+    };
+
+    use crate::{bindings::get_random_tcp_port, events, Message, Reader};
+
+    use super::HandWrittenReader;
+
+    macro_rules! execute_test {
+        ($bodies:expr, $match_expr:pat) => {{
+            let port = get_random_tcp_port().expect("getting random port");
+            let server =
+                TcpListener::bind(format!("127.0.0.1:{port}")).expect("binding to address");
+            let mut client =
+                TcpStream::connect(format!("127.0.0.1:{port}")).expect("connecting to server");
+            let (conn, _) = server.accept().expect("accepting connection");
+
+            let mut reader = HandWrittenReader::new(BufReader::new(conn));
+
+            // send message
+            for body in $bodies {
+                write!(&mut client, "{body}").expect("sending message");
+            }
+
+            let message = reader.poll_message().expect("polling message");
+
+            match message {
+                Some(msg) => {
+                    assert!(matches!(msg, $match_expr));
+                }
+                None => anyhow::bail!("no message found"),
+            }
+        }};
+    }
+
+    #[test]
+    fn single_message() -> anyhow::Result<()> {
+        let bodies =
+            vec!["Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}"];
+
+        execute_test!(bodies, Message::Event(events::Event::Terminated));
+
+        Ok(())
+    }
+}
