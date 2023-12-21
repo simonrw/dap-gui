@@ -9,6 +9,9 @@ use tracing_subscriber::EnvFilter;
 #[derive(Debug, Parser)]
 struct Args {
     file: PathBuf,
+
+    #[clap(short, long, default_value_t = 5678)]
+    port: u16,
 }
 
 #[derive(Serialize)]
@@ -22,7 +25,8 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     tracing::debug!(?args, "parsed command line arguments");
 
-    let messages = Messages(extract_messages(&args.file).context("extracting messages")?);
+    let messages =
+        Messages(extract_messages(&args.file, args.port).context("extracting messages")?);
     println!(
         "{}",
         serde_json::to_string_pretty(&messages).context("serializing messages")?

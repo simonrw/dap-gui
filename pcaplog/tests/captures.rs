@@ -14,25 +14,29 @@ pub struct Failure {
 
 #[rstest]
 #[trace]
-#[case("../captures/vscode/vscode-attach-connect.pcapng", 34)]
+#[case("../captures/vscode/vscode-attach-connect.pcapng", 5678, 34)]
 // #[trace]
-// #[case("../captures/vscode/dlv-debug-session.pcapng", 80)]
+// #[case("../captures/vscode/dlv-debug-session.pcapng", 5678, 80)]
 // #[trace]
-// #[case("../captures/vscode/full-session-multiple-breakpoints.pcapng", 108)]
+// #[case("../captures/vscode/full-session-multiple-breakpoints.pcapng", 5678, 108)]
 // #[trace]
-// #[case("../captures/vscode/full-session-testpy.pcapng", 93)]
+// #[case("../captures/vscode/full-session-testpy.pcapng", 5678, 93)]
 // #[trace]
-// #[case("../captures/vscode/session1.pcapng", 74)]
+// #[case("../captures/vscode/session1.pcapng", 5678, 74)]
 // #[trace]
-// #[case("../captures/vscode/session2.pcapng", 169)]
+// #[case("../captures/vscode/session2.pcapng", 5678, 169)]
 // #[trace]
-// #[case("../captures/vscode/stepover-go.pcapng", 16)]
+// #[case("../captures/vscode/stepover-go.pcapng", 5678, 16)]
 #[trace]
-#[case("../captures/vscode/vscode-attach-connect.pcapng", 34)]
-fn capture(#[case] path: &str, #[case] expected_count: usize) -> anyhow::Result<()> {
+#[case("../captures/vscode/vscode-attach-connect.pcapng", 5678, 34)]
+fn capture(
+    #[case] path: &str,
+    #[case] port: u16,
+    #[case] expected_count: usize,
+) -> anyhow::Result<()> {
     init_test_logger();
 
-    let messages = extract_messages(path).context("extracting messages")?;
+    let messages = extract_messages(path, port).context("extracting messages")?;
 
     assert_eq!(messages.len(), expected_count);
 
