@@ -1,10 +1,10 @@
 use anyhow::Context;
-use etherparse::SlicedPacket;
+use etherparse::{SlicedPacket, TransportSlice};
 use pcap_file::pcapng::{blocks::enhanced_packet::EnhancedPacketBlock, PcapNgParser};
 use std::{io::BufReader, path::Path};
 use transport::{Message, Reader};
 
-pub fn extract_messages(path: impl AsRef<Path>) -> anyhow::Result<Vec<Message>> {
+pub fn extract_messages(path: impl AsRef<Path>, port: u16) -> anyhow::Result<Vec<Message>> {
     let path = path.as_ref();
 
     // TODO: not great for memory usage or DOS...
@@ -34,13 +34,21 @@ pub fn extract_messages(path: impl AsRef<Path>) -> anyhow::Result<Vec<Message>> 
                         {
                             match SlicedPacket::from_ethernet(&data) {
                                 Ok(value) => {
-                                    let payload = value.payload;
-                                    if payload.is_empty() {
-                                        src = rem;
-                                        continue;
-                                    }
+                                    if let Some(TransportSlice::Tcp(tcph)) = value.transport {
+                                        let payload = value.payload;
+                                        if payload.is_empty() {
+                                            src = rem;
+                                            continue;
+                                        }
+                                        // skip packets that are not for the specified port
+                                        if tcph.source_port() != port
+                                            && tcph.destination_port() != port
+                                        {
+                                            continue;
+                                        }
 
-                                    messages.extend_from_slice(payload);
+                                        messages.extend_from_slice(payload);
+                                    }
                                 }
                                 Err(e) => {
                                     tracing::warn!(error = %e, "error parsing package as ethernet frame");
