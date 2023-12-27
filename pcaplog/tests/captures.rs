@@ -16,7 +16,7 @@ pub struct Failure {
 #[trace]
 #[case("../captures/vscode/vscode-attach-connect.pcapng", 5678, 34)]
 // #[trace]
-// #[case("../captures/vscode/dlv-debug-session.pcapng", 5678, 80)]
+// #[case("../captures/vscode/dlv-debug-session.pcapng", 35691, 80)]
 // #[trace]
 // #[case("../captures/vscode/full-session-multiple-breakpoints.pcapng", 5678, 108)]
 // #[trace]

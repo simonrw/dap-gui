@@ -24,37 +24,50 @@ pub fn extract_messages(path: impl AsRef<Path>, port: u16) -> anyhow::Result<Vec
 
             let mut messages = Vec::new();
 
+            let mut i = 0;
             loop {
+                tracing::trace!(packet = %i, "next packet");
                 match pcap_parser.next_block(src) {
                     Ok((rem, block)) => {
-                        if let pcap_file::pcapng::Block::EnhancedPacket(EnhancedPacketBlock {
-                            data,
-                            ..
-                        }) = block
-                        {
-                            match SlicedPacket::from_ethernet(&data) {
-                                Ok(value) => {
-                                    if let Some(TransportSlice::Tcp(tcph)) = value.transport {
-                                        let payload = value.payload;
-                                        if payload.is_empty() {
-                                            src = rem;
-                                            continue;
-                                        }
-                                        // skip packets that are not for the specified port
-                                        if tcph.source_port() != port
-                                            && tcph.destination_port() != port
-                                        {
-                                            continue;
-                                        }
+                        tracing::trace!("got block");
+                        match block {
+                            pcap_file::pcapng::Block::EnhancedPacket(EnhancedPacketBlock {
+                                data,
+                                ..
+                            }) => {
+                                tracing::trace!("block length {}", data.len());
+                                match SlicedPacket::from_ethernet(&data) {
+                                    Ok(value) => {
+                                        tracing::trace!("got sliced packet");
+                                        if let Some(TransportSlice::Tcp(tcph)) = value.transport {
+                                            tracing::trace!("got tcp layer");
 
-                                        messages.extend_from_slice(payload);
+                                            let payload = value.payload;
+                                            if payload.is_empty() {
+                                                tracing::trace!("no payload");
+                                                src = rem;
+                                                i += 1;
+                                                continue;
+                                            }
+                                            // skip packets that are not for the specified port
+                                            if tcph.source_port() != port
+                                                && tcph.destination_port() != port
+                                            {
+                                                i += 1;
+                                                src = rem;
+                                                continue;
+                                            }
+
+                                            messages.extend_from_slice(payload);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!(error = %e, "error parsing package as ethernet frame");
+                                        continue;
                                     }
                                 }
-                                Err(e) => {
-                                    tracing::warn!(error = %e, "error parsing package as ethernet frame");
-                                    continue;
-                                }
                             }
+                            e => tracing::warn!("unhandled block type {e:?}"),
                         }
 
                         src = rem;
@@ -64,6 +77,7 @@ pub fn extract_messages(path: impl AsRef<Path>, port: u16) -> anyhow::Result<Vec
                         break;
                     }
                 }
+                i += 1;
             }
 
             let mut reader = transport::reader::get(BufReader::new(messages.as_slice()));
