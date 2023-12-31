@@ -39,6 +39,8 @@ WIP
   * high level controls like `continue`
   * breakpoint management
   * initialisation of debugger state
+* `server` crate:
+  * abstraction over running DAP servers
 * `pcaplog` crate:
   * print messages from pcap(ng) captures (prototype)
 
