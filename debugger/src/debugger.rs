@@ -1,10 +1,13 @@
 use std::{
-    net::TcpStream,
+    io,
+    net::{TcpStream, ToSocketAddrs},
     sync::{Arc, Mutex},
     thread,
+    time::Duration,
 };
 
 use anyhow::Context;
+use retry::{delay::Exponential, retry};
 use server::Implementation;
 use transport::{
     requests::{self, Disconnect},
@@ -32,6 +35,29 @@ impl From<state::AttachArguments> for InitialiseArguments {
     fn from(value: state::AttachArguments) -> Self {
         Self::Attach(value)
     }
+}
+
+fn retry_scale() -> impl Iterator<Item = Duration> {
+    Exponential::from_millis(200).take(5)
+}
+
+fn reliable_tcp_stream<A>(addr: A) -> Result<TcpStream, retry::Error<io::Error>>
+where
+    A: ToSocketAddrs + Clone,
+{
+    retry(retry_scale(), || {
+        tracing::debug!("trying to make connection");
+        match TcpStream::connect(addr.clone()) {
+            Ok(stream) => {
+                tracing::debug!("connection made");
+                Ok(stream)
+            }
+            Err(e) => {
+                tracing::debug!(error = %e, "error making connection");
+                Err(e)
+            }
+        }
+    })
 }
 
 pub struct Debugger {
@@ -63,7 +89,7 @@ impl Debugger {
 
                 let s = server::for_implementation_on_port(implementation, port)
                     .context("creating background server process")?;
-                let stream = TcpStream::connect(format!("127.0.0.1:{port}"))
+                let stream = reliable_tcp_stream(format!("127.0.0.1:{port}"))
                     .context("connecting to server")?;
 
                 let (ttx, trx) = spmc::channel();
@@ -74,7 +100,7 @@ impl Debugger {
                 (internals, trx)
             }
             InitialiseArguments::Attach(_) => {
-                let stream = TcpStream::connect(format!("127.0.0.1:{port}"))
+                let stream = reliable_tcp_stream(format!("127.0.0.1:{port}"))
                     .context("connecting to server")?;
 
                 let (ttx, trx) = spmc::channel();
