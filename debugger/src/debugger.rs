@@ -45,7 +45,19 @@ fn reliable_tcp_stream<A>(addr: A) -> Result<TcpStream, retry::Error<io::Error>>
 where
     A: ToSocketAddrs + Clone,
 {
-    retry(retry_scale(), || TcpStream::connect(addr.clone()))
+    retry(retry_scale(), || {
+        tracing::debug!("trying to make connection");
+        match TcpStream::connect(addr.clone()) {
+            Ok(stream) => {
+                tracing::debug!("connection made");
+                Ok(stream)
+            }
+            Err(e) => {
+                tracing::debug!(error = %e, "error making connection");
+                Err(e)
+            }
+        }
+    })
 }
 
 pub struct Debugger {

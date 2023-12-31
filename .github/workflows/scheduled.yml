@@ -11,7 +11,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 env:
-  RUST_LOG: "gui=debug,transport=debug,end_to_end=trace"
+  RUST_LOG: "debugger=debug,gui=debug,transport=debug,end_to_end=trace"
 name: rolling
 jobs:
   # https://twitter.com/mycoliza/status/1571295690063753218
