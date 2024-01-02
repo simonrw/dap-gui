@@ -168,7 +168,12 @@ impl eframe::App for DebuggerApp {
                             unreachable!("no file source specified");
                         };
                         let mut breakpoints = HashSet::new();
-                        ui.add(CodeView::new(&contents, 1, false, &mut breakpoints));
+                        ui.add(CodeView::new(
+                            &contents,
+                            source.line,
+                            true,
+                            &mut breakpoints,
+                        ));
 
                         if ui.button("continue").clicked() {
                             inner.debugger.r#continue().unwrap();
