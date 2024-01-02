@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 pub type BreakpointId = u64;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct Breakpoint {
     pub name: Option<String>,
     pub path: PathBuf,

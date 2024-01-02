@@ -51,6 +51,7 @@ enum State {
     Paused {
         stack: Vec<StackFrame>,
         source: FileSource,
+        breakpoints: Vec<debugger::Breakpoint>,
     },
     Terminated,
 }
@@ -59,7 +60,15 @@ impl From<debugger::Event> for State {
     fn from(event: debugger::Event) -> Self {
         match event {
             debugger::Event::Initialised => State::Running,
-            debugger::Event::Paused { stack, source } => State::Paused { stack, source },
+            debugger::Event::Paused {
+                stack,
+                source,
+                breakpoints,
+            } => State::Paused {
+                stack,
+                source,
+                breakpoints,
+            },
             debugger::Event::Running => State::Running,
             debugger::Event::Ended => State::Terminated,
             debugger::Event::Uninitialised => State::Initialising,
@@ -151,6 +160,7 @@ impl eframe::App for DebuggerApp {
                 State::Paused {
                     stack: _stack,
                     source,
+                    breakpoints: original_breakpoints,
                 } => {
                     egui::SidePanel::left("left-panel").show(ctx, |ui| {
                         ui.heading("Variables");
@@ -167,7 +177,19 @@ impl eframe::App for DebuggerApp {
                         } else {
                             unreachable!("no file source specified");
                         };
-                        let mut breakpoints = HashSet::new();
+                        let mut breakpoints = HashSet::from_iter(
+                            original_breakpoints
+                                .iter()
+                                .filter(|b| {
+                                    source
+                                        .file_path
+                                        .as_ref()
+                                        .map(|s| s == b.path.as_path())
+                                        .unwrap_or(false)
+                                })
+                                .cloned(),
+                        );
+
                         ui.add(CodeView::new(
                             &contents,
                             source.line,

@@ -12,6 +12,7 @@ pub(crate) enum DebuggerState {
     Paused {
         stack: Vec<types::StackFrame>,
         source: crate::FileSource,
+        breakpoints: Vec<types::Breakpoint>,
     },
     Running,
     Ended,
@@ -24,6 +25,7 @@ pub enum Event {
     Paused {
         stack: Vec<types::StackFrame>,
         source: crate::FileSource,
+        breakpoints: Vec<types::Breakpoint>,
     },
     Running,
     Ended,
@@ -33,9 +35,15 @@ impl<'a> From<&'a DebuggerState> for Event {
     fn from(value: &'a DebuggerState) -> Self {
         match value {
             DebuggerState::Initialised => Event::Initialised,
-            DebuggerState::Paused { stack, source, .. } => Event::Paused {
+            DebuggerState::Paused {
+                stack,
+                source,
+                breakpoints,
+                ..
+            } => Event::Paused {
                 stack: stack.clone(),
                 source: source.clone(),
+                breakpoints: breakpoints.clone(),
             },
             DebuggerState::Running => Event::Running,
             DebuggerState::Ended => Event::Ended,
