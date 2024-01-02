@@ -50,7 +50,10 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(stream: TcpStream, mut responses: spmc::Sender<events::Event>) -> Result<Self> {
+    pub fn new(
+        stream: TcpStream,
+        responses: crossbeam_channel::Sender<events::Event>,
+    ) -> Result<Self> {
         // internal state
         let sequence_number = Arc::new(AtomicI64::new(0));
 

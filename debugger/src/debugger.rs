@@ -62,7 +62,7 @@ where
 
 pub struct Debugger {
     internals: Arc<Mutex<DebuggerInternals>>,
-    rx: spmc::Receiver<Event>,
+    rx: crossbeam_channel::Receiver<Event>,
 }
 
 impl Debugger {
@@ -74,7 +74,7 @@ impl Debugger {
         tracing::debug!("creating new client");
 
         // notify our subscribers
-        let (mut tx, rx) = spmc::channel();
+        let (tx, rx) = crossbeam_channel::unbounded();
         let _ = tx.send(Event::Uninitialised);
 
         let args: InitialiseArguments = initialise_arguments.into();
@@ -92,7 +92,7 @@ impl Debugger {
                 let stream = reliable_tcp_stream(format!("127.0.0.1:{port}"))
                     .context("connecting to server")?;
 
-                let (ttx, trx) = spmc::channel();
+                let (ttx, trx) = crossbeam_channel::unbounded();
                 let client =
                     transport::Client::new(stream, ttx).context("creating transport client")?;
 
@@ -103,7 +103,7 @@ impl Debugger {
                 let stream = reliable_tcp_stream(format!("127.0.0.1:{port}"))
                     .context("connecting to server")?;
 
-                let (ttx, trx) = spmc::channel();
+                let (ttx, trx) = crossbeam_channel::unbounded();
                 let client =
                     transport::Client::new(stream, ttx).context("creating transport client")?;
 
@@ -134,7 +134,7 @@ impl Debugger {
         Self::on_port(DEFAULT_DAP_PORT, initialise_arguments)
     }
 
-    pub fn events(&self) -> spmc::Receiver<Event> {
+    pub fn events(&self) -> crossbeam_channel::Receiver<Event> {
         self.rx.clone()
     }
 
