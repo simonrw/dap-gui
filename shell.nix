@@ -11,12 +11,14 @@ with pkgs; let
 
   custom-python =
     python3.withPackages (ps: with ps; [debugpy black scapy structlog]);
+
+  toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 in
   mkShell {
     buildInputs =
       [
-        rust-bin.beta.latest.default
-        rust-analyzer
+        toolchain
+        rust-analyzer-unwrapped
         cargo-flamegraph
         custom-python
         cargo-hack
@@ -29,10 +31,8 @@ in
 
     env = {
       RUST_BACKTRACE = "1";
-
-      RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
-
       RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug";
+      RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
 
       LD_LIBRARY_PATH =
         if stdenv.isLinux
