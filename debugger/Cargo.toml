@@ -15,4 +15,5 @@ retry = "2.0.0"
 
 [dev-dependencies]
 color-eyre.workspace = true
+ctor = "0.2.6"
 tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"] }

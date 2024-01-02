@@ -20,6 +20,7 @@ color-eyre.workspace = true
 tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"] }
 server = { path = "../server" }
 criterion = "0.5.1"
+ctor = "0.2.6"
 
 [[bench]]
 name = "parser"

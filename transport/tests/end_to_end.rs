@@ -10,6 +10,28 @@ use transport::{
     responses,
 };
 
+// test suite "constructor"
+#[ctor::ctor]
+fn init() {
+    let in_ci = std::env::var("CI")
+        .map(|val| val == "true")
+        .unwrap_or(false);
+
+    if std::io::stderr().is_terminal() || in_ci {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .try_init();
+    } else {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .json()
+            .try_init();
+    }
+
+    // error traces
+    let _ = color_eyre::install();
+}
+
 // Loop
 // Initialize
 // Launch
@@ -17,8 +39,6 @@ use transport::{
 // Continue
 #[test]
 fn test_loop() -> Result<()> {
-    init_test_logger();
-
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");
 
@@ -188,22 +208,5 @@ where
             tracing::trace!(event = ?evt, "non-matching event");
         }
         n += 1;
-    }
-}
-
-fn init_test_logger() {
-    let in_ci = std::env::var("CI")
-        .map(|val| val == "true")
-        .unwrap_or(false);
-
-    if std::io::stderr().is_terminal() || in_ci {
-        let _ = tracing_subscriber::fmt()
-            .with_env_filter(EnvFilter::from_default_env())
-            .try_init();
-    } else {
-        let _ = tracing_subscriber::fmt()
-            .with_env_filter(EnvFilter::from_default_env())
-            .json()
-            .try_init();
     }
 }

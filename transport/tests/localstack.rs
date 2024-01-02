@@ -10,6 +10,28 @@ use transport::{
     responses, Received,
 };
 
+// test suite "constructor"
+#[ctor::ctor]
+fn init() {
+    let in_ci = std::env::var("CI")
+        .map(|val| val == "true")
+        .unwrap_or(false);
+
+    if std::io::stderr().is_terminal() || in_ci {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .try_init();
+    } else {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .json()
+            .try_init();
+    }
+
+    // error traces
+    let _ = color_eyre::install();
+}
+
 #[test]
 #[ignore]
 fn localstack() -> Result<()> {
@@ -214,7 +236,6 @@ where
     }
 }
 
-/*
 fn wait_for_event<F>(rx: &mpsc::Receiver<Received>, pred: F) -> events::Event
 where
     F: Fn(&events::Event) -> bool,
@@ -239,19 +260,5 @@ where
     }
 
     unreachable!()
-}
-*/
-
-fn init_test_logger() {
-    if std::io::stderr().is_terminal() {
-        tracing_subscriber::fmt()
-            .with_env_filter(EnvFilter::from_default_env())
-            .init();
-    } else {
-        tracing_subscriber::fmt()
-            .with_env_filter(EnvFilter::from_default_env())
-            .json()
-            .init();
-    }
 }
 */
