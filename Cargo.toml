@@ -14,4 +14,4 @@ debug = 1
 anyhow = "1.0.77"
 crossbeam-channel = "0.5.10"
 tracing = "0.1.40"
-serde = { version = "1.0.193", features = ["derive"] }
+serde = { version = "1.0.194", features = ["derive"] }
