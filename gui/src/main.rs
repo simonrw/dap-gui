@@ -55,6 +55,18 @@ enum State {
     Terminated,
 }
 
+impl From<debugger::Event> for State {
+    fn from(event: debugger::Event) -> Self {
+        match event {
+            debugger::Event::Initialised => State::Running,
+            debugger::Event::Paused { stack, source } => State::Paused { stack, source },
+            debugger::Event::Running => State::Running,
+            debugger::Event::Ended => State::Terminated,
+            debugger::Event::Uninitialised => State::Initialising,
+        }
+    }
+}
+
 struct DebuggerAppState {
     state: State,
     debugger: Debugger,
@@ -64,18 +76,7 @@ impl DebuggerAppState {
     #[tracing::instrument(skip(self))]
     fn handle_event(&mut self, event: &debugger::Event) -> eyre::Result<()> {
         tracing::debug!("handling event");
-        match event {
-            debugger::Event::Initialised => self.state = State::Running,
-            debugger::Event::Paused { stack, source } => {
-                self.state = State::Paused {
-                    stack: stack.clone(),
-                    source: source.clone(),
-                }
-            }
-            debugger::Event::Running => self.state = State::Running,
-            debugger::Event::Ended => self.state = State::Terminated,
-            debugger::Event::Uninitialised => self.state = State::Initialising,
-        }
+        self.state = event.clone().into();
         Ok(())
     }
 }
@@ -159,8 +160,7 @@ impl eframe::App for DebuggerApp {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.heading("Paused");
 
-                        // TODO: remove the mut
-                        let mut contents = if let Some(ref path) = source.file_path {
+                        let contents = if let Some(ref path) = source.file_path {
                             // TODO: Result
                             std::fs::read_to_string(path)
                                 .expect("reading source contents from file")
@@ -168,7 +168,7 @@ impl eframe::App for DebuggerApp {
                             unreachable!("no file source specified");
                         };
                         let mut breakpoints = HashSet::new();
-                        ui.add(CodeView::new(&mut contents, 1, false, &mut breakpoints));
+                        ui.add(CodeView::new(&contents, 1, false, &mut breakpoints));
 
                         if ui.button("continue").clicked() {
                             inner.debugger.r#continue().unwrap();
