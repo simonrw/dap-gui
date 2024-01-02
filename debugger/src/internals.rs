@@ -158,6 +158,7 @@ impl DebuggerInternals {
                 self.set_state(DebuggerState::Paused {
                     stack: stack_frames,
                     source: current_source,
+                    breakpoints: self.breakpoints.values().cloned().collect(),
                 });
             }
             transport::events::Event::Continued(_) => {

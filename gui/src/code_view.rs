@@ -6,6 +6,8 @@ use eframe::{
 };
 
 /// Code view that shows debugger related things
+///
+/// Note: we assume that breakpoints have been filtered for the file that `content` is read from
 pub struct CodeView<'a> {
     /// Read-only view into the text content
     content: &'a str,
@@ -13,7 +15,7 @@ pub struct CodeView<'a> {
     current_line: usize,
     highlight_line: bool,
     /// Line numbers to add breakpoint markers to (1-indexed)
-    breakpoint_positions: &'a mut HashSet<usize>,
+    breakpoints: &'a mut HashSet<debugger::Breakpoint>,
 }
 
 impl<'a> CodeView<'a> {
@@ -22,25 +24,30 @@ impl<'a> CodeView<'a> {
         content: &'a str,
         current_line: usize,
         highlight_line: bool,
-        breakpoint_positions: &'a mut HashSet<usize>,
+        breakpoints: &'a mut HashSet<debugger::Breakpoint>,
     ) -> Self {
         Self {
             content,
             current_line,
             highlight_line,
-            breakpoint_positions,
+            breakpoints,
         }
+    }
+
+    fn breakpoint_positions(&self) -> HashSet<usize> {
+        HashSet::from_iter(self.breakpoints.iter().map(|b| b.line))
     }
 }
 
 impl<'a> egui::Widget for CodeView<'a> {
     fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
+        let breakpoint_positions = self.breakpoint_positions();
         // closure that defines the layout drop
         let mut layouter = |ui: &egui::Ui, s: &str, _wrap_width: f32| {
             let mut layout_job = LayoutJob::default();
             let indent = 16.0;
             for (i, line) in s.lines().enumerate() {
-                if self.breakpoint_positions.contains(&(i + 1)) {
+                if breakpoint_positions.contains(&(i + 1)) {
                     // marker
                     layout_job.append(
                         "•",
@@ -79,6 +86,10 @@ impl<'a> egui::Widget for CodeView<'a> {
 
 impl<'a> CodeView<'a> {
     fn update_breakpoints(&mut self, response: &Response) {
+        // TODO
+        return;
+
+        /*
         if response.clicked_by(egui::PointerButton::Primary) {
             // unwrap ok because we know we were clicked
             let pos = response.interact_pointer_pos().unwrap();
@@ -88,14 +99,15 @@ impl<'a> CodeView<'a> {
                 // TODO: calculate line height properly
                 // line number 1-indexed
                 let line = (pos.y / 16.0).floor() as usize;
-                if self.breakpoint_positions.contains(&line) {
+                if self.breakpoints.contains(&line) {
                     // remove the breakpoint
-                    self.breakpoint_positions.remove(&line);
+                    self.breakpoints.remove(&line);
                 } else {
                     // add the breakpoint
-                    self.breakpoint_positions.insert(line);
+                    self.breakpoints.insert(line);
                 }
             }
         }
+        */
     }
 }
