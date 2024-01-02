@@ -16,7 +16,7 @@ fn test_remote_attach() -> anyhow::Result<()> {
 
     // run background process
     let mut child = std::process::Command::new("python")
-        .args(&[
+        .args([
             "-Xfrozen_modules=off",
             "../attach.py",
             "-p",

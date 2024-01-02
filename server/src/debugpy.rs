@@ -108,7 +108,7 @@ mod tests {
         // server should be running
         tracing::info!("making connection");
         let _conn =
-            TcpStream::connect(&format!("127.0.0.1:{port}")).context("connecting to server")?;
+            TcpStream::connect(format!("127.0.0.1:{port}")).context("connecting to server")?;
         Ok(())
     }
 }
