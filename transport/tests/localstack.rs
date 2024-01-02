@@ -1,7 +1,7 @@
 /*
 use std::{io::IsTerminal, net::TcpStream, path::PathBuf, process::Stdio, thread, time::Duration};
 
-use anyhow::{Context, Result};
+use eyre::{WrapErr, Result};
 use tracing_subscriber::EnvFilter;
 
 use transport::{

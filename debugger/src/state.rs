@@ -50,13 +50,13 @@ pub enum Language {
 }
 
 impl FromStr for Language {
-    type Err = anyhow::Error;
+    type Err = eyre::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "debugpy" => Ok(Self::DebugPy),
             "delve" => Ok(Self::Delve),
-            other => Err(anyhow::anyhow!("invalid language {other}")),
+            other => Err(eyre::eyre!("invalid language {other}")),
         }
     }
 }

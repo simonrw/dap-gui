@@ -12,6 +12,8 @@ debug = 1
 
 [workspace.dependencies]
 anyhow = "1.0.79"
+eyre = "0.6.11"
+color-eyre = "0.6.2"
 crossbeam-channel = "0.5.10"
 tracing = "0.1.40"
 serde = { version = "1.0.194", features = ["derive"] }

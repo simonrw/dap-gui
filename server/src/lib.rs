@@ -1,4 +1,4 @@
-use anyhow::Context;
+use eyre::WrapErr;
 use transport::DEFAULT_DAP_PORT;
 
 pub mod debugpy;
@@ -10,11 +10,11 @@ pub enum Implementation {
 }
 
 pub trait Server {
-    fn on_port(port: impl Into<u16>) -> anyhow::Result<Self>
+    fn on_port(port: impl Into<u16>) -> eyre::Result<Self>
     where
         Self: Sized;
 
-    fn new() -> anyhow::Result<Self>
+    fn new() -> eyre::Result<Self>
     where
         Self: Sized,
     {
@@ -22,16 +22,14 @@ pub trait Server {
     }
 }
 
-pub fn for_implementation(
-    implementation: Implementation,
-) -> anyhow::Result<Box<dyn Server + Send>> {
+pub fn for_implementation(implementation: Implementation) -> eyre::Result<Box<dyn Server + Send>> {
     for_implementation_on_port(implementation, DEFAULT_DAP_PORT)
 }
 
 pub fn for_implementation_on_port(
     implementation: Implementation,
     port: impl Into<u16>,
-) -> anyhow::Result<Box<dyn Server + Send>> {
+) -> eyre::Result<Box<dyn Server + Send>> {
     match implementation {
         Implementation::Debugpy => {
             let server = crate::debugpy::DebugpyServer::on_port(port).context("creating server")?;

@@ -6,9 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow.workspace = true
+eyre.workspace = true
 tracing.workspace = true
 transport = { path = "../transport" }
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"] }
+color-eyre.workspace = true

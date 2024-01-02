@@ -1,4 +1,4 @@
-use anyhow::Context;
+use eyre::WrapErr;
 use server::Server;
 use std::{collections::HashMap, path::PathBuf};
 use transport::{
@@ -48,7 +48,7 @@ impl DebuggerInternals {
         let _ = self.publisher.send(event);
     }
 
-    pub(crate) fn initialise(&mut self, arguments: InitialiseArguments) -> anyhow::Result<()> {
+    pub(crate) fn initialise(&mut self, arguments: InitialiseArguments) -> eyre::Result<()> {
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
             lines_start_at_one: false,
@@ -178,10 +178,7 @@ impl DebuggerInternals {
     }
 
     #[tracing::instrument(skip(self))]
-    pub(crate) fn add_breakpoint(
-        &mut self,
-        breakpoint: Breakpoint,
-    ) -> anyhow::Result<BreakpointId> {
+    pub(crate) fn add_breakpoint(&mut self, breakpoint: Breakpoint) -> eyre::Result<BreakpointId> {
         tracing::debug!("adding breakpoint");
         let id = self.next_id();
         self.breakpoints.insert(id, breakpoint.clone());
@@ -198,7 +195,7 @@ impl DebuggerInternals {
             .expect("updating breakpoints with debugee");
     }
 
-    fn broadcast_breakpoints(&mut self) -> anyhow::Result<()> {
+    fn broadcast_breakpoints(&mut self) -> eyre::Result<()> {
         // TODO: don't assume the breakpoints are for the same file
         if self.breakpoints.is_empty() {
             return Ok(());

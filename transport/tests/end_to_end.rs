@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use eyre::{Result, WrapErr};
 use server::for_implementation_on_port;
 use std::{io::IsTerminal, net::TcpStream, path::PathBuf};
 use tracing_subscriber::EnvFilter;

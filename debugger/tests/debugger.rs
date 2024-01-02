@@ -1,12 +1,12 @@
-use anyhow::Context;
 use debugger::{Debugger, FileSource};
+use eyre::WrapErr;
 use std::{io::IsTerminal, thread, time::Duration};
 use tracing_subscriber::EnvFilter;
 
 use transport::bindings::get_random_tcp_port;
 
 #[test]
-fn test_remote_attach() -> anyhow::Result<()> {
+fn test_remote_attach() -> eyre::Result<()> {
     init_test_logger();
 
     let cwd = std::env::current_dir().unwrap();
@@ -88,7 +88,7 @@ fn test_remote_attach() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_debugger() -> anyhow::Result<()> {
+fn test_debugger() -> eyre::Result<()> {
     init_test_logger();
 
     let cwd = std::env::current_dir().unwrap();
