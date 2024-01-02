@@ -5,7 +5,7 @@ use std::{
     thread,
 };
 
-use anyhow::Context;
+use eyre::WrapErr;
 
 use crate::Server;
 
@@ -14,7 +14,7 @@ pub struct DebugpyServer {
 }
 
 impl Server for DebugpyServer {
-    fn on_port(port: impl Into<u16>) -> anyhow::Result<Self> {
+    fn on_port(port: impl Into<u16>) -> eyre::Result<Self> {
         let port = port.into();
 
         tracing::debug!(port = ?port, "starting server process");
@@ -74,7 +74,7 @@ impl Drop for DebugpyServer {
 mod tests {
     use std::{io::IsTerminal, net::TcpStream};
 
-    use anyhow::Context;
+    use eyre::WrapErr;
     use tracing_subscriber::EnvFilter;
     use transport::bindings::get_random_tcp_port;
 
@@ -98,7 +98,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create() -> anyhow::Result<()> {
+    fn test_create() -> eyre::Result<()> {
         init_test_logger();
 
         let port = get_random_tcp_port().context("reserving custom port")?;

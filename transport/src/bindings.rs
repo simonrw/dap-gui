@@ -1,6 +1,6 @@
 use std::net::TcpListener;
 
-use anyhow::Result;
+use eyre::Result;
 
 pub fn get_random_tcp_port() -> Result<u16> {
     for _ in 0..50 {
@@ -16,5 +16,5 @@ pub fn get_random_tcp_port() -> Result<u16> {
         }
     }
 
-    anyhow::bail!("could not get free port");
+    eyre::bail!("could not get free port");
 }

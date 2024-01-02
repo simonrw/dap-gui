@@ -34,8 +34,6 @@ fn capture(
     #[case] port: u16,
     #[case] expected_count: usize,
 ) -> anyhow::Result<()> {
-    init_test_logger();
-
     let messages = extract_messages(path, port).context("extracting messages")?;
 
     assert_eq!(messages.len(), expected_count);
@@ -43,7 +41,8 @@ fn capture(
     Ok(())
 }
 
-fn init_test_logger() {
+#[ctor::ctor]
+fn init() {
     let in_ci = std::env::var("CI")
         .map(|val| val == "true")
         .unwrap_or(false);
@@ -58,4 +57,6 @@ fn init_test_logger() {
             .json()
             .try_init();
     }
+
+    let _ = color_eyre::install();
 }

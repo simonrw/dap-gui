@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::Context;
+use eyre::WrapErr;
 use retry::{delay::Exponential, retry};
 use server::Implementation;
 use transport::{
@@ -70,7 +70,7 @@ impl Debugger {
     pub fn on_port(
         port: u16,
         initialise_arguments: impl Into<InitialiseArguments>,
-    ) -> anyhow::Result<Self> {
+    ) -> eyre::Result<Self> {
         tracing::debug!("creating new client");
 
         // notify our subscribers
@@ -130,7 +130,7 @@ impl Debugger {
         })
     }
     #[tracing::instrument(skip(initialise_arguments))]
-    pub fn new(initialise_arguments: impl Into<InitialiseArguments>) -> anyhow::Result<Self> {
+    pub fn new(initialise_arguments: impl Into<InitialiseArguments>) -> eyre::Result<Self> {
         Self::on_port(DEFAULT_DAP_PORT, initialise_arguments)
     }
 
@@ -141,12 +141,12 @@ impl Debugger {
     pub fn add_breakpoint(
         &self,
         breakpoint: types::Breakpoint,
-    ) -> anyhow::Result<types::BreakpointId> {
+    ) -> eyre::Result<types::BreakpointId> {
         let mut internals = self.internals.lock().unwrap();
         internals.add_breakpoint(breakpoint)
     }
 
-    pub fn launch(&self) -> anyhow::Result<()> {
+    pub fn launch(&self) -> eyre::Result<()> {
         let mut internals = self.internals.lock().unwrap();
         let _ = internals
             .client
@@ -157,7 +157,7 @@ impl Debugger {
     }
 
     /// Resume execution of the debugee
-    pub fn r#continue(&self) -> anyhow::Result<()> {
+    pub fn r#continue(&self) -> eyre::Result<()> {
         let internals = self.internals.lock().unwrap();
         match internals.current_thread_id {
             Some(thread_id) => {
@@ -169,7 +169,7 @@ impl Debugger {
                     }))
                     .context("sending continue request")?;
             }
-            None => anyhow::bail!("logic error: no current thread id"),
+            None => eyre::bail!("logic error: no current thread id"),
         }
         Ok(())
     }
@@ -182,7 +182,7 @@ impl Debugger {
         f(internals.current_source.as_ref())
     }
 
-    fn execute(&self, body: requests::RequestBody) -> anyhow::Result<()> {
+    fn execute(&self, body: requests::RequestBody) -> eyre::Result<()> {
         self.internals.lock().unwrap().client.execute(body)
     }
 

@@ -1,6 +1,6 @@
 use std::io::{self, BufRead};
 
-use anyhow::Context;
+use eyre::WrapErr;
 
 use crate::Reader;
 
@@ -21,7 +21,7 @@ where
         Self { input }
     }
 
-    fn poll_message(&mut self) -> anyhow::Result<Option<crate::Message>> {
+    fn poll_message(&mut self) -> eyre::Result<Option<crate::Message>> {
         let mut state = ReaderState::Header;
         let mut buffer = String::new();
         let mut content_length: usize = 0;
@@ -41,7 +41,7 @@ where
                                     content_length = match parts[1].trim().parse() {
                                         Ok(val) => val,
                                         Err(_) => {
-                                            anyhow::bail!("failed to parse content length")
+                                            eyre::bail!("failed to parse content length")
                                         }
                                     };
                                     buffer.clear();
@@ -49,7 +49,7 @@ where
                                     state = ReaderState::Content;
                                 }
                                 other => {
-                                    anyhow::bail!("header {} not implemented", other);
+                                    eyre::bail!("header {} not implemented", other);
                                 }
                             }
                         }
@@ -58,7 +58,7 @@ where
                             let mut content = vec![0; content_length];
                             self.input
                                 .read_exact(content.as_mut_slice())
-                                .map_err(|e| anyhow::anyhow!("failed to read: {:?}", e))?;
+                                .map_err(|e| eyre::eyre!("failed to read: {:?}", e))?;
                             let content =
                                 std::str::from_utf8(content.as_slice()).context("invalid utf8")?;
                             let message = serde_json::from_str(content).with_context(|| {
@@ -72,7 +72,7 @@ where
                     if e.kind() == io::ErrorKind::WouldBlock {
                         continue;
                     }
-                    return Err(anyhow::anyhow!("error reading from buffer: {e:?}"));
+                    return Err(eyre::eyre!("error reading from buffer: {e:?}"));
                 }
             }
         }
@@ -110,7 +110,7 @@ mod tests {
                 Some(msg) => {
                     assert!(matches!(msg, $match_expr));
                 }
-                None => anyhow::bail!("no message found"),
+                None => eyre::bail!("no message found"),
             }
         }};
 
@@ -137,7 +137,7 @@ mod tests {
                 Some(msg) => {
                     assert!(matches!(msg, $match_expr));
                 }
-                None => anyhow::bail!("no message found"),
+                None => eyre::bail!("no message found"),
             }
 
             )+
@@ -145,7 +145,7 @@ mod tests {
     }
 
     #[test]
-    fn single_message() -> anyhow::Result<()> {
+    fn single_message() -> eyre::Result<()> {
         let body = "Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}";
 
         execute_test!(body => Message::Event(events::Event::Terminated));
@@ -154,7 +154,7 @@ mod tests {
     }
 
     #[test]
-    fn split_between_requests() -> anyhow::Result<()> {
+    fn split_between_requests() -> eyre::Result<()> {
         execute_test!(
             "Content-Length: 37\r\n\r\n{\"ty",
             "pe\":\"event\",\"event\":\"terminated\"}" => 
@@ -164,7 +164,7 @@ mod tests {
     }
 
     #[test]
-    fn multiple_messages() -> anyhow::Result<()> {
+    fn multiple_messages() -> eyre::Result<()> {
         let body = "Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}";
 
         execute_test!(body => Message::Event(events::Event::Terminated), Message::Event(events::Event::Terminated));

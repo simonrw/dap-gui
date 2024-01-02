@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex, MutexGuard};
 // TODO: use internal error type
-use anyhow::Result;
+use eyre::Result;
 
 #[cfg(nom)]
 use crate::reader::nom_reader::NomReader;

@@ -1,14 +1,34 @@
-use anyhow::Context;
 use debugger::{Debugger, FileSource};
+use eyre::WrapErr;
 use std::{io::IsTerminal, thread, time::Duration};
 use tracing_subscriber::EnvFilter;
 
 use transport::bindings::get_random_tcp_port;
 
-#[test]
-fn test_remote_attach() -> anyhow::Result<()> {
-    init_test_logger();
+// test suite "constructor"
+#[ctor::ctor]
+fn init() {
+    let in_ci = std::env::var("CI")
+        .map(|val| val == "true")
+        .unwrap_or(false);
 
+    if std::io::stderr().is_terminal() || in_ci {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .try_init();
+    } else {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .json()
+            .try_init();
+    }
+
+    // error traces
+    let _ = color_eyre::install();
+}
+
+#[test]
+fn test_remote_attach() -> eyre::Result<()> {
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");
 
@@ -88,9 +108,7 @@ fn test_remote_attach() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_debugger() -> anyhow::Result<()> {
-    init_test_logger();
-
+fn test_debugger() -> eyre::Result<()> {
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");
     let port = get_random_tcp_port().context("getting free port")?;
@@ -149,23 +167,6 @@ fn test_debugger() -> anyhow::Result<()> {
     });
 
     Ok(())
-}
-
-fn init_test_logger() {
-    let in_ci = std::env::var("CI")
-        .map(|val| val == "true")
-        .unwrap_or(false);
-
-    if std::io::stderr().is_terminal() || in_ci {
-        let _ = tracing_subscriber::fmt()
-            .with_env_filter(EnvFilter::from_default_env())
-            .try_init();
-    } else {
-        let _ = tracing_subscriber::fmt()
-            .with_env_filter(EnvFilter::from_default_env())
-            .json()
-            .try_init();
-    }
 }
 
 #[tracing::instrument(skip(rx, pred))]

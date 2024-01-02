@@ -18,7 +18,7 @@ where
         }
     }
 
-    fn poll_message(&mut self) -> anyhow::Result<Option<Message>> {
+    fn poll_message(&mut self) -> eyre::Result<Option<Message>> {
         loop {
             if !self.buffer.is_empty() {
                 // try to parse from the buffer
@@ -50,7 +50,7 @@ where
                     if e.kind() == io::ErrorKind::WouldBlock {
                         continue;
                     }
-                    return Err(anyhow::anyhow!("error reading from buffer: {e:?}"));
+                    return Err(eyre::eyre!("error reading from buffer: {e:?}"));
                 }
             }
         }

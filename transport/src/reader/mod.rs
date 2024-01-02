@@ -9,7 +9,7 @@ pub mod nom_reader;
 
 pub trait Reader<R> {
     fn new(input: R) -> Self;
-    fn poll_message(&mut self) -> anyhow::Result<Option<Message>>;
+    fn poll_message(&mut self) -> eyre::Result<Option<Message>>;
 }
 
 #[cfg(nom)]
