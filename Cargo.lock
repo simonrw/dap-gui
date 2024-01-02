@@ -761,6 +761,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "color-eyre",
+ "ctor",
  "etherparse",
  "glob",
  "pcap-file",
