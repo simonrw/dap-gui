@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
-spmc.workspace = true
+crossbeam-channel.workspace = true
 tracing.workspace = true
 server = { path = "../server" }
 transport = { path = "../transport" }

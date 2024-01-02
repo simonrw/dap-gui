@@ -16,7 +16,7 @@ fn test_remote_attach() -> anyhow::Result<()> {
 
     // run background process
     let mut child = std::process::Command::new("python")
-        .args(&[
+        .args([
             "-Xfrozen_modules=off",
             "../attach.py",
             "-p",
@@ -171,7 +171,7 @@ fn init_test_logger() {
 #[tracing::instrument(skip(rx, pred))]
 fn wait_for_event<F>(
     message: &str,
-    rx: &spmc::Receiver<debugger::Event>,
+    rx: &crossbeam_channel::Receiver<debugger::Event>,
     pred: F,
 ) -> debugger::Event
 where

@@ -22,7 +22,7 @@ fn test_loop() -> Result<()> {
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");
 
-    let (tx, rx) = spmc::channel();
+    let (tx, rx) = crossbeam_channel::unbounded();
     let port = get_random_tcp_port().context("getting free port")?;
     let _server = for_implementation_on_port(server::Implementation::Debugpy, port)
         .context("creating server process")?;
@@ -165,7 +165,11 @@ fn test_loop() -> Result<()> {
 }
 
 #[tracing::instrument(skip(rx, pred))]
-fn wait_for_event<F>(message: &str, rx: &spmc::Receiver<events::Event>, pred: F) -> events::Event
+fn wait_for_event<F>(
+    message: &str,
+    rx: &crossbeam_channel::Receiver<events::Event>,
+    pred: F,
+) -> events::Event
 where
     F: Fn(&events::Event) -> bool,
 {

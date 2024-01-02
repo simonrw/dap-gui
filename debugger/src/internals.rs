@@ -23,7 +23,7 @@ pub struct FileSource {
 
 pub(crate) struct DebuggerInternals {
     pub(crate) client: Client,
-    pub(crate) publisher: spmc::Sender<Event>,
+    pub(crate) publisher: crossbeam_channel::Sender<Event>,
 
     // debugger specific details
     pub(crate) current_thread_id: Option<ThreadId>,
@@ -38,7 +38,7 @@ pub(crate) struct DebuggerInternals {
 impl DebuggerInternals {
     pub(crate) fn new(
         client: Client,
-        publisher: spmc::Sender<Event>,
+        publisher: crossbeam_channel::Sender<Event>,
         server: Option<Box<dyn Server + Send>>,
     ) -> Self {
         Self::with_breakpoints(client, publisher, HashMap::new(), server)
@@ -80,7 +80,7 @@ impl DebuggerInternals {
 
     pub(crate) fn with_breakpoints(
         client: Client,
-        publisher: spmc::Sender<Event>,
+        publisher: crossbeam_channel::Sender<Event>,
         existing_breakpoints: impl Into<HashMap<BreakpointId, Breakpoint>>,
         server: Option<Box<dyn Server + Send>>,
     ) -> Self {
