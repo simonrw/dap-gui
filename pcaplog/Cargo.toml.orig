@@ -7,7 +7,13 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+<<<<<<< HEAD
+clap = { version = "4.4.13", features = ["derive"] }
+||||||| parent of 5e3e52e493fd (Squash previous commits)
+clap = { version = "4.4.12", features = ["derive"] }
+=======
 clap.workspace = true
+>>>>>>> 5e3e52e493fd (Squash previous commits)
 etherparse = "0.13.0"
 pcap-file = "2.0.0"
 serde_json = "1.0.111"
