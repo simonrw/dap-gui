@@ -15,6 +15,6 @@ anyhow = "1.0.79"
 eyre = "0.6.11"
 color-eyre = "0.6.2"
 ctor = "0.2.6"
-crossbeam-channel = "0.5.10"
+crossbeam-channel = "0.5.11"
 tracing = "0.1.40"
 serde = { version = "1.0.194", features = ["derive"] }
