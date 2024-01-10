@@ -1,5 +1,7 @@
 use std::{
     collections::HashSet,
+    env::home_dir,
+    fs::create_dir_all,
     path::PathBuf,
     sync::{Arc, Mutex},
     thread,
@@ -96,6 +98,16 @@ struct DebuggerApp {
 
 impl DebuggerApp {
     fn new(args: Args, _cc: &eframe::CreationContext<'_>) -> eyre::Result<Self> {
+        let state_path = dirs::state_dir()
+            .unwrap_or_else(|| PathBuf::from("/tmp"))
+            .join("dapgui")
+            .join("state.json");
+        if !state_path.is_dir() {
+            create_dir_all(state_path.parent().unwrap()).context("creating state directory")?;
+        }
+        let persisted_state = state::read_from(&state_path).unwrap_or_default();
+        state::save_to(&persisted_state, &state_path).context("persisting initial state")?;
+
         // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
         // Restore app state using cc.storage (requires the "persistence" feature).
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use

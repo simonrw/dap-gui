@@ -18,6 +18,8 @@ sentry = { version = "0.31.5", optional = true, default-features = false, featur
 transport = { path = "../transport" }
 server = { path = "../server" }
 color-eyre.workspace = true
+state = { path = "../state" }
+dirs = "5.0.1"
 
 [features]
 sentry = ["dep:sentry"]
