@@ -131,14 +131,19 @@ impl DebuggerApp {
         debugger.wait_for_event(|e| matches!(e, debugger::Event::Initialised));
 
         // TEMP
-        debugger
-            .add_breakpoint(debugger::Breakpoint {
-                path: PathBuf::from("./attach.py"),
-                line: 9,
-                ..Default::default()
-            })
-            .context("adding temp breakpoint")?;
+        for line_no in [1, 9, 17, 27] {
+            eprintln!("Adding breakpoint on line {line_no}");
+            debugger
+                .add_breakpoint(debugger::Breakpoint {
+                    path: PathBuf::from("./attach.py"),
+                    line: line_no,
+                    ..Default::default()
+                })
+                .context("adding temp breakpoint")?;
+        }
         debugger.launch().context("launching debugee")?;
+
+        std::process::exit(0);
 
         let temp_state = DebuggerAppState {
             state: State::Initialising,
