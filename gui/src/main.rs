@@ -10,7 +10,7 @@ use std::{
 use clap::{Parser, Subcommand};
 use code_view::CodeView;
 use debugger::{AttachArguments, Debugger, PausedFrame};
-use eframe::egui;
+use eframe::egui::{self, Context, Ui};
 use eyre::WrapErr;
 use transport::types::StackFrame;
 
@@ -92,6 +92,124 @@ impl DebuggerAppState {
     }
 }
 
+struct UserInterface<'a> {
+    state: &'a DebuggerAppState,
+}
+
+impl<'s> UserInterface<'s> {
+    fn render_ui(&self, ctx: &Context) {
+        egui::CentralPanel::default().show(ctx, |ui| match &self.state.state {
+            State::Initialising => {}
+            State::Running => {}
+            State::Paused {
+                stack,
+                paused_frame,
+                breakpoints,
+            } => self.render_paused_ui(ctx, stack, paused_frame, breakpoints),
+            State::Terminated => {
+                ui.label("Program terminated");
+            }
+        });
+    }
+
+    pub fn render_paused_ui(
+        &self,
+        ctx: &Context,
+        stack: &[StackFrame],
+        paused_frame: &PausedFrame,
+        original_breakpoints: &[debugger::Breakpoint],
+    ) {
+        egui::SidePanel::left("left-panel").show(ctx, |ui| {
+            self.render_sidepanel(ctx, ui, stack);
+        });
+        egui::CentralPanel::default().show(ctx, |_| {
+            egui::TopBottomPanel::bottom("bottom-panel").show(ctx, |ui| {
+                self.render_bottom_panel(ctx, ui, paused_frame);
+            });
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.render_code_panel(ctx, ui, paused_frame, original_breakpoints);
+            });
+        });
+    }
+
+    fn render_sidepanel(&self, ctx: &Context, ui: &mut Ui, stack: &[StackFrame]) {
+        self.render_call_stack(ctx, ui, stack);
+        self.render_breakpoints(ctx, ui);
+    }
+
+    fn render_bottom_panel(&self, ctx: &Context, ui: &mut Ui, paused_frame: &PausedFrame) {
+        // TODO: tabbed interface with repl
+        self.render_variables(ctx, ui, paused_frame);
+    }
+
+    fn render_code_panel(
+        &self,
+        ctx: &Context,
+        ui: &mut Ui,
+        paused_frame: &PausedFrame,
+        original_breakpoints: &[debugger::Breakpoint],
+    ) {
+        self.render_code_viewer(ctx, ui, paused_frame, original_breakpoints);
+    }
+
+    fn render_call_stack(&self, _ctx: &Context, ui: &mut Ui, stack: &[StackFrame]) {
+        for frame in stack {
+            ui.label(format!("{name}", name = frame.name));
+        }
+    }
+    fn render_breakpoints(&self, _ctx: &Context, _ui: &mut Ui) {}
+    fn render_variables(&self, _ctx: &Context, ui: &mut Ui, paused_frame: &PausedFrame) {
+        ui.heading("Variables");
+        for var in &paused_frame.variables {
+            match &var.r#type {
+                Some(t) => {
+                    ui.label(format!(
+                        "{name}: {typ} = {value}",
+                        name = var.name,
+                        typ = t,
+                        value = var.value,
+                    ));
+                }
+                None => {
+                    ui.label(format!(
+                        "{name} = {value}",
+                        name = var.name,
+                        value = var.value,
+                    ));
+                }
+            }
+        }
+    }
+    fn render_code_viewer(
+        &self,
+        _ctx: &Context,
+        ui: &mut Ui,
+        paused_frame: &PausedFrame,
+        original_breakpoints: &[debugger::Breakpoint],
+    ) {
+        let frame = &paused_frame.frame;
+        let file_path = frame
+            .source
+            .as_ref()
+            .and_then(|s| s.path.as_ref())
+            .expect("no file source given");
+        let contents =
+            std::fs::read_to_string(&file_path).expect("reading source from given file path");
+        let mut breakpoints = HashSet::from_iter(
+            original_breakpoints
+                .iter()
+                .filter(|b| file_path.as_path() == b.path)
+                .cloned(),
+        );
+
+        ui.add(CodeView::new(&contents, frame.line, true, &mut breakpoints));
+
+        if ui.button("continue").clicked() {
+            self.state.debugger.r#continue().unwrap();
+        }
+    }
+}
+
 struct DebuggerApp {
     inner: Arc<Mutex<DebuggerAppState>>,
 }
@@ -168,67 +286,8 @@ impl eframe::App for DebuggerApp {
             ui.heading("Debugger");
             let inner = self.inner.lock().unwrap();
 
-            match &inner.state {
-                State::Initialising => {}
-                State::Running => {}
-                State::Paused {
-                    stack: _stack,
-                    paused_frame,
-                    breakpoints: original_breakpoints,
-                } => {
-                    egui::SidePanel::left("left-panel").show(ctx, |ui| {
-                        ui.heading("Variables");
-                        for var in &paused_frame.variables {
-                            match &var.r#type {
-                                Some(t) => {
-                                    ui.label(format!(
-                                        "{name}: {typ} = {value}",
-                                        name = var.name,
-                                        typ = t,
-                                        value = var.value,
-                                    ));
-                                }
-                                None => {
-                                    ui.label(format!(
-                                        "{name} = {value}",
-                                        name = var.name,
-                                        value = var.value,
-                                    ));
-                                }
-                            }
-                        }
-                        ui.heading("Stack Frames");
-                    });
-
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        ui.heading("Paused");
-
-                        let frame = &paused_frame.frame;
-                        let file_path = frame
-                            .source
-                            .as_ref()
-                            .and_then(|s| s.path.as_ref())
-                            .expect("no file source given");
-                        let contents = std::fs::read_to_string(&file_path)
-                            .expect("reading source from given file path");
-                        let mut breakpoints = HashSet::from_iter(
-                            original_breakpoints
-                                .iter()
-                                .filter(|b| file_path.as_path() == b.path)
-                                .cloned(),
-                        );
-
-                        ui.add(CodeView::new(&contents, frame.line, true, &mut breakpoints));
-
-                        if ui.button("continue").clicked() {
-                            inner.debugger.r#continue().unwrap();
-                        }
-                    });
-                }
-                State::Terminated => {
-                    ui.label("Program terminated");
-                }
-            }
+            let user_interface = UserInterface { state: &inner };
+            user_interface.render_ui(ctx);
         });
     }
 }
