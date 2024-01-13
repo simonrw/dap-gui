@@ -1,9 +1,12 @@
-use debugger::{Debugger, FileSource};
+use debugger::{Debugger, PausedFrame};
 use eyre::WrapErr;
 use std::{io::IsTerminal, thread, time::Duration};
 use tracing_subscriber::EnvFilter;
 
-use transport::bindings::get_random_tcp_port;
+use transport::{
+    bindings::get_random_tcp_port,
+    types::{Source, StackFrame},
+};
 
 // test suite "constructor"
 #[ctor::ctor]
@@ -81,19 +84,26 @@ fn test_remote_attach() -> eyre::Result<()> {
         matches!(e, debugger::Event::Running { .. })
     });
 
-    let debugger::Event::Paused { source, .. } = wait_for_event("paused event", &drx, |e| {
+    let debugger::Event::Paused { paused_frame, .. } = wait_for_event("paused event", &drx, |e| {
         matches!(e, debugger::Event::Paused { .. })
     }) else {
         unreachable!();
     };
 
-    assert_eq!(
-        source,
-        FileSource {
-            line: breakpoint_line,
-            file_path: Some(file_path.clone()),
-        }
-    );
+    assert!(matches!(
+        paused_frame,
+        PausedFrame {
+            frame: StackFrame {
+                source: Some(Source {
+                    path: Some(file_path),
+                    ..
+                }),
+                line: breakpoint_line,
+                ..
+            },
+            ..
+        } if file_path == file_path && breakpoint_line == breakpoint_line
+    ));
 
     debugger.r#continue().context("resuming debugee")?;
 
@@ -146,19 +156,26 @@ fn test_debugger() -> eyre::Result<()> {
         matches!(e, debugger::Event::Running { .. })
     });
 
-    let debugger::Event::Paused { source, .. } = wait_for_event("paused event", &drx, |e| {
+    let debugger::Event::Paused { paused_frame, .. } = wait_for_event("paused event", &drx, |e| {
         matches!(e, debugger::Event::Paused { .. })
     }) else {
-        unreachable!()
+        unreachable!();
     };
 
-    assert_eq!(
-        source,
-        FileSource {
-            line: breakpoint_line,
-            file_path: Some(file_path.clone()),
-        }
-    );
+    assert!(matches!(
+        paused_frame,
+        PausedFrame {
+            frame: StackFrame {
+                source: Some(Source {
+                    path: Some(file_path),
+                    ..
+                }),
+                line: breakpoint_line,
+                ..
+            },
+            ..
+        } if file_path == file_path && breakpoint_line == breakpoint_line
+    ));
 
     debugger.r#continue().context("resuming debugee")?;
 

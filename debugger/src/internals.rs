@@ -156,7 +156,7 @@ impl DebuggerInternals {
                 };
 
                 let paused_frame = {
-                    let top_frame = stack_frames.iter().next().unwrap().clone();
+                    let top_frame = stack_frames.first().unwrap().clone();
                     let Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })) =
                         self.client
                             .send(requests::RequestBody::Scopes(requests::Scopes {

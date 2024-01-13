@@ -1,6 +1,5 @@
 use std::{
     collections::HashSet,
-    env::home_dir,
     fs::create_dir_all,
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -173,7 +172,7 @@ impl<'s> UserInterface<'s> {
 
     fn render_call_stack(&self, _ctx: &Context, ui: &mut Ui, stack: &[StackFrame]) {
         for frame in stack {
-            ui.label(format!("{name}", name = frame.name));
+            ui.label(frame.name.to_string());
         }
     }
     fn render_breakpoints(&self, _ctx: &Context, _ui: &mut Ui) {}
@@ -215,7 +214,7 @@ impl<'s> UserInterface<'s> {
             .and_then(|s| s.path.as_ref())
             .expect("no file source given");
         let contents =
-            std::fs::read_to_string(&file_path).expect("reading source from given file path");
+            std::fs::read_to_string(file_path).expect("reading source from given file path");
         let mut breakpoints = HashSet::from_iter(
             original_breakpoints
                 .iter()
