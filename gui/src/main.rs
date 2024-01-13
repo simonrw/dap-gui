@@ -7,28 +7,22 @@ use std::{
     thread,
 };
 
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use code_view::CodeView;
 use debugger::{AttachArguments, Debugger, PausedFrame};
-use eframe::{
-    egui::{self, Button, Context, Ui},
-    epaint::Vec2,
-};
-use eyre::WrapErr;
+use eframe::egui::{self, Button, Context, Ui};
+use eyre::{OptionExt, WrapErr};
+use launch_configuration::{Debugpy, LaunchConfiguration};
 use transport::types::StackFrame;
 
 mod code_view;
 
 #[derive(Parser)]
 struct Args {
-    #[command(subcommand)]
-    command: Command,
-}
+    config_path: PathBuf,
 
-#[derive(Subcommand)]
-enum Command {
-    Attach,
-    Launch,
+    #[clap(short, long)]
+    name: String,
 }
 
 #[cfg(feature = "sentry")]
@@ -254,17 +248,27 @@ impl DebuggerApp {
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
         let cwd = std::env::current_dir().unwrap();
-        let debugger = match args.command {
-            Command::Attach => {
-                let launch_arguments = AttachArguments {
-                    working_directory: cwd,
-                    port: None,
-                    language: debugger::Language::DebugPy,
-                };
 
-                Debugger::new(launch_arguments).context("creating internal debugger")?
+        let config = launch_configuration::load_from_path(&args.name, args.config_path)
+            .wrap_err("loading configuration file")?
+            .ok_or_eyre("finding named configuration")?;
+
+        let debugger = match config {
+            LaunchConfiguration::Debugpy(Debugpy { request, .. }) => {
+                let debugger = match request.as_str() {
+                    "attach" => {
+                        let launch_arguments = AttachArguments {
+                            working_directory: cwd,
+                            port: None,
+                            language: debugger::Language::DebugPy,
+                        };
+
+                        Debugger::new(launch_arguments).context("creating internal debugger")?
+                    }
+                    _ => todo!(),
+                };
+                debugger
             }
-            Command::Launch => todo!(),
         };
 
         let events = debugger.events();
@@ -305,7 +309,7 @@ impl DebuggerApp {
 
 impl eframe::App for DebuggerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ctx, |_ui| {
             let inner = self.inner.lock().unwrap();
             let user_interface = UserInterface { state: &inner };
             user_interface.render_ui(ctx);
@@ -316,6 +320,7 @@ impl eframe::App for DebuggerApp {
 fn main() -> eyre::Result<()> {
     setup_sentry!();
     let _ = tracing_subscriber::fmt::try_init();
+    let _ = color_eyre::install();
 
     let args = Args::parse();
 

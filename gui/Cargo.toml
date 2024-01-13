@@ -20,6 +20,7 @@ server = { path = "../server" }
 color-eyre.workspace = true
 state = { path = "../state" }
 dirs = "5.0.1"
+launch_configuration = { path = "../launch_configuration" }
 
 [features]
 sentry = ["dep:sentry"]

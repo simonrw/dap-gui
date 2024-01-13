@@ -1,7 +1,14 @@
 {
-    "language": "python",
-    "command": "launch",
-    "working_directory": ".",
-    "type": "file",
-    "filename": "test.py"
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach",
+            "type": "python",
+            "request": "attach",
+            "connect": {
+                "host": "localhost",
+                "port": 5678
+            }
+        }
+    ]
 }

@@ -62,8 +62,8 @@ pub struct Debugpy {
     pub r#type: String,
     pub request: String,
     pub connect: ConnectionDetails,
-    pub path_mappings: Vec<PathMapping>,
-    pub just_my_code: bool,
+    pub path_mappings: Option<Vec<PathMapping>>,
+    pub just_my_code: Option<bool>,
 }
 
 #[derive(Deserialize)]

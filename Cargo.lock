@@ -1672,6 +1672,7 @@ dependencies = [
  "dirs",
  "eframe",
  "eyre",
+ "launch_configuration",
  "sentry",
  "server",
  "state",
