@@ -8,6 +8,7 @@ members = [
     "pcaplog",
     "gui",
     "state",
+    "launch_configuration",
 ]
 
 [profile.release]
