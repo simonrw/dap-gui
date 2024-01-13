@@ -105,7 +105,7 @@ impl<'s> UserInterface<'s> {
                 stack,
                 paused_frame,
                 breakpoints,
-            } => self.render_paused_ui(ctx, stack, paused_frame, breakpoints),
+            } => self.render_paused_ui(ctx, ui, stack, paused_frame, breakpoints),
             State::Terminated => {
                 ui.label("Program terminated");
             }
@@ -115,26 +115,31 @@ impl<'s> UserInterface<'s> {
     pub fn render_paused_ui(
         &self,
         ctx: &Context,
+        ui: &mut Ui,
         stack: &[StackFrame],
         paused_frame: &PausedFrame,
         original_breakpoints: &[debugger::Breakpoint],
     ) {
-        egui::SidePanel::left("left-panel").show(ctx, |ui| {
+        egui::SidePanel::left("left-panel").show_inside(ui, |ui| {
             self.render_sidepanel(ctx, ui, stack);
         });
-        egui::CentralPanel::default().show(ctx, |_| {
-            egui::TopBottomPanel::bottom("bottom-panel").show(ctx, |ui| {
-                self.render_bottom_panel(ctx, ui, paused_frame);
-            });
-            egui::CentralPanel::default().show(ctx, |ui| {
+        ui.vertical(|ui| {
+            egui::CentralPanel::default().show_inside(ui, |ui| {
                 self.render_code_panel(ctx, ui, paused_frame, original_breakpoints);
             });
+            egui::TopBottomPanel::bottom("bottom-panel")
+                .min_height(200.0)
+                .show_inside(ui, |ui| {
+                    self.render_bottom_panel(ctx, ui, paused_frame);
+                });
         });
     }
 
     fn render_sidepanel(&self, ctx: &Context, ui: &mut Ui, stack: &[StackFrame]) {
-        self.render_call_stack(ctx, ui, stack);
-        self.render_breakpoints(ctx, ui);
+        ui.vertical(|ui| {
+            self.render_call_stack(ctx, ui, stack);
+            self.render_breakpoints(ctx, ui);
+        });
     }
 
     fn render_bottom_panel(&self, ctx: &Context, ui: &mut Ui, paused_frame: &PausedFrame) {
@@ -149,7 +154,9 @@ impl<'s> UserInterface<'s> {
         paused_frame: &PausedFrame,
         original_breakpoints: &[debugger::Breakpoint],
     ) {
-        self.render_code_viewer(ctx, ui, paused_frame, original_breakpoints);
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            self.render_code_viewer(ctx, ui, paused_frame, original_breakpoints);
+        });
     }
 
     fn render_call_stack(&self, _ctx: &Context, ui: &mut Ui, stack: &[StackFrame]) {
@@ -159,26 +166,28 @@ impl<'s> UserInterface<'s> {
     }
     fn render_breakpoints(&self, _ctx: &Context, _ui: &mut Ui) {}
     fn render_variables(&self, _ctx: &Context, ui: &mut Ui, paused_frame: &PausedFrame) {
-        ui.heading("Variables");
-        for var in &paused_frame.variables {
-            match &var.r#type {
-                Some(t) => {
-                    ui.label(format!(
-                        "{name}: {typ} = {value}",
-                        name = var.name,
-                        typ = t,
-                        value = var.value,
-                    ));
-                }
-                None => {
-                    ui.label(format!(
-                        "{name} = {value}",
-                        name = var.name,
-                        value = var.value,
-                    ));
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.heading("Variables");
+            for var in &paused_frame.variables {
+                match &var.r#type {
+                    Some(t) => {
+                        ui.label(format!(
+                            "{name}: {typ} = {value}",
+                            name = var.name,
+                            typ = t,
+                            value = var.value,
+                        ));
+                    }
+                    None => {
+                        ui.label(format!(
+                            "{name} = {value}",
+                            name = var.name,
+                            value = var.value,
+                        ));
+                    }
                 }
             }
-        }
+        });
     }
     fn render_code_viewer(
         &self,
