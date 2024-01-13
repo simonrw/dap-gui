@@ -85,7 +85,7 @@ impl<'a> egui::Widget for CodeView<'a> {
 }
 
 impl<'a> CodeView<'a> {
-    fn update_breakpoints(&mut self, response: &Response) {
+    fn update_breakpoints(&mut self, _response: &Response) {
         // TODO
         return;
 

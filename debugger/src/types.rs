@@ -11,4 +11,10 @@ pub struct Breakpoint {
     pub line: usize,
 }
 
+#[derive(Debug, Clone)]
+pub struct PausedFrame {
+    pub frame: StackFrame,
+    pub variables: Vec<transport::types::Variable>,
+}
+
 pub(crate) use transport::types::StackFrame;

@@ -9,7 +9,7 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use code_view::CodeView;
-use debugger::{AttachArguments, Debugger, FileSource};
+use debugger::{AttachArguments, Debugger, PausedFrame};
 use eframe::egui;
 use eyre::WrapErr;
 use transport::types::StackFrame;
@@ -52,7 +52,7 @@ enum State {
     Running,
     Paused {
         stack: Vec<StackFrame>,
-        source: FileSource,
+        paused_frame: PausedFrame,
         breakpoints: Vec<debugger::Breakpoint>,
     },
     Terminated,
@@ -64,11 +64,11 @@ impl From<debugger::Event> for State {
             debugger::Event::Initialised => State::Running,
             debugger::Event::Paused {
                 stack,
-                source,
+                paused_frame,
                 breakpoints,
             } => State::Paused {
                 stack,
-                source,
+                paused_frame,
                 breakpoints,
             },
             debugger::Event::Running => State::Running,
@@ -171,7 +171,7 @@ impl eframe::App for DebuggerApp {
                 State::Running => {}
                 State::Paused {
                     stack: _stack,
-                    source,
+                    paused_frame,
                     breakpoints: original_breakpoints,
                 } => {
                     egui::SidePanel::left("left-panel").show(ctx, |ui| {
@@ -182,32 +182,22 @@ impl eframe::App for DebuggerApp {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.heading("Paused");
 
-                        let contents = if let Some(ref path) = source.file_path {
-                            // TODO: Result
-                            std::fs::read_to_string(path)
-                                .expect("reading source contents from file")
-                        } else {
-                            unreachable!("no file source specified");
-                        };
+                        let frame = &paused_frame.frame;
+                        let file_path = frame
+                            .source
+                            .as_ref()
+                            .and_then(|s| s.path.as_ref())
+                            .expect("no file source given");
+                        let contents = std::fs::read_to_string(&file_path)
+                            .expect("reading source from given file path");
                         let mut breakpoints = HashSet::from_iter(
                             original_breakpoints
                                 .iter()
-                                .filter(|b| {
-                                    source
-                                        .file_path
-                                        .as_ref()
-                                        .map(|s| s == b.path.as_path())
-                                        .unwrap_or(false)
-                                })
+                                .filter(|b| file_path.as_path() == b.path)
                                 .cloned(),
                         );
 
-                        ui.add(CodeView::new(
-                            &contents,
-                            source.line,
-                            true,
-                            &mut breakpoints,
-                        ));
+                        ui.add(CodeView::new(&contents, frame.line, true, &mut breakpoints));
 
                         if ui.button("continue").clicked() {
                             inner.debugger.r#continue().unwrap();

@@ -5,13 +5,14 @@ use transport::{
     DEFAULT_DAP_PORT,
 };
 
-use crate::types;
+use crate::types::{self, PausedFrame};
 
+#[derive(Debug)]
 pub(crate) enum DebuggerState {
     Initialised,
     Paused {
         stack: Vec<types::StackFrame>,
-        source: crate::FileSource,
+        paused_frame: PausedFrame,
         breakpoints: Vec<types::Breakpoint>,
     },
     Running,
@@ -24,8 +25,8 @@ pub enum Event {
     Initialised,
     Paused {
         stack: Vec<types::StackFrame>,
-        source: crate::FileSource,
         breakpoints: Vec<types::Breakpoint>,
+        paused_frame: types::PausedFrame,
     },
     Running,
     Ended,
@@ -37,12 +38,12 @@ impl<'a> From<&'a DebuggerState> for Event {
             DebuggerState::Initialised => Event::Initialised,
             DebuggerState::Paused {
                 stack,
-                source,
+                paused_frame,
                 breakpoints,
                 ..
             } => Event::Paused {
                 stack: stack.clone(),
-                source: source.clone(),
+                paused_frame: paused_frame.clone(),
                 breakpoints: breakpoints.clone(),
             },
             DebuggerState::Running => Event::Running,

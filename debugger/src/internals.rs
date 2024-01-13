@@ -11,7 +11,7 @@ use transport::{
 use crate::{
     debugger::InitialiseArguments,
     state::DebuggerState,
-    types::{Breakpoint, BreakpointId},
+    types::{Breakpoint, BreakpointId, PausedFrame},
     Event,
 };
 
@@ -155,9 +155,45 @@ impl DebuggerInternals {
                     unreachable!()
                 };
 
+                let paused_frame = {
+                    let top_frame = stack_frames.iter().next().unwrap().clone();
+                    let Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })) =
+                        self.client
+                            .send(requests::RequestBody::Scopes(requests::Scopes {
+                                frame_id: top_frame.id,
+                            }))
+                            .expect("requesting scopes")
+                    else {
+                        unreachable!()
+                    };
+
+                    let mut variables = Vec::new();
+
+                    for scope in scopes {
+                        let req = requests::RequestBody::Variables(requests::Variables {
+                            variables_reference: scope.variables_reference,
+                        });
+                        let Some(responses::ResponseBody::Variables(
+                            responses::VariablesResponse {
+                                variables: scope_variables,
+                            },
+                        )) = self.client.send(req).expect("fetching variables")
+                        else {
+                            unreachable!()
+                        };
+
+                        variables.extend(scope_variables.into_iter());
+                    }
+
+                    PausedFrame {
+                        frame: top_frame,
+                        variables,
+                    }
+                };
+
                 self.set_state(DebuggerState::Paused {
                     stack: stack_frames,
-                    source: current_source,
+                    paused_frame,
                     breakpoints: self.breakpoints.values().cloned().collect(),
                 });
             }
@@ -247,7 +283,9 @@ impl DebuggerInternals {
         self.current_breakpoint_id
     }
 
+    #[tracing::instrument(skip(self))]
     pub(crate) fn set_state(&mut self, new_state: DebuggerState) {
+        tracing::debug!("setting debugger state");
         let event = Event::from(&new_state);
         self.emit(event);
     }
