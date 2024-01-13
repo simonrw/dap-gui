@@ -181,6 +181,25 @@ impl eframe::App for DebuggerApp {
                 } => {
                     egui::SidePanel::left("left-panel").show(ctx, |ui| {
                         ui.heading("Variables");
+                        for var in &paused_frame.variables {
+                            match &var.r#type {
+                                Some(t) => {
+                                    ui.label(format!(
+                                        "{name}: {typ} = {value}",
+                                        name = var.name,
+                                        typ = t,
+                                        value = var.value,
+                                    ));
+                                }
+                                None => {
+                                    ui.label(format!(
+                                        "{name} = {value}",
+                                        name = var.name,
+                                        value = var.value,
+                                    ));
+                                }
+                            }
+                        }
                         ui.heading("Stack Frames");
                     });
 
