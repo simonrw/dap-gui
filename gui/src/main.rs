@@ -122,14 +122,14 @@ impl<'s> UserInterface<'s> {
             self.render_sidepanel(ctx, ui, stack);
         });
         ui.vertical(|ui| {
-            egui::CentralPanel::default().show_inside(ui, |ui| {
-                self.render_code_panel(ctx, ui, paused_frame, original_breakpoints);
-            });
             egui::TopBottomPanel::bottom("bottom-panel")
                 .min_height(200.0)
                 .show_inside(ui, |ui| {
                     self.render_bottom_panel(ctx, ui, paused_frame);
                 });
+            egui::CentralPanel::default().show_inside(ui, |ui| {
+                self.render_code_panel(ctx, ui, paused_frame, original_breakpoints);
+            });
         });
     }
 
