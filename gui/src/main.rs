@@ -10,7 +10,10 @@ use std::{
 use clap::{Parser, Subcommand};
 use code_view::CodeView;
 use debugger::{AttachArguments, Debugger, PausedFrame};
-use eframe::egui::{self, Context, Ui};
+use eframe::{
+    egui::{self, Button, Context, Ui},
+    epaint::Vec2,
+};
 use eyre::WrapErr;
 use transport::types::StackFrame;
 
@@ -120,6 +123,8 @@ impl<'s> UserInterface<'s> {
         paused_frame: &PausedFrame,
         original_breakpoints: &[debugger::Breakpoint],
     ) {
+        self.render_controls_window(ctx, ui);
+
         egui::SidePanel::left("left-panel").show_inside(ui, |ui| {
             self.render_sidepanel(ctx, ui, stack);
         });
@@ -133,6 +138,19 @@ impl<'s> UserInterface<'s> {
                     self.render_bottom_panel(ctx, ui, paused_frame);
                 });
         });
+    }
+
+    fn render_controls_window(&self, ctx: &Context, _ui: &mut Ui) {
+        egui::Window::new("Controls")
+            .anchor(egui::Align2::RIGHT_TOP, (10., 10.))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    let button = Button::new("▶️").small();
+                    if ui.add(button).clicked() {
+                        self.state.debugger.r#continue().unwrap();
+                    }
+                });
+            });
     }
 
     fn render_sidepanel(&self, ctx: &Context, ui: &mut Ui, stack: &[StackFrame]) {
@@ -212,10 +230,6 @@ impl<'s> UserInterface<'s> {
         );
 
         ui.add(CodeView::new(&contents, frame.line, true, &mut breakpoints));
-
-        if ui.button("continue").clicked() {
-            self.state.debugger.r#continue().unwrap();
-        }
     }
 }
 
@@ -292,9 +306,7 @@ impl DebuggerApp {
 impl eframe::App for DebuggerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Debugger");
             let inner = self.inner.lock().unwrap();
-
             let user_interface = UserInterface { state: &inner };
             user_interface.render_ui(ctx);
         });
