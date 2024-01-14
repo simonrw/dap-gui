@@ -174,6 +174,55 @@ impl Debugger {
         Ok(())
     }
 
+    /// Step over a statement
+    pub fn step_over(&self) -> eyre::Result<()> {
+        let internals = self.internals.lock().unwrap();
+        match internals.current_thread_id {
+            Some(thread_id) => {
+                internals
+                    .client
+                    .execute(requests::RequestBody::Next(requests::Next { thread_id }))
+                    .context("sending step_over request")?;
+            }
+            None => eyre::bail!("logic error: no current thread id"),
+        }
+        Ok(())
+    }
+
+    /// Step into a statement
+    pub fn step_in(&self) -> eyre::Result<()> {
+        let internals = self.internals.lock().unwrap();
+        match internals.current_thread_id {
+            Some(thread_id) => {
+                internals
+                    .client
+                    .execute(requests::RequestBody::StepIn(requests::StepIn {
+                        thread_id,
+                    }))
+                    .context("sending step_in` request")?;
+            }
+            None => eyre::bail!("logic error: no current thread id"),
+        }
+        Ok(())
+    }
+
+    /// Step out of a statement
+    pub fn step_out(&self) -> eyre::Result<()> {
+        let internals = self.internals.lock().unwrap();
+        match internals.current_thread_id {
+            Some(thread_id) => {
+                internals
+                    .client
+                    .execute(requests::RequestBody::StepOut(requests::StepOut {
+                        thread_id,
+                    }))
+                    .context("sending `step_out` request")?;
+            }
+            None => eyre::bail!("logic error: no current thread id"),
+        }
+        Ok(())
+    }
+
     pub fn with_current_source<F>(&self, f: F)
     where
         F: Fn(Option<&FileSource>),

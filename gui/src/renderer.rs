@@ -93,9 +93,17 @@ impl<'s> Renderer<'s> {
             .anchor(egui::Align2::RIGHT_TOP, (10., 10.))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    let button = Button::new("▶️").small();
-                    if ui.add(button).clicked() {
+                    if ui.add(Button::new("▶️").small()).clicked() {
                         self.state.debugger.r#continue().unwrap();
+                    }
+                    if ui.add(Button::new("step-over").small()).clicked() {
+                        self.state.debugger.step_over().unwrap();
+                    }
+                    if ui.add(Button::new("step-in").small()).clicked() {
+                        self.state.debugger.step_in().unwrap();
+                    }
+                    if ui.add(Button::new("step-out").small()).clicked() {
+                        self.state.debugger.step_out().unwrap();
                     }
                 });
             });
