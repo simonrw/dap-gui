@@ -71,7 +71,7 @@ impl<'s> Renderer<'s> {
         }
 
         egui::SidePanel::left("left-panel").show_inside(ui, |ui| {
-            self.render_sidepanel(ctx, ui, stack, show_details);
+            self.render_sidepanel(ctx, ui, stack, original_breakpoints, show_details);
         });
         ui.vertical(|ui| {
             egui::TopBottomPanel::bottom("bottom-panel")
@@ -111,11 +111,13 @@ impl<'s> Renderer<'s> {
         ctx: &Context,
         ui: &mut Ui,
         stack: &[StackFrame],
+        original_breakpoints: &[debugger::Breakpoint],
         show_details: bool,
     ) {
         ui.vertical(|ui| {
             self.render_call_stack(ctx, ui, stack, show_details);
-            self.render_breakpoints(ctx, ui, show_details);
+            ui.separator();
+            self.render_breakpoints(ctx, ui, original_breakpoints, show_details);
         });
     }
 
@@ -161,13 +163,43 @@ impl<'s> Renderer<'s> {
         show_details: bool,
     ) {
         ui.label("Call Stack");
-        if show_details {
-            for frame in stack {
-                ui.label(frame.name.to_string());
+        if !show_details {
+            return;
+        }
+        for frame in stack {
+            ui.label(frame.name.to_string());
+        }
+    }
+
+    fn render_breakpoints(
+        &mut self,
+        _ctx: &Context,
+        ui: &mut Ui,
+        breakpoints: &[debugger::Breakpoint],
+        show_details: bool,
+    ) {
+        ui.label("Breakpoints");
+        if !show_details {
+            return;
+        }
+
+        for breakpoint in breakpoints {
+            if let Some(name) = &breakpoint.name {
+                ui.label(format!(
+                    "{path}:{line} ({name})",
+                    path = breakpoint.path.display(),
+                    line = breakpoint.line,
+                    name = name
+                ));
+            } else {
+                ui.label(format!(
+                    "{path}:{line}",
+                    path = breakpoint.path.display(),
+                    line = breakpoint.line,
+                ));
             }
         }
     }
-    fn render_breakpoints(&mut self, _ctx: &Context, _ui: &mut Ui, _show_details: bool) {}
     fn render_variables(
         &mut self,
         _ctx: &Context,
