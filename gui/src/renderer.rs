@@ -6,7 +6,7 @@ use transport::types::StackFrame;
 
 use crate::{
     code_view::CodeView,
-    ui::{call_stack::CallStack, control_panel::ControlPanel},
+    ui::{breakpoints::Breakpoints, call_stack::CallStack, control_panel::ControlPanel},
     DebuggerAppState, State, TabState,
 };
 
@@ -95,7 +95,7 @@ impl<'s> Renderer<'s> {
 
     fn render_sidepanel(
         &mut self,
-        ctx: &Context,
+        _ctx: &Context,
         ui: &mut Ui,
         stack: &[StackFrame],
         original_breakpoints: &[debugger::Breakpoint],
@@ -104,7 +104,7 @@ impl<'s> Renderer<'s> {
         ui.vertical(|ui| {
             ui.add(CallStack::new(stack, show_details));
             ui.separator();
-            self.render_breakpoints(ctx, ui, original_breakpoints, show_details);
+            ui.add(Breakpoints::new(original_breakpoints, show_details));
         });
     }
 
@@ -142,35 +142,6 @@ impl<'s> Renderer<'s> {
         });
     }
 
-    fn render_breakpoints(
-        &mut self,
-        _ctx: &Context,
-        ui: &mut Ui,
-        breakpoints: &[debugger::Breakpoint],
-        show_details: bool,
-    ) {
-        ui.label("Breakpoints");
-        if !show_details {
-            return;
-        }
-
-        for breakpoint in breakpoints {
-            if let Some(name) = &breakpoint.name {
-                ui.label(format!(
-                    "{path}:{line} ({name})",
-                    path = breakpoint.path.display(),
-                    line = breakpoint.line,
-                    name = name
-                ));
-            } else {
-                ui.label(format!(
-                    "{path}:{line}",
-                    path = breakpoint.path.display(),
-                    line = breakpoint.line,
-                ));
-            }
-        }
-    }
     fn render_variables(
         &mut self,
         _ctx: &Context,
