@@ -42,6 +42,7 @@ macro_rules! setup_sentry {
     () => {};
 }
 
+#[derive(Clone)]
 enum State {
     Initialising,
     Running,
@@ -76,12 +77,14 @@ impl From<debugger::Event> for State {
 struct DebuggerAppState {
     state: State,
     debugger: Debugger,
+    previous_state: Option<State>,
 }
 
 impl DebuggerAppState {
     #[tracing::instrument(skip(self))]
     fn handle_event(&mut self, event: &debugger::Event) -> eyre::Result<()> {
         tracing::debug!("handling event");
+        self.previous_state = Some(self.state.clone());
         self.state = event.clone().into();
         Ok(())
     }
@@ -136,7 +139,7 @@ impl DebuggerApp {
         debugger.wait_for_event(|e| matches!(e, debugger::Event::Initialised));
 
         // TEMP
-        for line_no in [1, 9, 17, 27] {
+        for line_no in [1, 27, 16, 34] {
             debugger
                 .add_breakpoint(debugger::Breakpoint {
                     path: PathBuf::from("./attach.py"),
@@ -149,6 +152,7 @@ impl DebuggerApp {
 
         let temp_state = DebuggerAppState {
             state: State::Initialising,
+            previous_state: None,
             debugger,
         };
 
