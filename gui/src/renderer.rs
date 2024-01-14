@@ -4,7 +4,7 @@ use debugger::PausedFrame;
 use eframe::egui::{self, Button, Context, Ui};
 use transport::types::StackFrame;
 
-use crate::{code_view::CodeView, DebuggerAppState, State, TabState};
+use crate::{code_view::CodeView, ui::call_stack::CallStack, DebuggerAppState, State, TabState};
 
 pub(crate) struct Renderer<'a> {
     state: &'a DebuggerAppState,
@@ -162,13 +162,7 @@ impl<'s> Renderer<'s> {
         stack: &[StackFrame],
         show_details: bool,
     ) {
-        ui.label("Call Stack");
-        if !show_details {
-            return;
-        }
-        for frame in stack {
-            ui.label(frame.name.to_string());
-        }
+        ui.add(CallStack::new(stack, show_details));
     }
 
     fn render_breakpoints(

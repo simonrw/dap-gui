@@ -15,6 +15,7 @@ use transport::types::StackFrame;
 
 mod code_view;
 mod renderer;
+mod ui;
 
 #[derive(Parser)]
 struct Args {
