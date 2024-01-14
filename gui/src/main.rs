@@ -92,7 +92,7 @@ struct DebuggerApp {
 }
 
 impl DebuggerApp {
-    fn new(args: Args, _cc: &eframe::CreationContext<'_>) -> eyre::Result<Self> {
+    fn new(args: Args, cc: &eframe::CreationContext<'_>) -> eyre::Result<Self> {
         let state_path = dirs::state_dir()
             .unwrap_or_else(|| PathBuf::from("/tmp"))
             .join("dapgui")
@@ -154,12 +154,14 @@ impl DebuggerApp {
 
         let inner = Arc::new(Mutex::new(temp_state));
         let background_inner = Arc::clone(&inner);
+        let egui_context = cc.egui_ctx.clone();
 
         thread::spawn(move || loop {
             if let Ok(event) = events.recv() {
                 if let Err(e) = background_inner.lock().unwrap().handle_event(&event) {
                     tracing::warn!(error = %e, "handling debugger event");
                 }
+                egui_context.request_repaint();
             }
         });
 
