@@ -1,7 +1,4 @@
-use std::{
-    collections::HashSet,
-    sync::{Arc, Mutex},
-};
+use std::collections::HashSet;
 
 use debugger::PausedFrame;
 use eframe::egui::{self, Button, Context, Ui};
