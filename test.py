@@ -1,11 +1,14 @@
 a = 10
 
+
 def foo():
     return 5
+
 
 class Bar:
     def __init__(self, value):
         self.value = value
+
 
 def main():
     b = 20
@@ -15,6 +18,7 @@ def main():
 
     with open("out.txt", "w") as outfile:
         outfile.write("ok")
+
 
 if __name__ == "__main__":
     main()
