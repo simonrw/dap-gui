@@ -1,10 +1,14 @@
 use std::{collections::HashSet, ops::Deref};
 
 use debugger::PausedFrame;
-use eframe::egui::{self, Button, Context, Ui};
+use eframe::egui::{self, Context, Ui};
 use transport::types::StackFrame;
 
-use crate::{code_view::CodeView, ui::call_stack::CallStack, DebuggerAppState, State, TabState};
+use crate::{
+    code_view::CodeView,
+    ui::{call_stack::CallStack, control_panel::ControlPanel},
+    DebuggerAppState, State, TabState,
+};
 
 pub(crate) struct Renderer<'a> {
     state: &'a DebuggerAppState,
@@ -85,25 +89,8 @@ impl<'s> Renderer<'s> {
         });
     }
 
-    fn render_controls_window(&mut self, ctx: &Context, _ui: &mut Ui) {
-        egui::Window::new("Controls")
-            .anchor(egui::Align2::RIGHT_TOP, (10., 10.))
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    if ui.add(Button::new("▶️").small()).clicked() {
-                        self.state.debugger.r#continue().unwrap();
-                    }
-                    if ui.add(Button::new("step-over").small()).clicked() {
-                        self.state.debugger.step_over().unwrap();
-                    }
-                    if ui.add(Button::new("step-in").small()).clicked() {
-                        self.state.debugger.step_in().unwrap();
-                    }
-                    if ui.add(Button::new("step-out").small()).clicked() {
-                        self.state.debugger.step_out().unwrap();
-                    }
-                });
-            });
+    fn render_controls_window(&mut self, ctx: &Context, ui: &mut Ui) {
+        ui.add(ControlPanel::new(&self.state.debugger, ctx));
     }
 
     fn render_sidepanel(
@@ -115,7 +102,7 @@ impl<'s> Renderer<'s> {
         show_details: bool,
     ) {
         ui.vertical(|ui| {
-            self.render_call_stack(ctx, ui, stack, show_details);
+            ui.add(CallStack::new(stack, show_details));
             ui.separator();
             self.render_breakpoints(ctx, ui, original_breakpoints, show_details);
         });
@@ -153,16 +140,6 @@ impl<'s> Renderer<'s> {
         egui::ScrollArea::vertical().show(ui, |ui| {
             self.render_code_viewer(ctx, ui, paused_frame, original_breakpoints);
         });
-    }
-
-    fn render_call_stack(
-        &mut self,
-        _ctx: &Context,
-        ui: &mut Ui,
-        stack: &[StackFrame],
-        show_details: bool,
-    ) {
-        ui.add(CallStack::new(stack, show_details));
     }
 
     fn render_breakpoints(
