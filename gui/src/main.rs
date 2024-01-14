@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     fs::create_dir_all,
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -74,10 +75,19 @@ impl From<debugger::Event> for State {
     }
 }
 
+#[derive(PartialEq)]
+enum TabState {
+    Variables,
+    Repl,
+}
+
 struct DebuggerAppState {
     state: State,
     debugger: Debugger,
     previous_state: Option<State>,
+
+    // UI internals
+    tab: RefCell<TabState>,
 }
 
 impl DebuggerAppState {
@@ -154,6 +164,7 @@ impl DebuggerApp {
             state: State::Initialising,
             previous_state: None,
             debugger,
+            tab: RefCell::new(TabState::Variables),
         };
 
         let inner = Arc::new(Mutex::new(temp_state));
@@ -177,7 +188,7 @@ impl eframe::App for DebuggerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |_ui| {
             let inner = self.inner.lock().unwrap();
-            let user_interface = crate::renderer::Renderer::new(&inner);
+            let mut user_interface = crate::renderer::Renderer::new(&inner);
             user_interface.render_ui(ctx);
         });
     }

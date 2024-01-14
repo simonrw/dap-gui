@@ -1,10 +1,10 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::Deref};
 
 use debugger::PausedFrame;
 use eframe::egui::{self, Button, Context, Ui};
 use transport::types::StackFrame;
 
-use crate::{code_view::CodeView, DebuggerAppState, State};
+use crate::{code_view::CodeView, DebuggerAppState, State, TabState};
 
 pub(crate) struct Renderer<'a> {
     state: &'a DebuggerAppState,
@@ -15,23 +15,23 @@ impl<'s> Renderer<'s> {
         Self { state }
     }
 
-    pub(crate) fn render_ui(&self, ctx: &Context) {
+    pub(crate) fn render_ui(&mut self, ctx: &Context) {
         egui::CentralPanel::default().show(ctx, |ui| match &self.state.state {
             State::Initialising => {}
             State::Running => {
-                let previous_state = &self.state.previous_state;
+                let DebuggerAppState { previous_state, .. } = &self.state;
                 if let Some(State::Paused {
                     stack,
                     paused_frame,
                     breakpoints,
-                }) = previous_state
+                }) = previous_state.clone()
                 {
                     self.render_paused_or_running_ui(
                         ctx,
                         ui,
-                        stack,
-                        paused_frame,
-                        breakpoints,
+                        &stack,
+                        &paused_frame,
+                        &breakpoints,
                         false,
                     );
                 } else {
@@ -58,7 +58,7 @@ impl<'s> Renderer<'s> {
     /// * the breakpoints
     /// * the call stack
     pub fn render_paused_or_running_ui(
-        &self,
+        &mut self,
         ctx: &Context,
         ui: &mut Ui,
         stack: &[StackFrame],
@@ -85,7 +85,7 @@ impl<'s> Renderer<'s> {
         });
     }
 
-    fn render_controls_window(&self, ctx: &Context, _ui: &mut Ui) {
+    fn render_controls_window(&mut self, ctx: &Context, _ui: &mut Ui) {
         egui::Window::new("Controls")
             .anchor(egui::Align2::RIGHT_TOP, (10., 10.))
             .show(ctx, |ui| {
@@ -107,7 +107,7 @@ impl<'s> Renderer<'s> {
     }
 
     fn render_sidepanel(
-        &self,
+        &mut self,
         ctx: &Context,
         ui: &mut Ui,
         stack: &[StackFrame],
@@ -120,18 +120,29 @@ impl<'s> Renderer<'s> {
     }
 
     fn render_bottom_panel(
-        &self,
+        &mut self,
         ctx: &Context,
         ui: &mut Ui,
         paused_frame: &PausedFrame,
         show_details: bool,
     ) {
-        // TODO: tabbed interface with repl
-        self.render_variables(ctx, ui, paused_frame, show_details);
+        {
+            let mut tab = self.state.tab.borrow_mut();
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut *tab, TabState::Variables, "Variables");
+                ui.selectable_value(&mut *tab, TabState::Repl, "Repl");
+            });
+        }
+        match self.state.tab.borrow().deref() {
+            TabState::Variables => self.render_variables(ctx, ui, paused_frame, show_details),
+            TabState::Repl => self.render_repl(ctx, ui),
+        }
     }
 
+    fn render_repl(&mut self, _ctx: &Context, _ui: &mut Ui) {}
+
     fn render_code_panel(
-        &self,
+        &mut self,
         ctx: &Context,
         ui: &mut Ui,
         paused_frame: &PausedFrame,
@@ -143,7 +154,7 @@ impl<'s> Renderer<'s> {
     }
 
     fn render_call_stack(
-        &self,
+        &mut self,
         _ctx: &Context,
         ui: &mut Ui,
         stack: &[StackFrame],
@@ -156,9 +167,9 @@ impl<'s> Renderer<'s> {
             }
         }
     }
-    fn render_breakpoints(&self, _ctx: &Context, _ui: &mut Ui, _show_details: bool) {}
+    fn render_breakpoints(&mut self, _ctx: &Context, _ui: &mut Ui, _show_details: bool) {}
     fn render_variables(
-        &self,
+        &mut self,
         _ctx: &Context,
         ui: &mut Ui,
         paused_frame: &PausedFrame,
@@ -190,7 +201,7 @@ impl<'s> Renderer<'s> {
         });
     }
     fn render_code_viewer(
-        &self,
+        &mut self,
         _ctx: &Context,
         ui: &mut Ui,
         paused_frame: &PausedFrame,
