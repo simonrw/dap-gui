@@ -1,7 +1,7 @@
 use std::{collections::HashSet, ops::Deref};
 
-use debugger::PausedFrame;
-use eframe::egui::{self, Context, Ui};
+use debugger::{EvaluateResult, PausedFrame};
+use eframe::egui::{self, Context, Key, Ui};
 use transport::types::StackFrame;
 
 use crate::{
@@ -128,7 +128,28 @@ impl<'s> Renderer<'s> {
         }
     }
 
-    fn render_repl(&mut self, _ctx: &Context, _ui: &mut Ui) {}
+    fn render_repl(&mut self, _ctx: &Context, ui: &mut Ui) {
+        let repl_input = &mut *self.state.repl_input.borrow_mut();
+        let repl_output = &mut *self.state.repl_output.borrow_mut();
+        // we should always have a frame id to be in this state
+        let frame_id = self
+            .state
+            .current_frame_id
+            .expect("should always have a frame id");
+
+        // output/history area
+        ui.text_edit_multiline(repl_output);
+        // input area
+        if ui.text_edit_singleline(repl_input).lost_focus()
+            && ui.input(|i| i.key_pressed(Key::Enter))
+        {
+            let EvaluateResult { output } =
+                self.state.debugger.evaluate(repl_input, frame_id).unwrap();
+
+            *repl_output += &("\n".to_string() + repl_input + "\n=> " + &output + "\n");
+            repl_input.clear();
+        }
+    }
 
     fn render_code_panel(
         &mut self,

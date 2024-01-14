@@ -18,3 +18,7 @@ pub struct PausedFrame {
 }
 
 pub(crate) use transport::types::StackFrame;
+
+pub struct EvaluateResult {
+    pub output: String,
+}

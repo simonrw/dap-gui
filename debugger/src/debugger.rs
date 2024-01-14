@@ -11,13 +11,16 @@ use retry::{delay::Exponential, retry};
 use server::Implementation;
 use transport::{
     requests::{self, Disconnect},
+    responses,
+    types::StackFrameId,
     DEFAULT_DAP_PORT,
 };
 
 use crate::{
     internals::{DebuggerInternals, FileSource},
     state::{self, DebuggerState},
-    types, Event,
+    types::{self, EvaluateResult},
+    Event,
 };
 
 pub enum InitialiseArguments {
@@ -154,6 +157,25 @@ impl Debugger {
             .context("completing configuration")?;
         internals.set_state(DebuggerState::Running);
         Ok(())
+    }
+
+    pub fn evaluate(&self, input: &str, frame_id: StackFrameId) -> eyre::Result<EvaluateResult> {
+        let internals = self.internals.lock().unwrap();
+        let req = requests::RequestBody::Evaluate(requests::Evaluate {
+            expression: input.to_string(),
+            frame_id: Some(frame_id),
+            context: Some("repl".to_string()),
+        });
+        let res = internals
+            .client
+            .send(req)
+            .context("sending evaluate request")?;
+        match res {
+            Some(responses::ResponseBody::Evaluate(responses::EvaluateResponse {
+                result, ..
+            })) => Ok(EvaluateResult { output: result }),
+            _ => unreachable!(),
+        }
     }
 
     /// Resume execution of the debugee

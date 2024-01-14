@@ -11,7 +11,7 @@ use debugger::{AttachArguments, Debugger, PausedFrame};
 use eframe::egui;
 use eyre::{OptionExt, WrapErr};
 use launch_configuration::{Debugpy, LaunchConfiguration};
-use transport::types::StackFrame;
+use transport::types::{StackFrame, StackFrameId};
 
 mod code_view;
 mod renderer;
@@ -86,9 +86,12 @@ struct DebuggerAppState {
     state: State,
     debugger: Debugger,
     previous_state: Option<State>,
+    current_frame_id: Option<StackFrameId>,
 
     // UI internals
     tab: RefCell<TabState>,
+    repl_input: RefCell<String>,
+    repl_output: RefCell<String>,
 }
 
 impl DebuggerAppState {
@@ -97,6 +100,11 @@ impl DebuggerAppState {
         tracing::debug!("handling event");
         self.previous_state = Some(self.state.clone());
         self.state = event.clone().into();
+        if let State::Paused { paused_frame, .. } = &self.state {
+            self.current_frame_id = Some(paused_frame.frame.id);
+        } else if let State::Running = &self.state {
+            self.current_frame_id = None;
+        }
         Ok(())
     }
 }
@@ -165,7 +173,10 @@ impl DebuggerApp {
             state: State::Initialising,
             previous_state: None,
             debugger,
+            current_frame_id: None,
             tab: RefCell::new(TabState::Variables),
+            repl_input: RefCell::new(String::new()),
+            repl_output: RefCell::new(String::new()),
         };
 
         let inner = Arc::new(Mutex::new(temp_state));
