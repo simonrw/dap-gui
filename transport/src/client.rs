@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex, MutexGuard};
 // TODO: use internal error type
-use eyre::Result;
+use eyre::{Context, Result};
 
 #[cfg(nom)]
 use crate::reader::nom_reader::NomReader;
@@ -162,23 +162,23 @@ impl ClientInternals {
             r#type: "request".to_string(),
             body: body.clone(),
         };
-        let resp_json = serde_json::to_string(&message).unwrap();
+        let resp_json = serde_json::to_string(&message).wrap_err("encoding json body")?;
         tracing::debug!(request = ?message, "sending message");
-        write!(
-            self.output,
-            "Content-Length: {}\r\n\r\n{}",
-            resp_json.len(),
-            resp_json
-        )
-        .unwrap();
-        self.output.flush().unwrap();
-
         let (tx, rx) = oneshot::channel();
         let waiting_request = WaitingRequest(body, tx);
 
         with_lock("ClientInternals.store", self.store.as_ref(), |mut store| {
             store.insert(message.seq, waiting_request);
         });
+
+        write!(
+            self.output,
+            "Content-Length: {}\r\n\r\n{}",
+            resp_json.len(),
+            resp_json
+        )
+        .wrap_err("writing message to output buffer")?;
+        self.output.flush().wrap_err("flushing output buffer")?;
 
         let res = rx.recv().expect("sender dropped");
         Ok(res)
