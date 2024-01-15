@@ -143,8 +143,11 @@ impl<'s> Renderer<'s> {
         if ui.text_edit_singleline(repl_input).lost_focus()
             && ui.input(|i| i.key_pressed(Key::Enter))
         {
-            let EvaluateResult { output } =
-                self.state.debugger.evaluate(repl_input, frame_id).unwrap();
+            // TODO: handle the error case
+            let EvaluateResult {
+                output,
+                error: _error,
+            } = self.state.debugger.evaluate(repl_input, frame_id).unwrap();
 
             *repl_output += &("\n".to_string() + repl_input + "\n=> " + &output + "\n");
             repl_input.clear();

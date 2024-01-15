@@ -178,7 +178,18 @@ impl Debugger {
                     })),
                 success: true,
                 ..
-            } => Ok(EvaluateResult { output: result }),
+            } => Ok(EvaluateResult {
+                output: result,
+                error: false,
+            }),
+            responses::Response {
+                message: Some(msg),
+                success: false,
+                ..
+            } => Ok(EvaluateResult {
+                output: msg,
+                error: true,
+            }),
             _ => unreachable!(),
         }
     }
