@@ -12,7 +12,7 @@ use eyre::{Context, Result};
 #[cfg(nom)]
 use crate::reader::nom_reader::NomReader;
 use crate::request_store::{RequestStore, WaitingRequest};
-use crate::responses::ResponseBody;
+use crate::responses::Response;
 use crate::{events, reader, requests, responses, Reader};
 
 #[derive(Debug)]
@@ -93,7 +93,7 @@ impl Client {
                                 store_clone.as_ref(),
                                 |mut store| match store.remove(&r.request_seq) {
                                     Some(WaitingRequest(_, tx)) => {
-                                        let _ = tx.send(r.body);
+                                        let _ = tx.send(r);
                                     }
                                     None => {
                                         tracing::warn!(response = ?r, "no message in request store")
@@ -125,7 +125,7 @@ impl Client {
     }
 
     #[tracing::instrument(skip(self, body))]
-    pub fn send(&self, body: requests::RequestBody) -> Result<Option<ResponseBody>> {
+    pub fn send(&self, body: requests::RequestBody) -> Result<Response> {
         with_lock(
             "Client.internals",
             self.internals.as_ref(),
@@ -155,7 +155,7 @@ where
 }
 
 impl ClientInternals {
-    pub fn send(&mut self, body: requests::RequestBody) -> Result<Option<ResponseBody>> {
+    pub fn send(&mut self, body: requests::RequestBody) -> Result<Response> {
         self.sequence_number.fetch_add(1, Ordering::SeqCst);
         let message = requests::Request {
             seq: self.sequence_number.load(Ordering::SeqCst),

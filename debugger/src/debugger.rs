@@ -171,9 +171,14 @@ impl Debugger {
             .send(req)
             .context("sending evaluate request")?;
         match res {
-            Some(responses::ResponseBody::Evaluate(responses::EvaluateResponse {
-                result, ..
-            })) => Ok(EvaluateResult { output: result }),
+            responses::Response {
+                body:
+                    Some(responses::ResponseBody::Evaluate(responses::EvaluateResponse {
+                        result, ..
+                    })),
+                success: true,
+                ..
+            } => Ok(EvaluateResult { output: result }),
             _ => unreachable!(),
         }
     }

@@ -115,9 +115,14 @@ impl DebuggerInternals {
             }) => {
                 self.current_thread_id = Some(thread_id);
                 // determine where we are in the source code
-                let Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
-                    stack_frames,
-                })) = self
+                let responses::Response {
+                    body:
+                        Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+                            stack_frames,
+                        })),
+                    success: true,
+                    ..
+                } = self
                     .client
                     .send(requests::RequestBody::StackTrace(requests::StackTrace {
                         thread_id,
@@ -142,9 +147,14 @@ impl DebuggerInternals {
                 };
                 self.current_source = Some(current_source.clone());
 
-                let Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
-                    stack_frames,
-                })) = self
+                let responses::Response {
+                    body:
+                        Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+                            stack_frames,
+                        })),
+                    success: true,
+                    ..
+                } = self
                     .client
                     .send(requests::RequestBody::StackTrace(requests::StackTrace {
                         thread_id,
@@ -157,12 +167,17 @@ impl DebuggerInternals {
 
                 let paused_frame = {
                     let top_frame = stack_frames.first().unwrap().clone();
-                    let Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })) =
-                        self.client
-                            .send(requests::RequestBody::Scopes(requests::Scopes {
-                                frame_id: top_frame.id,
-                            }))
-                            .expect("requesting scopes")
+                    let responses::Response {
+                        body:
+                            Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })),
+                        success: true,
+                        ..
+                    } = self
+                        .client
+                        .send(requests::RequestBody::Scopes(requests::Scopes {
+                            frame_id: top_frame.id,
+                        }))
+                        .expect("requesting scopes")
                     else {
                         unreachable!()
                     };
@@ -173,11 +188,14 @@ impl DebuggerInternals {
                         let req = requests::RequestBody::Variables(requests::Variables {
                             variables_reference: scope.variables_reference,
                         });
-                        let Some(responses::ResponseBody::Variables(
-                            responses::VariablesResponse {
-                                variables: scope_variables,
-                            },
-                        )) = self.client.send(req).expect("fetching variables")
+                        let responses::Response {
+                            body:
+                                Some(responses::ResponseBody::Variables(responses::VariablesResponse {
+                                    variables: scope_variables,
+                                })),
+                            success: true,
+                            ..
+                        } = self.client.send(req).expect("fetching variables")
                         else {
                             unreachable!()
                         };
