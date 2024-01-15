@@ -10,6 +10,7 @@ pub struct Response {
     #[serde(rename = "request_seq")]
     pub request_seq: i64,
     pub success: bool,
+    pub message: Option<String>,
     #[serde(flatten)]
     pub body: Option<ResponseBody>,
 }
