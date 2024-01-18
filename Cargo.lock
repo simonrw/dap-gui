@@ -989,6 +989,7 @@ dependencies = [
  "color-eyre",
  "crossbeam-channel",
  "ctor",
+ "dirs",
  "eyre",
  "retry",
  "serde",

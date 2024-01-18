@@ -72,7 +72,7 @@ fn test_remote_attach() -> eyre::Result<()> {
 
     let breakpoint_line = 9;
     debugger
-        .add_breakpoint(debugger::Breakpoint {
+        .add_breakpoint(&debugger::Breakpoint {
             path: file_path.clone(),
             line: breakpoint_line,
             ..Default::default()
@@ -144,7 +144,7 @@ fn test_debugger() -> eyre::Result<()> {
 
     let breakpoint_line = 4;
     debugger
-        .add_breakpoint(debugger::Breakpoint {
+        .add_breakpoint(&debugger::Breakpoint {
             path: file_path.clone(),
             line: breakpoint_line,
             ..Default::default()

@@ -13,6 +13,7 @@ server = { path = "../server" }
 serde.workspace = true
 transport = { path = "../transport" }
 retry = "2.0.0"
+dirs.workspace = true
 
 [dev-dependencies]
 color-eyre.workspace = true

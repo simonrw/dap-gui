@@ -18,7 +18,7 @@
                 "host": "localhost",
                 "port": 5678
             },
-            "cwd": "/Users/simon/work/localstack/localstack"
+            "cwd": "~/work/localstack/localstack"
         }
     ]
 }
