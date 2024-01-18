@@ -130,22 +130,21 @@ impl DebuggerApp {
             .wrap_err("saving state")?;
         let _persisted_state = state_manager.current();
 
-        // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
-        // Restore app state using cc.storage (requires the "persistence" feature).
-        // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
-        // for e.g. egui::PaintCallback.
-        let cwd = std::env::current_dir().unwrap();
-
         let config = launch_configuration::load_from_path(&args.name, args.config_path)
             .wrap_err("loading configuration file")?
             .ok_or_eyre("finding named configuration")?;
 
+        let mut debug_root_dir = std::env::current_dir().unwrap();
+
         let debugger = match config {
-            LaunchConfiguration::Debugpy(Debugpy { request, .. }) => {
+            LaunchConfiguration::Debugpy(Debugpy { request, cwd, .. }) => {
+                if let Some(dir) = cwd {
+                    debug_root_dir = dir;
+                }
                 let debugger = match request.as_str() {
                     "attach" => {
                         let launch_arguments = AttachArguments {
-                            working_directory: cwd.clone(),
+                            working_directory: debug_root_dir.clone(),
                             port: None,
                             language: debugger::Language::DebugPy,
                         };
@@ -165,11 +164,11 @@ impl DebuggerApp {
         if let Some(project_state) = state_manager
             .current()
             .projects
-            .get(&cwd.display().to_string())
+            .get(&debug_root_dir.display().to_string())
         {
             for breakpoint in &project_state.breakpoints {
                 {
-                    if !breakpoint.path.starts_with(&cwd) {
+                    if !breakpoint.path.starts_with(&debug_root_dir) {
                         continue;
                     }
 

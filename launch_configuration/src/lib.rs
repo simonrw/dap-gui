@@ -1,6 +1,6 @@
 // TODO: VS code launch json files include comments
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use eyre::Context;
 use serde::Deserialize;
@@ -64,6 +64,7 @@ pub struct Debugpy {
     pub connect: ConnectionDetails,
     pub path_mappings: Option<Vec<PathMapping>>,
     pub just_my_code: Option<bool>,
+    pub cwd: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]

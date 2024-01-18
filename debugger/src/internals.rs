@@ -188,19 +188,21 @@ impl DebuggerInternals {
                         let req = requests::RequestBody::Variables(requests::Variables {
                             variables_reference: scope.variables_reference,
                         });
-                        let responses::Response {
-                            body:
-                                Some(responses::ResponseBody::Variables(responses::VariablesResponse {
-                                    variables: scope_variables,
-                                })),
-                            success: true,
-                            ..
-                        } = self.client.send(req).expect("fetching variables")
-                        else {
-                            unreachable!()
+                        match self.client.send(req).expect("fetching variables") {
+                            responses::Response {
+                                body:
+                                    Some(responses::ResponseBody::Variables(
+                                        responses::VariablesResponse {
+                                            variables: scope_variables,
+                                        },
+                                    )),
+                                success: true,
+                                ..
+                            } => variables.extend(scope_variables.into_iter()),
+                            r => {
+                                tracing::warn!(?r, "unhandled response from send variables request")
+                            }
                         };
-
-                        variables.extend(scope_variables.into_iter());
                     }
 
                     PausedFrame {
