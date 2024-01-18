@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{
+    borrow::Cow,
+    path::{Path, PathBuf},
+};
 
 pub type BreakpointId = u64;
 
@@ -11,10 +14,12 @@ pub struct Breakpoint {
     pub line: usize,
 }
 impl Breakpoint {
-    pub fn normalise_paths(&mut self) {
+    pub fn normalised_path(&self) -> Cow<'_, Path> {
         if self.path.starts_with("~") {
             let stub: String = self.path.display().to_string().chars().skip(2).collect();
-            self.path = dirs::home_dir().unwrap().join(stub);
+            Cow::Owned(dirs::home_dir().unwrap().join(stub))
+        } else {
+            Cow::Borrowed(&self.path)
         }
     }
 }
@@ -40,15 +45,15 @@ mod tests {
 
     #[test]
     fn test_normalisation() {
-        let mut b = Breakpoint {
+        let b = Breakpoint {
             name: None,
             path: PathBuf::from("~/test"),
             line: 0,
         };
 
-        b.normalise_paths();
+        let path = b.normalised_path();
 
         // TODO: only applicable to one system
-        assert_eq!(b.path, PathBuf::from("/Users/simon/test"));
+        assert_eq!(path, PathBuf::from("/Users/simon/test"));
     }
 }

@@ -18,8 +18,7 @@ pub struct StateManager {
 impl StateManager {
     pub fn new(path: impl Into<PathBuf>) -> eyre::Result<Self> {
         let path = path.into();
-        let mut state = crate::load_from(&path).wrap_err("loading state")?;
-        state.normalise_paths();
+        let state = crate::load_from(&path).wrap_err("loading state")?;
         Ok(Self {
             save_path: path,
             current: state,
@@ -27,7 +26,6 @@ impl StateManager {
     }
     pub fn load(mut self) -> eyre::Result<Self> {
         let mut state = crate::load_from(&self.save_path).wrap_err("loading state")?;
-        state.normalise_paths();
         self.current = state;
         Ok(self)
     }
@@ -49,26 +47,10 @@ pub struct Persistence {
     pub version: String,
 }
 
-impl Persistence {
-    /// Convert instanfces of "~" to the users home directory
-    fn normalise_paths(&mut self) {
-        for project in self.projects.values_mut() {
-            project.normalise_paths();
-        }
-    }
-}
-
 /// State that is persisted per file
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub struct PerFile {
     pub breakpoints: Vec<debugger::Breakpoint>,
-}
-impl PerFile {
-    fn normalise_paths(&mut self) {
-        for breakpoint in &mut self.breakpoints {
-            breakpoint.normalise_paths();
-        }
-    }
 }
 
 pub fn save(state: &Persistence, writer: impl Write) -> eyre::Result<()> {
