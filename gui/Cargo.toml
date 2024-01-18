@@ -19,7 +19,7 @@ transport = { path = "../transport" }
 server = { path = "../server" }
 color-eyre.workspace = true
 state = { path = "../state" }
-dirs = "5.0.1"
+dirs.workspace = true
 launch_configuration = { path = "../launch_configuration" }
 
 [features]

@@ -143,7 +143,7 @@ impl Debugger {
 
     pub fn add_breakpoint(
         &self,
-        breakpoint: types::Breakpoint,
+        breakpoint: &types::Breakpoint,
     ) -> eyre::Result<types::BreakpointId> {
         let mut internals = self.internals.lock().unwrap();
         internals.add_breakpoint(breakpoint)

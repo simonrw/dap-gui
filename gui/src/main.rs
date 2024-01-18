@@ -11,6 +11,7 @@ use debugger::{AttachArguments, Debugger, PausedFrame};
 use eframe::egui;
 use eyre::{OptionExt, WrapErr};
 use launch_configuration::{Debugpy, LaunchConfiguration};
+use state::StateManager;
 use transport::types::{StackFrame, StackFrameId};
 
 mod code_view;
@@ -111,19 +112,23 @@ impl DebuggerAppState {
 
 struct DebuggerApp {
     inner: Arc<Mutex<DebuggerAppState>>,
+    _state_manager: StateManager,
 }
 
 impl DebuggerApp {
     fn new(args: Args, cc: &eframe::CreationContext<'_>) -> eyre::Result<Self> {
-        let state_path = dirs::state_dir()
+        let state_path = dirs::data_local_dir()
             .unwrap_or_else(|| PathBuf::from("/tmp"))
             .join("dapgui")
             .join("state.json");
-        if !state_path.is_dir() {
+        if !state_path.parent().unwrap().is_dir() {
             create_dir_all(state_path.parent().unwrap()).context("creating state directory")?;
         }
-        let persisted_state = state::read_from(&state_path).unwrap_or_default();
-        state::save_to(&persisted_state, &state_path).context("persisting initial state")?;
+        let state_manager = StateManager::new(state_path)
+            .wrap_err("loading state")?
+            .save()
+            .wrap_err("saving state")?;
+        let _persisted_state = state_manager.current();
 
         // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
         // Restore app state using cc.storage (requires the "persistence" feature).
@@ -140,7 +145,7 @@ impl DebuggerApp {
                 let debugger = match request.as_str() {
                     "attach" => {
                         let launch_arguments = AttachArguments {
-                            working_directory: cwd,
+                            working_directory: cwd.clone(),
                             port: None,
                             language: debugger::Language::DebugPy,
                         };
@@ -157,15 +162,22 @@ impl DebuggerApp {
 
         debugger.wait_for_event(|e| matches!(e, debugger::Event::Initialised));
 
-        // TEMP
-        for line_no in [1, 27, 16, 34] {
-            debugger
-                .add_breakpoint(debugger::Breakpoint {
-                    path: PathBuf::from("./attach.py"),
-                    line: line_no,
-                    ..Default::default()
-                })
-                .context("adding temp breakpoint")?;
+        if let Some(project_state) = state_manager
+            .current()
+            .projects
+            .get(&cwd.display().to_string())
+        {
+            for breakpoint in &project_state.breakpoints {
+                {
+                    if !breakpoint.path.starts_with(&cwd) {
+                        continue;
+                    }
+
+                    debugger
+                        .add_breakpoint(breakpoint)
+                        .context("adding breakpoint")?;
+                }
+            }
         }
         debugger.launch().context("launching debugee")?;
 
@@ -192,7 +204,10 @@ impl DebuggerApp {
             }
         });
 
-        Ok(Self { inner })
+        Ok(Self {
+            inner,
+            _state_manager: state_manager,
+        })
     }
 }
 

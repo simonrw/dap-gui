@@ -233,7 +233,7 @@ impl DebuggerInternals {
     }
 
     #[tracing::instrument(skip(self))]
-    pub(crate) fn add_breakpoint(&mut self, breakpoint: Breakpoint) -> eyre::Result<BreakpointId> {
+    pub(crate) fn add_breakpoint(&mut self, breakpoint: &Breakpoint) -> eyre::Result<BreakpointId> {
         tracing::debug!("adding breakpoint");
         let id = self.next_id();
         self.breakpoints.insert(id, breakpoint.clone());
