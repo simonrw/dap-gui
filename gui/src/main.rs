@@ -8,7 +8,7 @@ use std::{
 
 use clap::Parser;
 use debugger::{AttachArguments, Debugger, PausedFrame};
-use eframe::egui;
+use eframe::egui::{self, Visuals};
 use eyre::{OptionExt, WrapErr};
 use launch_configuration::{Debugpy, LaunchConfiguration};
 use state::StateManager;
@@ -254,6 +254,14 @@ fn main() -> eyre::Result<()> {
         "My egui App",
         native_options,
         Box::new(|cc| {
+            let style = egui::Style {
+                visuals: match dark_light::detect() {
+                    dark_light::Mode::Dark | dark_light::Mode::Default => Visuals::dark(),
+                    dark_light::Mode::Light => Visuals::light(),
+                },
+                ..Default::default()
+            };
+            cc.egui_ctx.set_style(style);
             let app = DebuggerApp::new(args, cc).expect("creating main application");
             Box::new(app)
         }),

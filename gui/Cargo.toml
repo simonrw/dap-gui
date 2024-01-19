@@ -21,6 +21,7 @@ color-eyre.workspace = true
 state = { path = "../state" }
 dirs.workspace = true
 launch_configuration = { path = "../launch_configuration" }
+dark-light = "1.0.0"
 
 [features]
 sentry = ["dep:sentry"]
