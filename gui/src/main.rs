@@ -121,6 +121,7 @@ impl DebuggerApp {
             .unwrap_or_else(|| PathBuf::from("/tmp"))
             .join("dapgui")
             .join("state.json");
+        tracing::debug!(state_path = %state_path.display(), "loading state");
         if !state_path.parent().unwrap().is_dir() {
             create_dir_all(state_path.parent().unwrap()).context("creating state directory")?;
         }
@@ -128,7 +129,8 @@ impl DebuggerApp {
             .wrap_err("loading state")?
             .save()
             .wrap_err("saving state")?;
-        let _persisted_state = state_manager.current();
+        let persisted_state = state_manager.current();
+        tracing::trace!(state = ?persisted_state, "loaded state");
 
         let config = launch_configuration::load_from_path(&args.name, args.config_path)
             .wrap_err("loading configuration file")?
@@ -137,17 +139,24 @@ impl DebuggerApp {
         let mut debug_root_dir = std::env::current_dir().unwrap();
 
         let debugger = match config {
-            LaunchConfiguration::Debugpy(Debugpy { request, cwd, .. }) => {
+            LaunchConfiguration::Debugpy(Debugpy {
+                request,
+                cwd,
+                connect,
+                ..
+            }) => {
                 if let Some(dir) = cwd {
-                    debug_root_dir = dir;
+                    debug_root_dir = debugger::utils::normalise_path(&dir).into_owned();
                 }
                 let debugger = match request.as_str() {
                     "attach" => {
                         let launch_arguments = AttachArguments {
-                            working_directory: debug_root_dir.clone(),
-                            port: None,
+                            working_directory: debug_root_dir.to_owned().to_path_buf(),
+                            port: Some(connect.port),
                             language: debugger::Language::DebugPy,
                         };
+
+                        tracing::debug!(?launch_arguments, "generated launch configuration");
 
                         Debugger::new(launch_arguments).context("creating internal debugger")?
                     }
@@ -164,20 +173,33 @@ impl DebuggerApp {
         if let Some(project_state) = state_manager
             .current()
             .projects
-            .get(&debug_root_dir.display().to_string())
+            .iter()
+            .find(|p| debugger::utils::normalise_path(&p.path) == debug_root_dir)
         {
+            tracing::debug!("got project state");
             for breakpoint in &project_state.breakpoints {
                 {
-                    if !breakpoint.path.starts_with(&debug_root_dir) {
+                    let breakpoint_path = debugger::utils::normalise_path(&breakpoint.path);
+                    if !breakpoint_path.starts_with(&debug_root_dir) {
                         continue;
                     }
+                    tracing::debug!(?breakpoint, "adding breakpoint from state file");
+
+                    let mut breakpoint = breakpoint.clone();
+                    breakpoint.path = debugger::utils::normalise_path(&breakpoint.path)
+                        .into_owned()
+                        .to_path_buf();
 
                     debugger
-                        .add_breakpoint(breakpoint)
+                        .add_breakpoint(&breakpoint)
                         .context("adding breakpoint")?;
                 }
             }
+        } else {
+            tracing::warn!("missing project state");
         }
+
+        tracing::debug!("launching debugee");
         debugger.launch().context("launching debugee")?;
 
         let temp_state = DebuggerAppState {

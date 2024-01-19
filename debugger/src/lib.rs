@@ -3,6 +3,7 @@ mod internals;
 mod persistence;
 pub(crate) mod state;
 mod types;
+pub mod utils;
 
 pub use debugger::Debugger;
 pub use internals::FileSource;

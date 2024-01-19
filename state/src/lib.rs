@@ -1,7 +1,6 @@
 //! The state module handles persisting the state of a debugging session between sessions.
 
 use std::{
-    collections::HashMap,
     io::Read,
     io::Write,
     path::{Path, PathBuf},
@@ -18,14 +17,34 @@ pub struct StateManager {
 impl StateManager {
     pub fn new(path: impl Into<PathBuf>) -> eyre::Result<Self> {
         let path = path.into();
-        let state = crate::load_from(&path).wrap_err("loading state")?;
-        Ok(Self {
-            save_path: path,
-            current: state,
-        })
+        let span = tracing::debug_span!("StateManager", state_path = %path.display());
+        let _guard = span.enter();
+
+        tracing::debug!("attempting to load state");
+        match crate::load_from(&path) {
+            Ok(state) => {
+                tracing::debug!("state loaded");
+                Ok(Self {
+                    save_path: path,
+                    current: state,
+                })
+            }
+            Err(e) => {
+                // TODO: assume the file does not exist for now
+                tracing::debug!(error = %e, "loading state file");
+                let state = Persistence::default();
+                crate::save_to(&state, &path).wrap_err("saving state file")?;
+
+                Ok(Self {
+                    save_path: path,
+                    current: state,
+                })
+            }
+        }
     }
+
     pub fn load(mut self) -> eyre::Result<Self> {
-        let mut state = crate::load_from(&self.save_path).wrap_err("loading state")?;
+        let state = crate::load_from(&self.save_path).wrap_err("loading state")?;
         self.current = state;
         Ok(self)
     }
@@ -43,13 +62,14 @@ impl StateManager {
 /// State that is persisted
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub struct Persistence {
-    pub projects: HashMap<String, PerFile>,
+    pub projects: Vec<PerFile>,
     pub version: String,
 }
 
 /// State that is persisted per file
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub struct PerFile {
+    pub path: PathBuf,
     pub breakpoints: Vec<debugger::Breakpoint>,
 }
 
@@ -70,7 +90,9 @@ pub fn load(reader: impl Read) -> eyre::Result<Persistence> {
 }
 
 pub fn load_from(path: impl AsRef<Path>) -> eyre::Result<Persistence> {
-    let f = std::fs::File::open(path).context("opening save state")?;
+    let path = path.as_ref();
+    let f = std::fs::File::open(path)
+        .with_context(|| format!("opening save state {}", path.display()))?;
     let state = load(f).context("reading from state file")?;
     Ok(state)
 }

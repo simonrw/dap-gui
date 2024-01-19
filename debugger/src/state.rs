@@ -52,7 +52,7 @@ impl<'a> From<&'a DebuggerState> for Event {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum Language {
     DebugPy,
     Delve,
@@ -70,6 +70,7 @@ impl FromStr for Language {
     }
 }
 
+#[derive(Debug)]
 pub struct AttachArguments {
     pub working_directory: PathBuf,
     pub port: Option<u16>,

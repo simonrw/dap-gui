@@ -11,3 +11,4 @@ serde_json.workspace = true
 eyre.workspace = true
 debugger = { path = "../debugger" }
 dirs.workspace = true
+tracing.workspace = true

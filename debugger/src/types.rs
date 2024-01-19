@@ -13,14 +13,10 @@ pub struct Breakpoint {
     pub path: PathBuf,
     pub line: usize,
 }
+
 impl Breakpoint {
     pub fn normalised_path(&self) -> Cow<'_, Path> {
-        if self.path.starts_with("~") {
-            let stub: String = self.path.display().to_string().chars().skip(2).collect();
-            Cow::Owned(dirs::home_dir().unwrap().join(stub))
-        } else {
-            Cow::Borrowed(&self.path)
-        }
+        crate::utils::normalise_path(&self.path)
     }
 }
 
