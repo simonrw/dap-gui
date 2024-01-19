@@ -11,13 +11,16 @@ use retry::{delay::Exponential, retry};
 use server::Implementation;
 use transport::{
     requests::{self, Disconnect},
+    responses,
+    types::StackFrameId,
     DEFAULT_DAP_PORT,
 };
 
 use crate::{
     internals::{DebuggerInternals, FileSource},
     state::{self, DebuggerState},
-    types, Event,
+    types::{self, EvaluateResult},
+    Event,
 };
 
 pub enum InitialiseArguments {
@@ -140,7 +143,7 @@ impl Debugger {
 
     pub fn add_breakpoint(
         &self,
-        breakpoint: types::Breakpoint,
+        breakpoint: &types::Breakpoint,
     ) -> eyre::Result<types::BreakpointId> {
         let mut internals = self.internals.lock().unwrap();
         internals.add_breakpoint(breakpoint)
@@ -156,6 +159,41 @@ impl Debugger {
         Ok(())
     }
 
+    pub fn evaluate(&self, input: &str, frame_id: StackFrameId) -> eyre::Result<EvaluateResult> {
+        let internals = self.internals.lock().unwrap();
+        let req = requests::RequestBody::Evaluate(requests::Evaluate {
+            expression: input.to_string(),
+            frame_id: Some(frame_id),
+            context: Some("repl".to_string()),
+        });
+        let res = internals
+            .client
+            .send(req)
+            .context("sending evaluate request")?;
+        match res {
+            responses::Response {
+                body:
+                    Some(responses::ResponseBody::Evaluate(responses::EvaluateResponse {
+                        result, ..
+                    })),
+                success: true,
+                ..
+            } => Ok(EvaluateResult {
+                output: result,
+                error: false,
+            }),
+            responses::Response {
+                message: Some(msg),
+                success: false,
+                ..
+            } => Ok(EvaluateResult {
+                output: msg,
+                error: true,
+            }),
+            _ => unreachable!(),
+        }
+    }
+
     /// Resume execution of the debugee
     pub fn r#continue(&self) -> eyre::Result<()> {
         let internals = self.internals.lock().unwrap();
@@ -168,6 +206,55 @@ impl Debugger {
                         single_thread: false,
                     }))
                     .context("sending continue request")?;
+            }
+            None => eyre::bail!("logic error: no current thread id"),
+        }
+        Ok(())
+    }
+
+    /// Step over a statement
+    pub fn step_over(&self) -> eyre::Result<()> {
+        let internals = self.internals.lock().unwrap();
+        match internals.current_thread_id {
+            Some(thread_id) => {
+                internals
+                    .client
+                    .execute(requests::RequestBody::Next(requests::Next { thread_id }))
+                    .context("sending step_over request")?;
+            }
+            None => eyre::bail!("logic error: no current thread id"),
+        }
+        Ok(())
+    }
+
+    /// Step into a statement
+    pub fn step_in(&self) -> eyre::Result<()> {
+        let internals = self.internals.lock().unwrap();
+        match internals.current_thread_id {
+            Some(thread_id) => {
+                internals
+                    .client
+                    .execute(requests::RequestBody::StepIn(requests::StepIn {
+                        thread_id,
+                    }))
+                    .context("sending step_in` request")?;
+            }
+            None => eyre::bail!("logic error: no current thread id"),
+        }
+        Ok(())
+    }
+
+    /// Step out of a statement
+    pub fn step_out(&self) -> eyre::Result<()> {
+        let internals = self.internals.lock().unwrap();
+        match internals.current_thread_id {
+            Some(thread_id) => {
+                internals
+                    .client
+                    .execute(requests::RequestBody::StepOut(requests::StepOut {
+                        thread_id,
+                    }))
+                    .context("sending `step_out` request")?;
             }
             None => eyre::bail!("logic error: no current thread id"),
         }

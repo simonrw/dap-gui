@@ -86,7 +86,7 @@ mod tests {
         net::{TcpListener, TcpStream},
     };
 
-    use crate::{bindings::get_random_tcp_port, events, Message, Reader};
+    use crate::{bindings::get_random_tcp_port, events, responses, Message, Reader};
 
     use super::HandWrittenReader;
 
@@ -108,7 +108,7 @@ mod tests {
 
             match message {
                 Some(msg) => {
-                    assert!(matches!(msg, $match_expr));
+                    assert!(matches!(msg, $match_expr), "Got message {:?}", msg);
                 }
                 None => eyre::bail!("no message found"),
             }
@@ -168,6 +168,21 @@ mod tests {
         let body = "Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}";
 
         execute_test!(body => Message::Event(events::Event::Terminated), Message::Event(events::Event::Terminated));
+
+        Ok(())
+    }
+
+    #[test]
+    fn evaluate_error() -> eyre::Result<()> {
+        let body = r#"Content-Length: 220"#.to_owned()
+            + "\r\n\r\n"
+            + r#"{"seq": 21, "type": "response", "request_seq": 13, "success": false, "command": "evaluate", "message": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nNameError: name 'b' is not defined\n"}"#;
+
+        execute_test!(body => Message::Response(responses::Response {
+            message: Some(_),
+            success: false,
+            ..
+        }));
 
         Ok(())
     }

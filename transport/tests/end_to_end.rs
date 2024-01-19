@@ -128,8 +128,12 @@ fn test_loop() -> Result<()> {
         thread_id,
         ..Default::default()
     });
-    let Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse { stack_frames })) =
-        client.send(req).unwrap()
+    let responses::Response {
+        body:
+            Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse { stack_frames })),
+        success: true,
+        ..
+    } = client.send(req).unwrap()
     else {
         unreachable!()
     };
@@ -138,8 +142,11 @@ fn test_loop() -> Result<()> {
         // scopes
         let req = requests::RequestBody::Scopes(requests::Scopes { frame_id: frame.id });
 
-        let Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })) =
-            client.send(req).unwrap()
+        let responses::Response {
+            body: Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })),
+            success: true,
+            ..
+        } = client.send(req).unwrap()
         else {
             unreachable!()
         };

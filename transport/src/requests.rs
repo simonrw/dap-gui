@@ -37,12 +37,35 @@ pub enum RequestBody {
     Terminate(Terminate),
     Disconnect(Disconnect),
     Next(Next),
+    StepIn(StepIn),
+    StepOut(StepOut),
+    Evaluate(Evaluate),
 }
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Next {
     pub thread_id: ThreadId,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct StepIn {
+    pub thread_id: ThreadId,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct StepOut {
+    pub thread_id: ThreadId,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Evaluate {
+    pub expression: String,
+    pub frame_id: Option<StackFrameId>,
+    pub context: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]

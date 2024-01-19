@@ -15,7 +15,7 @@ class Bar:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--port", type=int, required=True)
+    parser.add_argument("-p", "--port", type=int, required=False, default=5678)
     args = parser.parse_args()
 
     debugpy.listen(("127.0.0.1", args.port))

@@ -5,13 +5,15 @@ use transport::{
     DEFAULT_DAP_PORT,
 };
 
-use crate::types;
+use crate::types::{self, PausedFrame};
 
+#[derive(Debug)]
 pub(crate) enum DebuggerState {
     Initialised,
     Paused {
         stack: Vec<types::StackFrame>,
-        source: crate::FileSource,
+        paused_frame: PausedFrame,
+        breakpoints: Vec<types::Breakpoint>,
     },
     Running,
     Ended,
@@ -23,7 +25,8 @@ pub enum Event {
     Initialised,
     Paused {
         stack: Vec<types::StackFrame>,
-        source: crate::FileSource,
+        breakpoints: Vec<types::Breakpoint>,
+        paused_frame: types::PausedFrame,
     },
     Running,
     Ended,
@@ -33,9 +36,15 @@ impl<'a> From<&'a DebuggerState> for Event {
     fn from(value: &'a DebuggerState) -> Self {
         match value {
             DebuggerState::Initialised => Event::Initialised,
-            DebuggerState::Paused { stack, source, .. } => Event::Paused {
+            DebuggerState::Paused {
+                stack,
+                paused_frame,
+                breakpoints,
+                ..
+            } => Event::Paused {
                 stack: stack.clone(),
-                source: source.clone(),
+                paused_frame: paused_frame.clone(),
+                breakpoints: breakpoints.clone(),
             },
             DebuggerState::Running => Event::Running,
             DebuggerState::Ended => Event::Ended,
@@ -43,7 +52,7 @@ impl<'a> From<&'a DebuggerState> for Event {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum Language {
     DebugPy,
     Delve,
@@ -61,6 +70,7 @@ impl FromStr for Language {
     }
 }
 
+#[derive(Debug)]
 pub struct AttachArguments {
     pub working_directory: PathBuf,
     pub port: Option<u16>,

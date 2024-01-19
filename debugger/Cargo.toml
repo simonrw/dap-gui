@@ -10,10 +10,12 @@ eyre.workspace = true
 crossbeam-channel.workspace = true
 tracing.workspace = true
 server = { path = "../server" }
+serde.workspace = true
 transport = { path = "../transport" }
 retry = "2.0.0"
+dirs.workspace = true
 
 [dev-dependencies]
 color-eyre.workspace = true
 ctor.workspace = true
-tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"] }
+tracing-subscriber.workspace = true

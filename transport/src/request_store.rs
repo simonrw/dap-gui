@@ -3,12 +3,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{requests, responses::ResponseBody, types};
+use crate::{requests, responses::Response, types};
 
 /// Wraps the incoming request with a channel to reply back on
 pub(crate) struct WaitingRequest(
     pub(crate) requests::RequestBody,
-    pub(crate) oneshot::Sender<Option<ResponseBody>>,
+    pub(crate) oneshot::Sender<Response>,
 );
 
 /// A container for the requests awaiting responses

@@ -11,7 +11,7 @@ use transport::{
 use crate::{
     debugger::InitialiseArguments,
     state::DebuggerState,
-    types::{Breakpoint, BreakpointId},
+    types::{Breakpoint, BreakpointId, PausedFrame},
     Event,
 };
 
@@ -115,9 +115,14 @@ impl DebuggerInternals {
             }) => {
                 self.current_thread_id = Some(thread_id);
                 // determine where we are in the source code
-                let Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
-                    stack_frames,
-                })) = self
+                let responses::Response {
+                    body:
+                        Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+                            stack_frames,
+                        })),
+                    success: true,
+                    ..
+                } = self
                     .client
                     .send(requests::RequestBody::StackTrace(requests::StackTrace {
                         thread_id,
@@ -142,9 +147,14 @@ impl DebuggerInternals {
                 };
                 self.current_source = Some(current_source.clone());
 
-                let Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
-                    stack_frames,
-                })) = self
+                let responses::Response {
+                    body:
+                        Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+                            stack_frames,
+                        })),
+                    success: true,
+                    ..
+                } = self
                     .client
                     .send(requests::RequestBody::StackTrace(requests::StackTrace {
                         thread_id,
@@ -155,9 +165,56 @@ impl DebuggerInternals {
                     unreachable!()
                 };
 
+                let paused_frame = {
+                    let top_frame = stack_frames.first().unwrap().clone();
+                    let responses::Response {
+                        body:
+                            Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })),
+                        success: true,
+                        ..
+                    } = self
+                        .client
+                        .send(requests::RequestBody::Scopes(requests::Scopes {
+                            frame_id: top_frame.id,
+                        }))
+                        .expect("requesting scopes")
+                    else {
+                        unreachable!()
+                    };
+
+                    let mut variables = Vec::new();
+
+                    for scope in scopes {
+                        let req = requests::RequestBody::Variables(requests::Variables {
+                            variables_reference: scope.variables_reference,
+                        });
+                        match self.client.send(req).expect("fetching variables") {
+                            responses::Response {
+                                body:
+                                    Some(responses::ResponseBody::Variables(
+                                        responses::VariablesResponse {
+                                            variables: scope_variables,
+                                        },
+                                    )),
+                                success: true,
+                                ..
+                            } => variables.extend(scope_variables.into_iter()),
+                            r => {
+                                tracing::warn!(?r, "unhandled response from send variables request")
+                            }
+                        };
+                    }
+
+                    PausedFrame {
+                        frame: top_frame,
+                        variables,
+                    }
+                };
+
                 self.set_state(DebuggerState::Paused {
                     stack: stack_frames,
-                    source: current_source,
+                    paused_frame,
+                    breakpoints: self.breakpoints.values().cloned().collect(),
                 });
             }
             transport::events::Event::Continued(_) => {
@@ -178,7 +235,7 @@ impl DebuggerInternals {
     }
 
     #[tracing::instrument(skip(self))]
-    pub(crate) fn add_breakpoint(&mut self, breakpoint: Breakpoint) -> eyre::Result<BreakpointId> {
+    pub(crate) fn add_breakpoint(&mut self, breakpoint: &Breakpoint) -> eyre::Result<BreakpointId> {
         tracing::debug!("adding breakpoint");
         let id = self.next_id();
         self.breakpoints.insert(id, breakpoint.clone());
@@ -246,7 +303,9 @@ impl DebuggerInternals {
         self.current_breakpoint_id
     }
 
+    #[tracing::instrument(skip(self))]
     pub(crate) fn set_state(&mut self, new_state: DebuggerState) {
+        tracing::debug!("setting debugger state");
         let event = Event::from(&new_state);
         self.emit(event);
     }

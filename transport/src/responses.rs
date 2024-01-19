@@ -1,5 +1,7 @@
 //! Responses in reply to [`crate::requests`] from a DAP server
-use crate::types::{self, Scope, StackFrame, Thread, Variable};
+use crate::types::{
+    self, Scope, StackFrame, Thread, Variable, VariablePresentationHint, VariablesReference,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -8,6 +10,7 @@ pub struct Response {
     #[serde(rename = "request_seq")]
     pub request_seq: i64,
     pub success: bool,
+    pub message: Option<String>,
     #[serde(flatten)]
     pub body: Option<ResponseBody>,
 }
@@ -27,6 +30,7 @@ pub enum ResponseBody {
     ConfigurationDone,
     Terminate,
     Disconnect,
+    Evaluate(EvaluateResponse),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,4 +117,16 @@ pub struct ScopesResponse {
 #[serde(rename_all = "camelCase")]
 pub struct VariablesResponse {
     pub variables: Vec<Variable>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EvaluateResponse {
+    pub result: String,
+    pub r#type: Option<String>,
+    pub presentation_hint: Option<VariablePresentationHint>,
+    pub variables_reference: VariablesReference,
+    pub named_variables: Option<usize>,
+    pub indexed_variables: Option<usize>,
+    pub memory_reference: Option<String>,
 }
