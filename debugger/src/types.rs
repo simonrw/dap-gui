@@ -49,10 +49,7 @@ mod tests {
 
         let path = b.normalised_path();
 
-        if cfg!(target_os = "macos") {
-            assert_eq!(path, PathBuf::from("/Users/simon/test"));
-        } else if cfg!(target_os = "linux") {
-            assert_eq!(path, PathBuf::from("/home/simon/test"));
-        }
+        let home_dir = dirs::home_dir().unwrap();
+        assert_eq!(path, home_dir.join("test"));
     }
 }
