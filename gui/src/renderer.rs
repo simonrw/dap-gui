@@ -20,7 +20,7 @@ impl<'s> Renderer<'s> {
     }
 
     pub(crate) fn render_ui(&mut self, ctx: &Context) {
-        egui::CentralPanel::default().show(ctx, |ui| match &self.state.state {
+        match &self.state.state {
             State::Initialising => {}
             State::Running => {
                 let DebuggerAppState { previous_state, .. } = &self.state;
@@ -32,7 +32,6 @@ impl<'s> Renderer<'s> {
                 {
                     self.render_paused_or_running_ui(
                         ctx,
-                        ui,
                         &stack,
                         &paused_frame,
                         &breakpoints,
@@ -47,12 +46,14 @@ impl<'s> Renderer<'s> {
                 paused_frame,
                 breakpoints,
             } => {
-                self.render_paused_or_running_ui(ctx, ui, stack, paused_frame, breakpoints, true);
+                self.render_paused_or_running_ui(ctx, stack, paused_frame, breakpoints, true);
             }
             State::Terminated => {
-                ui.label("Program terminated");
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.label("Program terminated");
+                });
             }
-        });
+        }
     }
 
     /// Render both the paused and running UIs
@@ -64,28 +65,24 @@ impl<'s> Renderer<'s> {
     pub fn render_paused_or_running_ui(
         &mut self,
         ctx: &Context,
-        ui: &mut Ui,
         stack: &[StackFrame],
         paused_frame: &PausedFrame,
         original_breakpoints: &[debugger::Breakpoint],
         show_details: bool,
     ) {
-        if show_details {
-            self.render_controls_window(ctx, ui);
-        }
-
-        egui::SidePanel::left("left-panel").show_inside(ui, |ui| {
+        egui::SidePanel::left("left-panel").show(ctx, |ui| {
             self.render_sidepanel(ctx, ui, stack, original_breakpoints, show_details);
         });
-        ui.vertical(|ui| {
-            egui::TopBottomPanel::bottom("bottom-panel")
-                .min_height(200.0)
-                .show_inside(ui, |ui| {
-                    self.render_bottom_panel(ctx, ui, paused_frame, show_details);
-                });
-            egui::CentralPanel::default().show_inside(ui, |ui| {
-                self.render_code_panel(ctx, ui, paused_frame, original_breakpoints);
+        egui::TopBottomPanel::bottom("bottom-panel")
+            .min_height(200.0)
+            .show(ctx, |ui| {
+                self.render_bottom_panel(ctx, ui, paused_frame, show_details);
             });
+        egui::CentralPanel::default().show(ctx, |ui| {
+            self.render_code_panel(ctx, ui, paused_frame, original_breakpoints);
+            if show_details {
+                self.render_controls_window(ctx, ui);
+            }
         });
     }
 
