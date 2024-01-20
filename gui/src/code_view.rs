@@ -76,7 +76,11 @@ impl<'a> egui::Widget for CodeView<'a> {
 
             ui.fonts(|f| f.layout_job(layout_job))
         };
-        let response = ui.add(TextEdit::multiline(&mut self.content).layouter(&mut layouter));
+        let response = egui::ScrollArea::vertical()
+            .show(ui, |ui| {
+                ui.add(TextEdit::multiline(&mut self.content).layouter(&mut layouter))
+            })
+            .inner;
 
         self.update_breakpoints(&response);
 

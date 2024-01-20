@@ -158,9 +158,7 @@ impl<'s> Renderer<'s> {
         paused_frame: &PausedFrame,
         original_breakpoints: &[debugger::Breakpoint],
     ) {
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            self.render_code_viewer(ctx, ui, paused_frame, original_breakpoints);
-        });
+        self.render_code_viewer(ctx, ui, paused_frame, original_breakpoints);
     }
 
     fn render_variables(
