@@ -26,5 +26,6 @@
       formatter = pkgs.alejandra;
 
       devShells.default = import ./shell.nix {inherit pkgs;};
+      packages.default = import ./default.nix {inherit pkgs;};
     });
 }
