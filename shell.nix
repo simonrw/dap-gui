@@ -38,6 +38,7 @@ mkShell {
       if stdenv.isLinux
       then
         lib.makeLibraryPath [
+          libxkbcommon
           xorg.libX11
           xorg.libXcursor
           xorg.libXrandr
