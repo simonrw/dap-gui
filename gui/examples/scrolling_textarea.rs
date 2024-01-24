@@ -1,9 +1,6 @@
 use std::f32;
 
-use eframe::{
-    egui::{self, TextEdit, Visuals},
-    epaint::text::cursor::RCursor,
-};
+use eframe::egui::{self, TextEdit, Visuals};
 
 enum Position {
     Top,
@@ -14,26 +11,20 @@ enum Position {
 #[derive(Default)]
 struct App {
     contents: String,
-    last_cursor: Option<RCursor>,
-}
-
-impl App {
-    fn scroll_to(&mut self, _position: Position) {}
+    click_position: Option<Position>,
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.click_position = None;
+
         egui::SidePanel::left("left-panel").show(ctx, |ui| {
             if ui.button("scroll to top").clicked() {
-                self.scroll_to(Position::Top);
-            }
-
-            if ui.button("scroll to midpoint").clicked() {
-                self.scroll_to(Position::Mid);
-            }
-
-            if ui.button("scroll to bottom").clicked() {
-                self.scroll_to(Position::Bottom);
+                self.click_position = Some(Position::Top);
+            } else if ui.button("scroll to midpoint").clicked() {
+                self.click_position = Some(Position::Mid);
+            } else if ui.button("scroll to bottom").clicked() {
+                self.click_position = Some(Position::Bottom);
             }
         });
 
@@ -44,17 +35,23 @@ impl eframe::App for App {
                     .code_editor()
                     .show(ui);
 
-                // tracing::trace!(cursor = ?output.cursor_range.map(|r| r.primary), "cursor position");
-
-                if let Some(new_cursor) = output.cursor_range.map(|r| r.primary.rcursor) {
-                    match self.last_cursor.as_mut() {
-                        Some(last_cursor) => {
-                            if new_cursor != *last_cursor {
-                                *last_cursor = new_cursor;
-                                tracing::debug!(cursor = ?*last_cursor, "new cursor position");
+                if let Some(position) = &self.click_position {
+                    let text_edit_id = output.response.id;
+                    if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), text_edit_id) {
+                        let ccursor = match position {
+                            Position::Top => egui::text::CCursor::new(0),
+                            Position::Mid => {
+                                egui::text::CCursor::new(self.contents.chars().count() / 2)
                             }
-                        }
-                        None => self.last_cursor = Some(new_cursor),
+                            Position::Bottom => {
+                                egui::text::CCursor::new(self.contents.chars().count())
+                            }
+                        };
+                        state.set_ccursor_range(Some(egui::text::CCursorRange::one(ccursor)));
+                        state.store(ui.ctx(), text_edit_id);
+                        ui.ctx().memory_mut(|m| {
+                            m.request_focus(text_edit_id);
+                        });
                     }
                 }
 
