@@ -1,26 +1,29 @@
-use anyhow::Context;
+use eyre::WrapErr;
+use server::Server;
 use std::{collections::HashMap, path::PathBuf};
 use transport::{
-    requests, responses,
+    requests::{self, Initialize, PathFormat},
+    responses,
     types::{Source, SourceBreakpoint, ThreadId},
     Client,
 };
 
 use crate::{
+    debugger::InitialiseArguments,
     state::DebuggerState,
-    types::{Breakpoint, BreakpointId},
+    types::{Breakpoint, BreakpointId, PausedFrame},
     Event,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FileSource {
-    pub line: isize,
-    pub contents: String,
+    pub line: usize,
+    pub file_path: Option<PathBuf>,
 }
 
 pub(crate) struct DebuggerInternals {
     pub(crate) client: Client,
-    pub(crate) publisher: spmc::Sender<Event>,
+    pub(crate) publisher: crossbeam_channel::Sender<Event>,
 
     // debugger specific details
     pub(crate) current_thread_id: Option<ThreadId>,
@@ -28,21 +31,58 @@ pub(crate) struct DebuggerInternals {
 
     current_breakpoint_id: BreakpointId,
     pub(crate) current_source: Option<FileSource>,
+
+    pub(crate) _server: Option<Box<dyn Server + Send>>,
 }
 
 impl DebuggerInternals {
-    pub(crate) fn new(client: Client, publisher: spmc::Sender<Event>) -> Self {
-        Self::with_breakpoints(client, publisher, HashMap::new())
+    pub(crate) fn new(
+        client: Client,
+        publisher: crossbeam_channel::Sender<Event>,
+        server: Option<Box<dyn Server + Send>>,
+    ) -> Self {
+        Self::with_breakpoints(client, publisher, HashMap::new(), server)
     }
 
     pub(crate) fn emit(&mut self, event: Event) {
         let _ = self.publisher.send(event);
     }
 
+    pub(crate) fn initialise(&mut self, arguments: InitialiseArguments) -> eyre::Result<()> {
+        let req = requests::RequestBody::Initialize(Initialize {
+            adapter_id: "dap gui".to_string(),
+            lines_start_at_one: false,
+            path_format: PathFormat::Path,
+            supports_start_debugging_request: true,
+            supports_variable_type: true,
+            supports_variable_paging: true,
+            supports_progress_reporting: true,
+            supports_memory_event: true,
+        });
+
+        // TODO: deal with capabilities from the response
+        let _ = self.client.send(req).context("sending initialize event")?;
+
+        match arguments {
+            InitialiseArguments::Launch(launch_arguments) => {
+                // send launch event
+                let req = launch_arguments.to_request();
+                self.client.execute(req).context("sending launch request")?;
+            }
+            InitialiseArguments::Attach(attach_arguments) => {
+                let req = attach_arguments.to_request();
+                self.client.execute(req).context("sending attach request")?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn with_breakpoints(
         client: Client,
-        publisher: spmc::Sender<Event>,
+        publisher: crossbeam_channel::Sender<Event>,
         existing_breakpoints: impl Into<HashMap<BreakpointId, Breakpoint>>,
+        server: Option<Box<dyn Server + Send>>,
     ) -> Self {
         let breakpoints = existing_breakpoints.into();
         let current_breakpoint_id = *breakpoints.keys().max().unwrap_or(&0);
@@ -54,6 +94,7 @@ impl DebuggerInternals {
             breakpoints,
             current_breakpoint_id,
             current_source: None,
+            _server: server,
         }
     }
 
@@ -74,9 +115,14 @@ impl DebuggerInternals {
             }) => {
                 self.current_thread_id = Some(thread_id);
                 // determine where we are in the source code
-                let Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
-                    stack_frames,
-                })) = self
+                let responses::Response {
+                    body:
+                        Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+                            stack_frames,
+                        })),
+                    success: true,
+                    ..
+                } = self
                     .client
                     .send(requests::RequestBody::StackTrace(requests::StackTrace {
                         thread_id,
@@ -93,15 +139,22 @@ impl DebuggerInternals {
                 }
 
                 let source = stack_frames[0].source.as_ref().unwrap();
-                let contents = std::fs::read_to_string(source.path.as_ref().unwrap()).unwrap();
                 let line = stack_frames[0].line;
 
-                let current_source = FileSource { contents, line };
+                let current_source = FileSource {
+                    line,
+                    file_path: source.path.clone(),
+                };
                 self.current_source = Some(current_source.clone());
 
-                let Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
-                    stack_frames,
-                })) = self
+                let responses::Response {
+                    body:
+                        Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+                            stack_frames,
+                        })),
+                    success: true,
+                    ..
+                } = self
                     .client
                     .send(requests::RequestBody::StackTrace(requests::StackTrace {
                         thread_id,
@@ -112,9 +165,56 @@ impl DebuggerInternals {
                     unreachable!()
                 };
 
+                let paused_frame = {
+                    let top_frame = stack_frames.first().unwrap().clone();
+                    let responses::Response {
+                        body:
+                            Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })),
+                        success: true,
+                        ..
+                    } = self
+                        .client
+                        .send(requests::RequestBody::Scopes(requests::Scopes {
+                            frame_id: top_frame.id,
+                        }))
+                        .expect("requesting scopes")
+                    else {
+                        unreachable!()
+                    };
+
+                    let mut variables = Vec::new();
+
+                    for scope in scopes {
+                        let req = requests::RequestBody::Variables(requests::Variables {
+                            variables_reference: scope.variables_reference,
+                        });
+                        match self.client.send(req).expect("fetching variables") {
+                            responses::Response {
+                                body:
+                                    Some(responses::ResponseBody::Variables(
+                                        responses::VariablesResponse {
+                                            variables: scope_variables,
+                                        },
+                                    )),
+                                success: true,
+                                ..
+                            } => variables.extend(scope_variables.into_iter()),
+                            r => {
+                                tracing::warn!(?r, "unhandled response from send variables request")
+                            }
+                        };
+                    }
+
+                    PausedFrame {
+                        frame: top_frame,
+                        variables,
+                    }
+                };
+
                 self.set_state(DebuggerState::Paused {
                     stack: stack_frames,
-                    source: current_source,
+                    paused_frame,
+                    breakpoints: self.breakpoints.values().cloned().collect(),
                 });
             }
             transport::events::Event::Continued(_) => {
@@ -135,13 +235,13 @@ impl DebuggerInternals {
     }
 
     #[tracing::instrument(skip(self))]
-    pub(crate) fn add_breakpoint(&mut self, breakpoint: Breakpoint) -> BreakpointId {
+    pub(crate) fn add_breakpoint(&mut self, breakpoint: &Breakpoint) -> eyre::Result<BreakpointId> {
         tracing::debug!("adding breakpoint");
         let id = self.next_id();
         self.breakpoints.insert(id, breakpoint.clone());
         self.broadcast_breakpoints()
-            .expect("updating breakpoints with debugee");
-        id
+            .context("updating breakpoints with debugee")?;
+        Ok(id)
     }
 
     #[tracing::instrument(skip(self))]
@@ -152,7 +252,7 @@ impl DebuggerInternals {
             .expect("updating breakpoints with debugee");
     }
 
-    fn broadcast_breakpoints(&mut self) -> anyhow::Result<()> {
+    fn broadcast_breakpoints(&mut self) -> eyre::Result<()> {
         // TODO: don't assume the breakpoints are for the same file
         if self.breakpoints.is_empty() {
             return Ok(());
@@ -203,7 +303,9 @@ impl DebuggerInternals {
         self.current_breakpoint_id
     }
 
+    #[tracing::instrument(skip(self))]
     pub(crate) fn set_state(&mut self, new_state: DebuggerState) {
+        tracing::debug!("setting debugger state");
         let event = Event::from(&new_state);
         self.emit(event);
     }

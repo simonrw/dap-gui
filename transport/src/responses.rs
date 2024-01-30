@@ -1,18 +1,21 @@
 //! Responses in reply to [`crate::requests`] from a DAP server
-use crate::types::{self, Scope, StackFrame, Thread, Variable};
-use serde::Deserialize;
+use crate::types::{
+    self, Scope, StackFrame, Thread, Variable, VariablePresentationHint, VariablesReference,
+};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Response {
     #[serde(rename = "request_seq")]
     pub request_seq: i64,
     pub success: bool,
+    pub message: Option<String>,
     #[serde(flatten)]
     pub body: Option<ResponseBody>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", content = "body", rename_all = "camelCase")]
 #[non_exhaustive]
 pub enum ResponseBody {
@@ -27,9 +30,10 @@ pub enum ResponseBody {
     ConfigurationDone,
     Terminate,
     Disconnect,
+    Evaluate(EvaluateResponse),
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Capabilities {
     pub supports_configuration_done_request: Option<bool>,
@@ -73,44 +77,56 @@ pub struct Capabilities {
     pub supports_single_thread_execution_requests: Option<bool>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetFunctionBreakpointsResponse {
     pub breakpoints: Vec<types::Breakpoint>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetBreakpoints {
     pub breakpoints: Vec<types::Breakpoint>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContinueResponse {
     pub all_threads_continued: Option<bool>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadsResponse {
     pub threads: Vec<Thread>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StackTraceResponse {
     pub stack_frames: Vec<StackFrame>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScopesResponse {
     pub scopes: Vec<Scope>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VariablesResponse {
     pub variables: Vec<Variable>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EvaluateResponse {
+    pub result: String,
+    pub r#type: Option<String>,
+    pub presentation_hint: Option<VariablePresentationHint>,
+    pub variables_reference: VariablesReference,
+    pub named_variables: Option<usize>,
+    pub indexed_variables: Option<usize>,
+    pub memory_reference: Option<String>,
 }

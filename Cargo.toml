@@ -5,12 +5,25 @@ members = [
     "transport",
     "debugger",
     "pythondap",
+    "server",
+    "pcaplog",
+    "gui",
+    "state",
+    "launch_configuration",
 ]
 
 [profile.release]
 debug = 1
 
 [workspace.dependencies]
-anyhow = "1.0.75"
-spmc = "0.3.0"
+anyhow = "1.0.79"
+eyre = "0.6.11"
+color-eyre = "0.6.2"
+ctor = "0.2.6"
+crossbeam-channel = "0.5.11"
 tracing = "0.1.40"
+serde = { version = "1.0.196", features = ["derive"] }
+serde_json = "1.0.113"
+clap = { version = "4.4.11", features = ["derive"] }
+tracing-subscriber = { version = "0.3.17", features = ["json", "env-filter"] }
+dirs = "5.0.1"

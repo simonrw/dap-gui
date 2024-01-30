@@ -1,63 +1,70 @@
-let
-  overlays = [
-    (import (builtins.fetchTarball "https://github.com/oxalica/rust-overlay/archive/master.tar.gz"))
-  ];
-in
-
-{ pkgs ? import <nixpkgs> { inherit overlays; } }:
-with pkgs;
-
-let
+{pkgs, ...}:
+with pkgs; let
   apple-frameworks = with darwin.apple_sdk.frameworks; [
     OpenGL
     CoreServices
     AppKit
   ];
-  apple-libs = [
-    libiconv
-  ];
+  apple-libs = [libiconv];
 
   apple-deps = apple-frameworks ++ apple-libs;
+
+  custom-python = python3.withPackages (ps:
+    with ps; [
+      debugpy
+      black
+      scapy
+      structlog
+    ]);
+
+  toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 in
-mkShell rec {
-  buildInputs = [
-    rust-bin.beta.latest.default
-    rust-analyzer
-    cargo-nextest
-    cargo-flamegraph
-    cargo-hack
-    act
-    maturin
-    python3Packages.venvShellHook
-  ] ++ lib.optionals stdenv.isDarwin apple-deps ++ lib.optionals stdenv.isLinux [
-    gdb
-    simplescreenrecorder
-    cargo-llvm-cov
-  ];
-  RUST_BACKTRACE = "1";
+  mkShell rec {
+    buildInputs =
+      [
+        toolchain
+        rust-analyzer-unwrapped
+        cargo-flamegraph
+        custom-python
+        cargo-hack
+        act
+        maturin
+        python3Packages.venvShellHook
+      ]
+      ++ lib.optionals stdenv.isDarwin apple-deps
+      ++ lib.optionals stdenv.isLinux [
+        gdb
+        simplescreenrecorder
+        cargo-llvm-cov
+      ];
+    venvDir = ".venv";
 
-  RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
+    env = {
+      RUST_BACKTRACE = "1";
+      RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug";
+      RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
 
-  RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug";
+      VIRTUAL_ENV = venvDir;
 
-  venvDir = ".venv";
-  VIRTUAL_ENV = venvDir;
+      postVenvCreation = ''
+        python -m pip install \
+          debugpy \
+          pytest \
+          ipython
+      '';
 
-  postVenvCreation = ''
-  python -m pip install \
-    debugpy \
-    pytest \
-    ipython
-  '';
-
-  LD_LIBRARY_PATH =
-    if stdenv.isLinux then
-      lib.makeLibraryPath [
-        xorg.libX11
-        xorg.libXcursor
-        xorg.libXrandr
-        xorg.libXi
-        libglvnd
-        vulkan-loader # TODO: needed?
-      ] else "";
-}
+      LD_LIBRARY_PATH =
+        if stdenv.isLinux
+        then
+          lib.makeLibraryPath [
+            libxkbcommon
+            xorg.libX11
+            xorg.libXcursor
+            xorg.libXrandr
+            xorg.libXi
+            libglvnd
+            vulkan-loader # TODO: needed?
+          ]
+        else "";
+    };
+  }

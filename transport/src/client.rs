@@ -1,18 +1,19 @@
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{BufReader, Write};
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
 use std::time::Duration;
 
-use oneshot::Receiver;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex, MutexGuard};
 // TODO: use internal error type
-use anyhow::{Context, Result};
+use eyre::{Context, Result};
 
+#[cfg(nom)]
+use crate::reader::nom_reader::NomReader;
 use crate::request_store::{RequestStore, WaitingRequest};
-use crate::responses::ResponseBody;
-use crate::{events, requests, responses};
+use crate::responses::Response;
+use crate::{events, reader, requests, responses, Reader};
 
 #[derive(Debug)]
 pub struct Reply {
@@ -20,12 +21,13 @@ pub struct Reply {
     pub request: Option<requests::Request>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub enum Message {
     Event(events::Event),
     Response(responses::Response),
+    Request(requests::Request),
 }
 
 pub struct ClientInternals {
@@ -48,7 +50,10 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(stream: TcpStream, responses: spmc::Sender<events::Event>) -> Result<Self> {
+    pub fn new(
+        stream: TcpStream,
+        responses: crossbeam_channel::Sender<events::Event>,
+    ) -> Result<Self> {
         // internal state
         let sequence_number = Arc::new(AtomicI64::new(0));
 
@@ -60,15 +65,50 @@ impl Client {
         let store = RequestStore::default();
         let store_clone = Arc::clone(&store);
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
+
         thread::spawn(move || {
             let input = BufReader::new(input_stream);
-            let mut reader = Reader {
-                input,
-                store: store_clone,
-                responses,
-            };
-            if let Err(e) = reader.run_poll_loop(shutdown_rx) {
-                tracing::warn!(error = ?e, "running poll loop");
+            let mut reader = reader::get(input);
+
+            // poll loop
+            loop {
+                // check for shutdown
+                match shutdown_rx.try_recv() {
+                    Ok(_) => return,
+                    Err(oneshot::TryRecvError::Empty) => {}
+                    Err(e) => {
+                        tracing::error!(error = %e, "shutdown sender closed");
+                        return;
+                    }
+                }
+
+                match reader.poll_message() {
+                    Ok(Some(msg)) => match msg {
+                        Message::Event(evt) => {
+                            let _ = responses.send(evt);
+                        }
+                        Message::Response(r) => {
+                            with_lock(
+                                "Reader.store",
+                                store_clone.as_ref(),
+                                |mut store| match store.remove(&r.request_seq) {
+                                    Some(WaitingRequest(_, tx)) => {
+                                        let _ = tx.send(r);
+                                    }
+                                    None => {
+                                        tracing::warn!(response = ?r, "no message in request store")
+                                    }
+                                },
+                            );
+                        }
+                        Message::Request(_) => unreachable!("we should not be parsing requests"),
+                    },
+                    Ok(None) => {
+                        tracing::debug!("ok none");
+                        return;
+                    }
+                    Err(e) => eprintln!("reader error: {e}"),
+                }
             }
         });
 
@@ -85,7 +125,7 @@ impl Client {
     }
 
     #[tracing::instrument(skip(self, body))]
-    pub fn send(&self, body: requests::RequestBody) -> Result<Option<ResponseBody>> {
+    pub fn send(&self, body: requests::RequestBody) -> Result<Response> {
         with_lock(
             "Client.internals",
             self.internals.as_ref(),
@@ -115,30 +155,30 @@ where
 }
 
 impl ClientInternals {
-    pub fn send(&mut self, body: requests::RequestBody) -> Result<Option<ResponseBody>> {
+    pub fn send(&mut self, body: requests::RequestBody) -> Result<Response> {
         self.sequence_number.fetch_add(1, Ordering::SeqCst);
         let message = requests::Request {
             seq: self.sequence_number.load(Ordering::SeqCst),
             r#type: "request".to_string(),
             body: body.clone(),
         };
-        let resp_json = serde_json::to_string(&message).unwrap();
+        let resp_json = serde_json::to_string(&message).wrap_err("encoding json body")?;
         tracing::debug!(request = ?message, "sending message");
-        write!(
-            self.output,
-            "Content-Length: {}\r\n\r\n{}",
-            resp_json.len(),
-            resp_json
-        )
-        .unwrap();
-        self.output.flush().unwrap();
-
         let (tx, rx) = oneshot::channel();
         let waiting_request = WaitingRequest(body, tx);
 
         with_lock("ClientInternals.store", self.store.as_ref(), |mut store| {
             store.insert(message.seq, waiting_request);
         });
+
+        write!(
+            self.output,
+            "Content-Length: {}\r\n\r\n{}",
+            resp_json.len(),
+            resp_json
+        )
+        .wrap_err("writing message to output buffer")?;
+        self.output.flush().wrap_err("flushing output buffer")?;
 
         let res = rx.recv().expect("sender dropped");
         Ok(res)
@@ -172,117 +212,6 @@ impl Drop for ClientInternals {
         tracing::debug!("shutting down client");
         // Shutdown the background thread
         let _ = self.exit.take().unwrap().send(());
-    }
-}
-
-enum ClientState {
-    Header,
-    Content,
-}
-
-struct Reader {
-    input: BufReader<TcpStream>,
-    store: RequestStore,
-    responses: spmc::Sender<events::Event>,
-}
-
-impl Reader {
-    fn poll_message(&mut self, shutdown: &Receiver<()>) -> Result<Option<Message>> {
-        let mut state = ClientState::Header;
-        let mut buffer = String::new();
-        let mut content_length: usize = 0;
-
-        loop {
-            // check for shutdown
-            match shutdown.try_recv() {
-                Ok(_) => return Ok(None),
-                Err(oneshot::TryRecvError::Empty) => {}
-                Err(e) => {
-                    tracing::error!(error = %e, "shutdown sender closed");
-                    anyhow::bail!("shutdown sender closed");
-                }
-            }
-
-            match self.input.read_line(&mut buffer) {
-                Ok(read_size) => {
-                    if read_size == 0 {
-                        return Ok(None);
-                    }
-
-                    match state {
-                        ClientState::Header => {
-                            let parts: Vec<&str> = buffer.trim_end().split(':').collect();
-                            if parts.len() == 2 {
-                                match parts[0] {
-                                    "Content-Length" => {
-                                        content_length = match parts[1].trim().parse() {
-                                            Ok(val) => val,
-                                            Err(_) => {
-                                                anyhow::bail!("failed to parse content length")
-                                            }
-                                        };
-                                        buffer.clear();
-                                        buffer.reserve(content_length);
-                                        state = ClientState::Content;
-                                    }
-                                    other => {
-                                        anyhow::bail!("header {} not implemented", other);
-                                    }
-                                }
-                            }
-                        }
-                        ClientState::Content => {
-                            buffer.clear();
-                            let mut content = vec![0; content_length];
-                            self.input
-                                .read_exact(content.as_mut_slice())
-                                .map_err(|e| anyhow::anyhow!("failed to read: {:?}", e))?;
-                            let content =
-                                std::str::from_utf8(content.as_slice()).context("invalid utf8")?;
-                            let message = serde_json::from_str(content).with_context(|| {
-                                format!("could not construct message from: {content:?}")
-                            })?;
-                            return Ok(Some(message));
-                        }
-                    }
-                }
-                Err(e) => {
-                    if e.kind() == io::ErrorKind::WouldBlock {
-                        continue;
-                    }
-                    return Err(anyhow::anyhow!("error reading from buffer: {e:?}"));
-                }
-            }
-        }
-    }
-
-    fn run_poll_loop(&mut self, shutdown: Receiver<()>) -> Result<()> {
-        loop {
-            match self.poll_message(&shutdown) {
-                Ok(Some(msg)) => match msg {
-                    Message::Event(evt) => {
-                        let _ = self.responses.send(evt);
-                    }
-                    Message::Response(r) => {
-                        with_lock("Reader.store", self.store.as_ref(), |mut store| match store
-                            .remove(&r.request_seq)
-                        {
-                            Some(WaitingRequest(_, tx)) => {
-                                let _ = tx.send(r.body);
-                            }
-                            None => {
-                                tracing::warn!(response = ?r, "no message in request store")
-                            }
-                        });
-                    }
-                },
-                Ok(None) => {
-                    tracing::debug!("ok none");
-                    return Ok(());
-                }
-                Err(e) => eprintln!("reader error: {e}"),
-            }
-        }
     }
 }
 

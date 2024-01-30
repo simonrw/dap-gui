@@ -1,0 +1,23 @@
+[package]
+name = "pcaplog"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+etherparse = "0.13.0"
+pcap-file = "2.0.0"
+serde_json.workspace = true
+serde.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+transport = { path = "../transport" }
+
+[dev-dependencies]
+ctor.workspace = true
+glob = "0.3.1"
+rstest = "0.18.2"
+color-eyre.workspace = true

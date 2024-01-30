@@ -3,8 +3,9 @@ mod internals;
 mod persistence;
 pub(crate) mod state;
 mod types;
+pub mod utils;
 
 pub use debugger::Debugger;
 pub use internals::FileSource;
-pub use state::{Event, Language, LaunchArguments};
-pub use types::Breakpoint;
+pub use state::{AttachArguments, Event, Language, LaunchArguments};
+pub use types::{Breakpoint, EvaluateResult, PausedFrame};

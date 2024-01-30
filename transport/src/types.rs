@@ -10,7 +10,7 @@ pub type StackFrameId = i64;
 pub type VariablesReference = i64;
 pub type SourceReference = i64;
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Thread {
     pub id: ThreadId,
     pub name: String,
@@ -44,7 +44,7 @@ pub struct StackFrameFormat {
     pub include_all: Option<bool>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Scope {
     pub name: String,
@@ -72,7 +72,7 @@ pub struct Source {
     pub sources: Option<Vec<Source>>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Breakpoint {
     pub id: Option<BreakpointId>,
     pub verified: bool,
@@ -113,13 +113,13 @@ pub struct SourceBreakpoint {
     pub log_message: Option<String>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct StackFrame {
     pub id: StackFrameId,
     pub name: String,
     pub source: Option<Source>,
-    pub line: isize,
+    pub line: usize,
     pub column: isize,
     pub end_line: Option<usize>,
     pub end_column: Option<usize>,
@@ -128,7 +128,7 @@ pub struct StackFrame {
     pub presentation_hint: Option<String>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct VariablePresentationHint {
     pub kind: Option<String>,
@@ -137,7 +137,7 @@ pub struct VariablePresentationHint {
     pub lazy: Option<bool>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Variable {
     pub name: String,
@@ -147,13 +147,13 @@ pub struct Variable {
     pub presentation_hint: Option<VariablePresentationHint>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ModuleId {
     Number(i64),
     String(String),
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Module {
     pub id: i64,
     pub name: String,
