@@ -128,26 +128,24 @@ impl<'s> Renderer<'s> {
     fn render_repl(&mut self, _ctx: &Context, ui: &mut Ui) {
         let repl_input = &mut *self.state.repl_input.borrow_mut();
         let repl_output = &mut *self.state.repl_output.borrow_mut();
-        // we should always have a frame id to be in this state
-        let frame_id = self
-            .state
-            .current_frame_id
-            .expect("should always have a frame id");
+        // We only have a frame id if we are paused. If we are running then there is no frame id,
+        // so don't render the REPL.
+        if let Some(frame_id) = self.state.current_frame_id {
+            // output/history area
+            ui.text_edit_multiline(repl_output);
+            // input area
+            if ui.text_edit_singleline(repl_input).lost_focus()
+                && ui.input(|i| i.key_pressed(Key::Enter))
+            {
+                // TODO: handle the error case
+                let EvaluateResult {
+                    output,
+                    error: _error,
+                } = self.state.debugger.evaluate(repl_input, frame_id).unwrap();
 
-        // output/history area
-        ui.text_edit_multiline(repl_output);
-        // input area
-        if ui.text_edit_singleline(repl_input).lost_focus()
-            && ui.input(|i| i.key_pressed(Key::Enter))
-        {
-            // TODO: handle the error case
-            let EvaluateResult {
-                output,
-                error: _error,
-            } = self.state.debugger.evaluate(repl_input, frame_id).unwrap();
-
-            *repl_output += &("\n".to_string() + repl_input + "\n=> " + &output + "\n");
-            repl_input.clear();
+                *repl_output += &("\n".to_string() + repl_input + "\n=> " + &output + "\n");
+                repl_input.clear();
+            }
         }
     }
 
