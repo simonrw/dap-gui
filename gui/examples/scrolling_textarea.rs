@@ -29,34 +29,26 @@ impl eframe::App for App {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                let output = TextEdit::multiline(&mut self.contents)
+            let output = egui::ScrollArea::vertical().show(ui, |ui| {
+                TextEdit::multiline(&mut self.contents)
                     .desired_width(f32::INFINITY)
                     .code_editor()
-                    .show(ui);
+                    .show(ui)
+            });
 
-                if let Some(position) = &self.click_position {
-                    let text_edit_id = output.response.id;
-                    if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), text_edit_id) {
-                        let ccursor = match position {
-                            Position::Top => egui::text::CCursor::new(0),
-                            Position::Mid => {
-                                egui::text::CCursor::new(self.contents.chars().count() / 2)
-                            }
-                            Position::Bottom => {
-                                egui::text::CCursor::new(self.contents.chars().count())
-                            }
-                        };
-                        state.set_ccursor_range(Some(egui::text::CCursorRange::one(ccursor)));
-                        state.store(ui.ctx(), text_edit_id);
-                        ui.ctx().memory_mut(|m| {
-                            m.request_focus(text_edit_id);
-                        });
+            let mut state = output.state;
+            if let Some(position) = &self.click_position {
+                match position {
+                    Position::Top => state.offset.y = 0.0,
+                    Position::Mid => {
+                        state.offset.y = (output.content_size.y - output.inner_rect.max.y) / 2.0
+                    }
+                    Position::Bottom => {
+                        state.offset.y = output.content_size.y - output.inner_rect.max.y
                     }
                 }
-
-                output.response
-            });
+            }
+            state.store(ui.ctx(), output.id);
         });
     }
 }
