@@ -41,6 +41,35 @@ impl Debugger {
     ) -> PyResult<Self> {
         Self::internal_new(Some(port), breakpoints, file)
     }
+
+    pub fn resume(&mut self) -> PyResult<Option<ProgramState>> {
+        if !self._launched {
+            self._launched = true;
+            self._internal
+                .launch()
+                .map_err(|e| PyRuntimeError::new_err(format!("launching debugger: {e}")))?;
+        } else {
+            self._internal
+                .r#continue()
+                .map_err(|e| PyRuntimeError::new_err(format!("continuing execution: {e}")))?;
+        }
+
+        // wait for stopped or terminated event
+        match self._internal.wait_for_event(|evt| {
+            matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
+        }) {
+            Event::Paused {
+                stack,
+                paused_frame,
+                ..
+            } => Ok(Some(ProgramState { _stack: stack })),
+            Event::Ended => {
+                eprintln!("Debugee ended");
+                return Ok(None);
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl Debugger {
@@ -77,35 +106,6 @@ impl Debugger {
             _internal: debugger,
             _launched: false,
         })
-    }
-
-    pub fn resume(&mut self) -> PyResult<Option<ProgramState>> {
-        if !self._launched {
-            self._launched = true;
-            self._internal
-                .launch()
-                .map_err(|e| PyRuntimeError::new_err(format!("launching debugger: {e}")))?;
-        } else {
-            self._internal
-                .r#continue()
-                .map_err(|e| PyRuntimeError::new_err(format!("continuing execution: {e}")))?;
-        }
-
-        // wait for stopped or terminated event
-        match self._internal.wait_for_event(|evt| {
-            matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
-        }) {
-            Event::Paused {
-                stack,
-                paused_frame,
-                ..
-            } => Ok(Some(ProgramState { _stack: stack })),
-            Event::Ended => {
-                eprintln!("Debugee ended");
-                return Ok(None);
-            }
-            _ => unreachable!(),
-        }
     }
 }
 
