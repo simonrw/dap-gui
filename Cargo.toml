@@ -16,7 +16,7 @@ debug = 1
 
 [workspace.dependencies]
 anyhow = "1.0.79"
-eyre = "0.6.11"
+eyre = "0.6.12"
 color-eyre = "0.6.2"
 ctor = "0.2.6"
 crossbeam-channel = "0.5.11"
