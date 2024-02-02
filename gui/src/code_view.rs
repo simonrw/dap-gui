@@ -16,21 +16,28 @@ pub struct CodeView<'a> {
     highlight_line: bool,
     /// Line numbers to add breakpoint markers to (1-indexed)
     breakpoints: &'a mut HashSet<debugger::Breakpoint>,
+    /// Should we jump to the current position or not?
+    jump: &'a mut bool,
 }
 
 impl<'a> CodeView<'a> {
     /// Create a new code view
+    ///
+    /// If `jump` is supplied, then hump to that position in the code viewer. If this occurs, then
+    /// `jump` will be reset to `false`.
     pub fn new(
         content: &'a str,
         current_line: usize,
         highlight_line: bool,
         breakpoints: &'a mut HashSet<debugger::Breakpoint>,
+        jump: &'a mut bool,
     ) -> Self {
         Self {
             content,
             current_line,
             highlight_line,
             breakpoints,
+            jump,
         }
     }
 

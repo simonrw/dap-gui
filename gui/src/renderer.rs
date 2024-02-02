@@ -12,11 +12,12 @@ use crate::{
 
 pub(crate) struct Renderer<'a> {
     state: &'a DebuggerAppState,
+    jump: &'a mut bool,
 }
 
 impl<'s> Renderer<'s> {
-    pub(crate) fn new(state: &'s DebuggerAppState) -> Self {
-        Self { state }
+    pub(crate) fn new(state: &'s DebuggerAppState, jump: &'s mut bool) -> Self {
+        Self { state, jump }
     }
 
     pub(crate) fn render_ui(&mut self, ctx: &Context) {
@@ -213,6 +214,12 @@ impl<'s> Renderer<'s> {
                 .cloned(),
         );
 
-        ui.add(CodeView::new(&contents, frame.line, true, &mut breakpoints));
+        ui.add(CodeView::new(
+            &contents,
+            frame.line,
+            true,
+            &mut breakpoints,
+            &mut self.jump,
+        ));
     }
 }

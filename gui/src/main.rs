@@ -113,6 +113,7 @@ impl DebuggerAppState {
 struct DebuggerApp {
     inner: Arc<Mutex<DebuggerAppState>>,
     _state_manager: StateManager,
+    jump: bool,
 }
 
 impl DebuggerApp {
@@ -228,6 +229,7 @@ impl DebuggerApp {
         Ok(Self {
             inner,
             _state_manager: state_manager,
+            jump: false,
         })
     }
 }
@@ -236,7 +238,7 @@ impl eframe::App for DebuggerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |_ui| {
             let inner = self.inner.lock().unwrap();
-            let mut user_interface = crate::renderer::Renderer::new(&inner);
+            let mut user_interface = crate::renderer::Renderer::new(&inner, &mut self.jump);
             user_interface.render_ui(ctx);
         });
     }
