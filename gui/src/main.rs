@@ -93,6 +93,7 @@ struct DebuggerAppState {
     tab: RefCell<TabState>,
     repl_input: RefCell<String>,
     repl_output: RefCell<String>,
+    jump: bool,
 }
 
 impl DebuggerAppState {
@@ -103,6 +104,7 @@ impl DebuggerAppState {
         self.state = event.clone().into();
         if let State::Paused { paused_frame, .. } = &self.state {
             self.current_frame_id = Some(paused_frame.frame.id);
+            self.jump = true;
         } else if let State::Running = &self.state {
             self.current_frame_id = None;
         }
@@ -113,7 +115,6 @@ impl DebuggerAppState {
 struct DebuggerApp {
     inner: Arc<Mutex<DebuggerAppState>>,
     _state_manager: StateManager,
-    jump: bool,
 }
 
 impl DebuggerApp {
@@ -208,6 +209,7 @@ impl DebuggerApp {
             previous_state: None,
             debugger,
             current_frame_id: None,
+            jump: false,
             tab: RefCell::new(TabState::Variables),
             repl_input: RefCell::new(String::new()),
             repl_output: RefCell::new(String::new()),
@@ -229,7 +231,6 @@ impl DebuggerApp {
         Ok(Self {
             inner,
             _state_manager: state_manager,
-            jump: false,
         })
     }
 }
@@ -237,8 +238,19 @@ impl DebuggerApp {
 impl eframe::App for DebuggerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |_ui| {
-            let inner = self.inner.lock().unwrap();
-            let mut user_interface = crate::renderer::Renderer::new(&inner, &mut self.jump);
+            let mut inner = self.inner.lock().unwrap();
+
+            // if the current state is an event and the previous state wasn't then make sure we
+            // jump to the breakpoint location
+            match (&inner.state, &inner.previous_state) {
+                (State::Paused { .. }, Some(State::Running))
+                | (State::Paused { .. }, Some(State::Initialising)) => {
+                    inner.jump = true;
+                }
+                _ => {}
+            }
+
+            let mut user_interface = crate::renderer::Renderer::new(&inner);
             user_interface.render_ui(ctx);
         });
     }

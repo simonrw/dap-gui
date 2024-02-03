@@ -91,6 +91,9 @@ impl<'a> egui::Widget for CodeView<'a> {
 
         self.update_breakpoints(&response);
 
+        // make sure the next frame will not ask us to jump if we have handled the case
+        *self.jump = false;
+
         response
     }
 }

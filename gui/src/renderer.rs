@@ -12,12 +12,14 @@ use crate::{
 
 pub(crate) struct Renderer<'a> {
     state: &'a DebuggerAppState,
-    jump: &'a mut bool,
 }
 
 impl<'s> Renderer<'s> {
-    pub(crate) fn new(state: &'s DebuggerAppState, jump: &'s mut bool) -> Self {
-        Self { state, jump }
+    pub(crate) fn new(state: &'s DebuggerAppState) -> Self {
+        if state.jump {
+            tracing::warn!("JUMPING!");
+        }
+        Self { state }
     }
 
     pub(crate) fn render_ui(&mut self, ctx: &Context) {
@@ -199,6 +201,7 @@ impl<'s> Renderer<'s> {
         paused_frame: &PausedFrame,
         original_breakpoints: &[debugger::Breakpoint],
     ) {
+        // let DebuggerAppState { ref mut jump, .. } = self.state;
         let frame = &paused_frame.frame;
         let file_path = frame
             .source
@@ -214,12 +217,14 @@ impl<'s> Renderer<'s> {
                 .cloned(),
         );
 
+        // TODO: get this value from the debugger app state somehow
+        let mut jump = false;
         ui.add(CodeView::new(
             &contents,
             frame.line,
             true,
             &mut breakpoints,
-            &mut self.jump,
+            &mut jump,
         ));
     }
 }
