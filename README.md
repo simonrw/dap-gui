@@ -4,7 +4,8 @@
 
 Very early prototype of a general purpose GUI debugger based on the [DAP][dap] protocol and [egui]([url](https://github.com/emilk/egui)).
 
-https://github.com/simonrw/dap-gui/assets/59756/45a88f50-54ce-4ff7-9932-ed2cbc2501f0
+https://github.com/simonrw/dap-gui/assets/59756/a31d6a97-431f-48b7-a051-baac3ca9b167
+
 
 
 ## Motivation
