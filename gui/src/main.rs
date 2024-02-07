@@ -265,7 +265,7 @@ fn main() -> eyre::Result<()> {
 
     let native_options = eframe::NativeOptions::default();
     eframe::run_native(
-        "My egui App",
+        "DAP Debugger",
         native_options,
         Box::new(|cc| {
             let style = egui::Style {
