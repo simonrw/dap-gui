@@ -42,7 +42,7 @@ pub fn extract_messages(path: impl AsRef<Path>, port: u16) -> anyhow::Result<Vec
                                         if let Some(TransportSlice::Tcp(tcph)) = value.transport {
                                             tracing::trace!("got tcp layer");
 
-                                            let payload = value.payload;
+                                            let payload = tcph.payload();
                                             if payload.is_empty() {
                                                 tracing::trace!("no payload");
                                                 src = rem;
