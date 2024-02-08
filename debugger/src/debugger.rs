@@ -159,7 +159,11 @@ impl Debugger {
         Ok(())
     }
 
-    pub fn evaluate(&self, input: &str, frame_id: StackFrameId) -> eyre::Result<EvaluateResult> {
+    pub fn evaluate(
+        &self,
+        input: &str,
+        frame_id: StackFrameId,
+    ) -> eyre::Result<Option<EvaluateResult>> {
         let internals = self.internals.lock().unwrap();
         let req = requests::RequestBody::Evaluate(requests::Evaluate {
             expression: input.to_string(),
@@ -178,19 +182,22 @@ impl Debugger {
                     })),
                 success: true,
                 ..
-            } => Ok(EvaluateResult {
+            } => Ok(Some(EvaluateResult {
                 output: result,
                 error: false,
-            }),
+            })),
             responses::Response {
                 message: Some(msg),
                 success: false,
                 ..
-            } => Ok(EvaluateResult {
+            } => Ok(Some(EvaluateResult {
                 output: msg,
                 error: true,
-            }),
-            _ => unreachable!(),
+            })),
+            other => {
+                tracing::warn!(response = ?other, "unhandled response");
+                Ok(None)
+            }
         }
     }
 

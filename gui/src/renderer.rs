@@ -138,13 +138,14 @@ impl<'s> Renderer<'s> {
                 && ui.input(|i| i.key_pressed(Key::Enter))
             {
                 // TODO: handle the error case
-                let EvaluateResult {
+                if let Ok(Some(EvaluateResult {
                     output,
                     error: _error,
-                } = self.state.debugger.evaluate(repl_input, frame_id).unwrap();
-
-                *repl_output += &("\n".to_string() + repl_input + "\n=> " + &output + "\n");
-                repl_input.clear();
+                })) = self.state.debugger.evaluate(repl_input, frame_id)
+                {
+                    *repl_output += &("\n".to_string() + repl_input + "\n=> " + &output + "\n");
+                    repl_input.clear();
+                }
             }
         }
     }
