@@ -16,9 +16,6 @@ pub(crate) struct Renderer<'a> {
 
 impl<'s> Renderer<'s> {
     pub(crate) fn new(state: &'s DebuggerAppState) -> Self {
-        if state.jump {
-            tracing::warn!("JUMPING!");
-        }
         Self { state }
     }
 
@@ -217,14 +214,12 @@ impl<'s> Renderer<'s> {
                 .cloned(),
         );
 
-        // TODO: get this value from the debugger app state somehow
-        let mut jump = false;
         ui.add(CodeView::new(
             &contents,
             frame.line,
             true,
             &mut breakpoints,
-            &mut jump,
+            &self.state.jump,
         ));
     }
 }

@@ -17,7 +17,7 @@ pub struct CodeView<'a> {
     /// Line numbers to add breakpoint markers to (1-indexed)
     breakpoints: &'a mut HashSet<debugger::Breakpoint>,
     /// Should we jump to the current position or not?
-    jump: &'a mut bool,
+    jump: &'a bool,
 }
 
 impl<'a> CodeView<'a> {
@@ -30,7 +30,7 @@ impl<'a> CodeView<'a> {
         current_line: usize,
         highlight_line: bool,
         breakpoints: &'a mut HashSet<debugger::Breakpoint>,
-        jump: &'a mut bool,
+        jump: &'a bool,
     ) -> Self {
         Self {
             content,
@@ -83,18 +83,53 @@ impl<'a> egui::Widget for CodeView<'a> {
 
             ui.fonts(|f| f.layout_job(layout_job))
         };
-        let response = egui::ScrollArea::vertical()
-            .show(ui, |ui| {
-                ui.add(TextEdit::multiline(&mut self.content).layouter(&mut layouter))
-            })
-            .inner;
+        let response = egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.add(TextEdit::multiline(&mut self.content).layouter(&mut layouter))
+        });
 
-        self.update_breakpoints(&response);
+        //               |  +------------------+ |
+        //               |  |                  | |
+        //               |  |                  | | offset.y
+        //               |  |                  | |
+        //               |  |                  | |
+        //               |  |                  | |
+        //               |  |+----------------+| | |
+        //               |  ||                ||   |
+        //               |  ||                ||   |
+        //               |  ||                ||   |
+        //               |  ||                ||   |
+        //               |  ||                ||   | inner_rect.max
+        //        bp ->  |  || -------------- ||   |
+        //               |  ||                ||   |
+        //               |  ||                ||   |
+        //               |  |+----------------+|   |
+        //  content_size |  |                  |
+        //               |  |                  |
+        //               |  |                  |
+        //               |  |                  |
+        //               |  |                  |
+        //               |  |                  |
+        //               |  +------------------+
 
-        // make sure the next frame will not ask us to jump if we have handled the case
-        *self.jump = false;
+        // handle jumping to the breakpoint
+        if *self.jump {
+            let mut state = response.state;
+            let num_lines = self.content.lines().count();
+            let position_fractional = self.current_line as f32 / num_lines as f32;
 
-        response
+            let window_centre_pos = (position_fractional * response.content_size.y) as i32;
+            let window_pos = (window_centre_pos - ((response.inner_rect.max.y / 2.0) as i32))
+                .max(0)
+                .min((response.content_size.y - response.inner_rect.max.y) as i32);
+
+            state.offset.y = window_pos as f32;
+            state.store(ui.ctx(), response.id);
+        }
+
+        // tracing::debug!(?state.offset, ?response.content_size, ?response.inner_rect.max, "positional info");
+        self.update_breakpoints(&response.inner);
+
+        response.inner
     }
 }
 
