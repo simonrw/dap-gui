@@ -104,10 +104,17 @@ impl DebuggerAppState {
         self.state = event.clone().into();
         if let State::Paused { paused_frame, .. } = &self.state {
             self.current_frame_id = Some(paused_frame.frame.id);
-            self.jump = true;
         } else if let State::Running = &self.state {
             self.current_frame_id = None;
         }
+
+        // if we have just been paused then jump the editor to the nearest point
+        if let (State::Paused { .. }, Some(State::Running)) =
+            (&mut self.state, &self.previous_state)
+        {
+            self.jump = true;
+        }
+
         Ok(())
     }
 }
@@ -239,19 +246,11 @@ impl eframe::App for DebuggerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |_ui| {
             let mut inner = self.inner.lock().unwrap();
-
-            // if the current state is an event and the previous state wasn't then make sure we
-            // jump to the breakpoint location
-            match (&inner.state, &inner.previous_state) {
-                (State::Paused { .. }, Some(State::Running))
-                | (State::Paused { .. }, Some(State::Initialising)) => {
-                    inner.jump = true;
-                }
-                _ => {}
-            }
-
             let mut user_interface = crate::renderer::Renderer::new(&inner);
             user_interface.render_ui(ctx);
+            if inner.jump {
+                inner.jump = false;
+            }
         });
     }
 }
