@@ -11,8 +11,10 @@ members = [
     "launch_configuration",
 ]
 
-[profile.release]
-debug = 1
+[profile.dev]
+debug = 0
+strip = "debuginfo"
+
 
 [workspace.dependencies]
 anyhow = "1.0.79"

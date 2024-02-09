@@ -25,9 +25,11 @@ mkShell {
       act
       go
       delve
+      clang
+      hyperfine
     ]
     ++ lib.optionals stdenv.isDarwin apple-deps
-    ++ lib.optionals stdenv.isLinux [ gdb simplescreenrecorder cargo-llvm-cov ];
+    ++ lib.optionals stdenv.isLinux [ mold gdb simplescreenrecorder cargo-llvm-cov ];
 
   env = {
     RUST_BACKTRACE = "1";
