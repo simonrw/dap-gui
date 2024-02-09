@@ -152,6 +152,7 @@ impl DebuggerApp {
                 request,
                 cwd,
                 connect,
+                path_mappings,
                 ..
             }) => {
                 if let Some(dir) = cwd {
@@ -163,6 +164,7 @@ impl DebuggerApp {
                             working_directory: debug_root_dir.to_owned().to_path_buf(),
                             port: Some(connect.port),
                             language: debugger::Language::DebugPy,
+                            path_mappings,
                         };
 
                         tracing::debug!(?launch_arguments, "generated launch configuration");

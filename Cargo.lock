@@ -2328,6 +2328,7 @@ dependencies = [
  "eyre",
  "serde",
  "serde_json",
+ "transport",
 ]
 
 [[package]]

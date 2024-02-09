@@ -75,6 +75,7 @@ pub struct AttachArguments {
     pub working_directory: PathBuf,
     pub port: Option<u16>,
     pub language: Language,
+    pub path_mappings: Option<Vec<requests::PathMapping>>,
 }
 
 impl AttachArguments {
@@ -84,7 +85,7 @@ impl AttachArguments {
                 host: "localhost".to_string(),
                 port: self.port.unwrap_or(DEFAULT_DAP_PORT),
             },
-            path_mappings: Vec::new(),
+            path_mappings: self.path_mappings.unwrap_or_default(),
             just_my_code: false,
             workspace_folder: self.working_directory,
         })

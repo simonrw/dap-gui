@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 use eyre::Context;
 use serde::Deserialize;
 
+// re-export
+pub use transport::requests::PathMapping;
+
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum ConfigFormat {
@@ -16,7 +19,7 @@ enum ConfigFormat {
     },
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum LaunchConfiguration {
     Debugpy(Debugpy),
@@ -55,7 +58,7 @@ pub fn load_from_path(
     Ok(config)
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Debugpy {
     pub name: String,
@@ -67,15 +70,8 @@ pub struct Debugpy {
     pub cwd: Option<PathBuf>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ConnectionDetails {
     pub host: String,
     pub port: u16,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PathMapping {
-    pub local_root: String,
-    pub remote_root: String,
 }
