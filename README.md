@@ -44,12 +44,20 @@ WIP
   * abstraction over running DAP servers
 * `pcaplog` crate:
   * print messages from pcap(ng) captures (prototype)
+* `gui` crate:
+  * main GUI implementation using `egui`/`eframe`
+* `state` crate:
+  * handles cross-session state persistence
+* `launch_configuration` crate:
+  * represents different launch configration options, e.g. `vscode` `launch.json` files
 
 ### States and transitions
 
+The diagram below represents the different state transitions used by the [`debugger::Debugger`](./debugger/src/debugger.rs) type.
+
 ```mermaid
 ---
-title: State machine
+title: Debugger states
 ---
 
 stateDiagram-v2
@@ -57,13 +65,11 @@ stateDiagram-v2
     Initialized --> Running: [2]
     Running --> Paused: [2]
     Paused --> Running: [3]
+    Paused --> ScopeChange: [4]
+    ScopeChange --> Paused
     Running --> Terminated: [5]
     Terminated --> [*]
 ```
-
-1. Initializing
-    * Set up initial state
-
 
 [dap]: https://microsoft.github.io/debug-adapter-protocol/
 
