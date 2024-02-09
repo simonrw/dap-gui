@@ -42,6 +42,7 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
           components: clippy
+      - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
       - name: cargo clippy
         uses: actions-rs/clippy-check@v1
@@ -56,6 +57,7 @@ jobs:
           submodules: true
       - name: Install nightly
         uses: dtolnay/rust-toolchain@nightly
+      - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
       - name: cargo doc
         run: cargo doc --no-deps --all-features
@@ -70,6 +72,7 @@ jobs:
           submodules: true
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
+      - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
       - name: cargo install cargo-hack
         uses: taiki-e/install-action@cargo-hack
@@ -93,6 +96,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.msrv }}
+      - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
       - name: cargo +${{ matrix.msrv }} check
         run: cargo check
