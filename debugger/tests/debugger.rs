@@ -55,6 +55,7 @@ fn test_remote_attach() -> eyre::Result<()> {
         working_directory: cwd.clone(),
         port: Some(port),
         language: debugger::Language::DebugPy,
+        path_mappings: None,
     };
 
     let debugger = Debugger::on_port(port, launch_args).context("creating debugger")?;
