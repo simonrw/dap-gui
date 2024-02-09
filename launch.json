@@ -1,24 +1,40 @@
 {
-    "version": "0.2.0",
-    "configurations": [
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach",
+      "type": "python",
+      "request": "attach",
+      "connect": {
+        "host": "localhost",
+        "port": 5678
+      }
+    },
+    {
+      "name": "LocalStack",
+      "type": "python",
+      "request": "attach",
+      "connect": {
+        "host": "localhost",
+        "port": 5678
+      },
+      "cwd": "~/work/localstack/localstack"
+    },
+    {
+      "name": "LocalStack Remote",
+      "type": "python",
+      "request": "attach",
+      "connect": {
+        "host": "localhost",
+        "port": 5678
+      },
+      "cwd": "~/work/localstack/localstack",
+      "pathMappings": [
         {
-            "name": "Attach",
-            "type": "python",
-            "request": "attach",
-            "connect": {
-                "host": "localhost",
-                "port": 5678
-            }
-        },
-        {
-            "name": "LocalStack",
-            "type": "python",
-            "request": "attach",
-            "connect": {
-                "host": "localhost",
-                "port": 5678
-            },
-            "cwd": "~/work/localstack/localstack"
+          "localRoot": "/home/simon/work/localstack/localstack/localstack",
+          "remoteRoot": "/opt/code/localstack/localstack"
         }
-    ]
+      ]
+    }
+  ]
 }

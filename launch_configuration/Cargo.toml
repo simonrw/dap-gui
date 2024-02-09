@@ -10,6 +10,7 @@ serde.workspace = true
 serde_json = "1.0.113"
 eyre.workspace = true
 ctor.workspace = true
+transport = { path = "../transport" }
 
 [dev-dependencies]
 color-eyre.workspace = true
