@@ -4,7 +4,7 @@ use std::{collections::HashMap, path::PathBuf};
 use transport::{
     requests::{self, Initialize, PathFormat},
     responses,
-    types::{Source, SourceBreakpoint, ThreadId},
+    types::{Source, SourceBreakpoint, StackFrame, StackFrameId, ThreadId},
     Client,
 };
 
@@ -42,6 +42,81 @@ impl DebuggerInternals {
         server: Option<Box<dyn Server + Send>>,
     ) -> Self {
         Self::with_breakpoints(client, publisher, HashMap::new(), server)
+    }
+
+    pub(crate) fn change_scope(&mut self, stack_frame_id: StackFrameId) -> eyre::Result<()> {
+        let current_thread_id = self
+            .current_thread_id
+            .ok_or_else(|| eyre::eyre!("no current thread id"))?;
+
+        let responses::Response {
+            body:
+                Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+                    stack_frames,
+                })),
+            success: true,
+            ..
+        } = self
+            .client
+            .send(requests::RequestBody::StackTrace(requests::StackTrace {
+                thread_id: current_thread_id,
+                ..Default::default()
+            }))
+            .unwrap()
+        else {
+            unreachable!()
+        };
+
+        let chosen_stack_frame = stack_frames
+            .iter()
+            .find(|f| f.id == stack_frame_id)
+            .ok_or_else(|| eyre::eyre!("missing stack frame {}", stack_frame_id))?;
+
+        let responses::Response {
+            body: Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })),
+            success: true,
+            ..
+        } = self
+            .client
+            .send(requests::RequestBody::Scopes(requests::Scopes {
+                frame_id: chosen_stack_frame.id,
+            }))
+            .expect("requesting scopes")
+        else {
+            unreachable!()
+        };
+
+        let mut variables = Vec::new();
+        for scope in scopes {
+            let req = requests::RequestBody::Variables(requests::Variables {
+                variables_reference: scope.variables_reference,
+            });
+            match self.client.send(req).expect("fetching variables") {
+                responses::Response {
+                    body:
+                        Some(responses::ResponseBody::Variables(responses::VariablesResponse {
+                            variables: scope_variables,
+                        })),
+                    success: true,
+                    ..
+                } => variables.extend(scope_variables.into_iter()),
+                r => {
+                    tracing::warn!(?r, "unhandled response from send variables request")
+                }
+            };
+        }
+        let paused_frame = PausedFrame {
+            frame: chosen_stack_frame.clone(),
+            variables,
+        };
+
+        self.emit(Event::ScopeChange {
+            stack: stack_frames,
+            breakpoints: self.breakpoints.values().cloned().collect(),
+            paused_frame,
+        });
+
+        Ok(())
     }
 
     pub(crate) fn emit(&mut self, event: Event) {
@@ -96,6 +171,10 @@ impl DebuggerInternals {
             current_source: None,
             _server: server,
         }
+    }
+
+    fn get_stack_frames(&self) -> eyre::Result<Vec<StackFrame>> {
+        todo!()
     }
 
     #[tracing::instrument(skip(self))]

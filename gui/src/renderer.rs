@@ -99,7 +99,7 @@ impl<'s> Renderer<'s> {
         show_details: bool,
     ) {
         ui.vertical(|ui| {
-            ui.add(CallStack::new(stack, show_details));
+            ui.add(CallStack::new(stack, show_details, self.state));
             ui.separator();
             ui.add(Breakpoints::new(original_breakpoints, show_details));
         });

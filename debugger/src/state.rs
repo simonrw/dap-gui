@@ -28,6 +28,11 @@ pub enum Event {
         breakpoints: Vec<types::Breakpoint>,
         paused_frame: types::PausedFrame,
     },
+    ScopeChange {
+        stack: Vec<types::StackFrame>,
+        breakpoints: Vec<types::Breakpoint>,
+        paused_frame: types::PausedFrame,
+    },
     Running,
     Ended,
 }

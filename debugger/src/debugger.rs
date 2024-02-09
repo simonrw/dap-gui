@@ -300,6 +300,15 @@ impl Debugger {
             n += 1;
         }
     }
+
+    pub fn change_scope(&self, stack_frame_id: StackFrameId) -> eyre::Result<()> {
+        self.internals
+            .lock()
+            .unwrap()
+            .change_scope(stack_frame_id)
+            .wrap_err("changing scope")?;
+        Ok(())
+    }
 }
 
 impl Drop for Debugger {

@@ -73,6 +73,15 @@ impl From<debugger::Event> for State {
             debugger::Event::Running => State::Running,
             debugger::Event::Ended => State::Terminated,
             debugger::Event::Uninitialised => State::Initialising,
+            debugger::Event::ScopeChange {
+                stack,
+                breakpoints,
+                paused_frame,
+            } => State::Paused {
+                stack,
+                breakpoints,
+                paused_frame,
+            },
         }
     }
 }
@@ -97,6 +106,12 @@ struct DebuggerAppState {
 }
 
 impl DebuggerAppState {
+    pub(crate) fn change_scope(&self, stack_frame_id: StackFrameId) -> eyre::Result<()> {
+        self.debugger
+            .change_scope(stack_frame_id)
+            .wrap_err("changing scope")
+    }
+
     #[tracing::instrument(skip(self))]
     fn handle_event(&mut self, event: &debugger::Event) -> eyre::Result<()> {
         tracing::debug!("handling event");
