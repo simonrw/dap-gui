@@ -72,6 +72,19 @@ impl DebuggerInternals {
             .find(|f| f.id == stack_frame_id)
             .ok_or_else(|| eyre::eyre!("missing stack frame {}", stack_frame_id))?;
 
+        let paused_frame = self
+            .compute_paused_frame(chosen_stack_frame)
+            .context("computing paused frame")?;
+        self.emit(Event::ScopeChange {
+            stack: stack_frames,
+            breakpoints: self.breakpoints.values().cloned().collect(),
+            paused_frame,
+        });
+
+        Ok(())
+    }
+
+    fn compute_paused_frame(&self, stack_frame: &StackFrame) -> eyre::Result<PausedFrame> {
         let responses::Response {
             body: Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })),
             success: true,
@@ -79,7 +92,7 @@ impl DebuggerInternals {
         } = self
             .client
             .send(requests::RequestBody::Scopes(requests::Scopes {
-                frame_id: chosen_stack_frame.id,
+                frame_id: stack_frame.id,
             }))
             .expect("requesting scopes")
         else {
@@ -106,17 +119,11 @@ impl DebuggerInternals {
             };
         }
         let paused_frame = PausedFrame {
-            frame: chosen_stack_frame.clone(),
+            frame: stack_frame.clone(),
             variables,
         };
 
-        self.emit(Event::ScopeChange {
-            stack: stack_frames,
-            breakpoints: self.breakpoints.values().cloned().collect(),
-            paused_frame,
-        });
-
-        Ok(())
+        Ok(paused_frame)
     }
 
     pub(crate) fn emit(&mut self, event: Event) {
@@ -244,51 +251,10 @@ impl DebuggerInternals {
                     unreachable!()
                 };
 
-                let paused_frame = {
-                    let top_frame = stack_frames.first().unwrap().clone();
-                    let responses::Response {
-                        body:
-                            Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })),
-                        success: true,
-                        ..
-                    } = self
-                        .client
-                        .send(requests::RequestBody::Scopes(requests::Scopes {
-                            frame_id: top_frame.id,
-                        }))
-                        .expect("requesting scopes")
-                    else {
-                        unreachable!()
-                    };
-
-                    let mut variables = Vec::new();
-
-                    for scope in scopes {
-                        let req = requests::RequestBody::Variables(requests::Variables {
-                            variables_reference: scope.variables_reference,
-                        });
-                        match self.client.send(req).expect("fetching variables") {
-                            responses::Response {
-                                body:
-                                    Some(responses::ResponseBody::Variables(
-                                        responses::VariablesResponse {
-                                            variables: scope_variables,
-                                        },
-                                    )),
-                                success: true,
-                                ..
-                            } => variables.extend(scope_variables.into_iter()),
-                            r => {
-                                tracing::warn!(?r, "unhandled response from send variables request")
-                            }
-                        };
-                    }
-
-                    PausedFrame {
-                        frame: top_frame,
-                        variables,
-                    }
-                };
+                let top_frame = stack_frames.first().expect("no frames found");
+                let paused_frame = self
+                    .compute_paused_frame(top_frame)
+                    .expect("building paused frame construct");
 
                 self.set_state(DebuggerState::Paused {
                     stack: stack_frames,
