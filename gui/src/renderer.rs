@@ -37,8 +37,6 @@ impl<'s> Renderer<'s> {
                         &breakpoints,
                         false,
                     );
-                } else {
-                    tracing::warn!("no previous state found");
                 }
             }
             State::Paused {

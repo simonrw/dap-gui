@@ -112,7 +112,7 @@ impl DebuggerAppState {
             .wrap_err("changing scope")
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), level = "trace")]
     fn handle_event(&mut self, event: &debugger::Event) -> eyre::Result<()> {
         tracing::debug!("handling event");
         self.previous_state = Some(self.state.clone());

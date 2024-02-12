@@ -124,7 +124,7 @@ impl Client {
         })
     }
 
-    #[tracing::instrument(skip(self, body))]
+    #[tracing::instrument(skip(self, body), level = "debug")]
     pub fn send(&self, body: requests::RequestBody) -> Result<Response> {
         with_lock(
             "Client.internals",
@@ -133,7 +133,7 @@ impl Client {
         )
     }
 
-    #[tracing::instrument(skip(self, body))]
+    #[tracing::instrument(skip(self, body), level = "debug")]
     pub fn execute(&self, body: requests::RequestBody) -> Result<()> {
         with_lock(
             "Client.internals",
@@ -155,6 +155,7 @@ where
 }
 
 impl ClientInternals {
+    #[tracing::instrument(skip(self), level = "trace", fields(request))]
     pub fn send(&mut self, body: requests::RequestBody) -> Result<Response> {
         self.sequence_number.fetch_add(1, Ordering::SeqCst);
         let message = requests::Request {
@@ -163,7 +164,8 @@ impl ClientInternals {
             body: body.clone(),
         };
         let resp_json = serde_json::to_string(&message).wrap_err("encoding json body")?;
-        tracing::debug!(request = ?message, "sending message");
+        tracing::Span::current().record("request", &resp_json);
+        tracing::debug!("sending message");
         let (tx, rx) = oneshot::channel();
         let waiting_request = WaitingRequest(body, tx);
 
@@ -185,6 +187,7 @@ impl ClientInternals {
     }
 
     /// Execute a call on the client but do not wait for a response
+    #[tracing::instrument(skip(self), level = "trace", fields(request))]
     pub fn execute(&mut self, body: requests::RequestBody) -> Result<()> {
         self.sequence_number.fetch_add(1, Ordering::SeqCst);
         let message = requests::Request {
@@ -193,7 +196,8 @@ impl ClientInternals {
             body: body.clone(),
         };
         let resp_json = serde_json::to_string(&message).unwrap();
-        tracing::debug!(request = ?message, "sending message");
+        tracing::Span::current().record("request", &resp_json);
+        tracing::debug!("sending message");
         write!(
             self.output,
             "Content-Length: {}\r\n\r\n{}",

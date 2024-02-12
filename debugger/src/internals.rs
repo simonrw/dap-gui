@@ -184,7 +184,7 @@ impl DebuggerInternals {
         todo!()
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), level = "trace")]
     pub(crate) fn on_event(&mut self, event: transport::events::Event) {
         tracing::debug!("handling event");
 
@@ -274,12 +274,12 @@ impl DebuggerInternals {
             // transport::events::Event::DebugpyWaitingForServer { host, port } => todo!(),
             // transport::events::Event::Module(_) => todo!(),
             _ => {
-                tracing::debug!("unknown event");
+                tracing::debug!(?event, "unknown event");
             }
         }
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), level = "trace")]
     pub(crate) fn add_breakpoint(&mut self, breakpoint: &Breakpoint) -> eyre::Result<BreakpointId> {
         tracing::debug!("adding breakpoint");
         let id = self.next_id();
@@ -289,7 +289,7 @@ impl DebuggerInternals {
         Ok(id)
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), level = "debug")]
     pub(crate) fn remove_breakpoint(&mut self, id: BreakpointId) {
         tracing::debug!("removing breakpoint");
         self.breakpoints.remove(&id);
@@ -348,7 +348,7 @@ impl DebuggerInternals {
         self.current_breakpoint_id
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), level = "trace")]
     pub(crate) fn set_state(&mut self, new_state: DebuggerState) {
         tracing::debug!("setting debugger state");
         let event = Event::from(&new_state);
