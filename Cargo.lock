@@ -1165,9 +1165,9 @@ checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 
 [[package]]
 name = "dark-light"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb02ff40e6d65b7fcda0089104559e5a32f67c04d00ba4c392ce2d77ec9752c7"
+checksum = "2a76fa97167fa740dcdbfe18e8895601e1bc36525f09b044e00916e717c03a3c"
 dependencies = [
  "dconf_rs",
  "detect-desktop-environment",
@@ -1177,7 +1177,6 @@ dependencies = [
  "web-sys",
  "winreg 0.10.1",
  "zbus 4.1.2",
- "zvariant 3.15.1",
 ]
 
 [[package]]
@@ -2764,7 +2763,7 @@ version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "681030a937600a36906c185595136d26abfebb4aa9c65701cefcaf8578bb982b"
 dependencies = [
- "proc-macro-crate 1.3.1",
+ "proc-macro-crate 3.1.0",
  "proc-macro2",
  "quote",
  "syn 2.0.46",
