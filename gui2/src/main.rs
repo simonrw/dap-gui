@@ -1,6 +1,6 @@
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{button, column, container, text};
-use iced::{executor, Alignment, Application, Border, Color, Command, Length, Settings};
+use iced::{executor, Alignment, Application, Border, Color, Command, Element, Length, Settings};
 
 #[derive(Debug, Clone)]
 enum Message {
@@ -36,31 +36,42 @@ impl Application for Counter {
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message> {
-        let c: iced::Element<_> = container(
-            column![
-                button("increment").on_press(Message::Increment),
-                text(self.value).size(50),
-                button("decrement").on_press(Message::Decrement),
-            ]
-            .padding(20)
-            .align_items(Alignment::Center),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_x(Horizontal::Center)
-        .align_y(Vertical::Center)
-        .center_x()
-        .center_y()
-        .style(container::Appearance {
-            border: Border {
-                width: 2.0,
-                color: Color::BLACK,
-                ..Default::default()
-            },
-            ..Default::default()
-        })
+        let sidebar = column![];
+
+        let main_content = column![];
+
+        let container: Element<_> = column![
+            sidebar.width(Length::FillPortion(1)),
+            main_content.width(Length::Fill),
+        ]
         .into();
-        c.explain(Color::BLACK)
+        container.explain(Color::BLACK)
+
+        // let c: iced::Element<_> = container(
+        //     column![
+        //         button("increment").on_press(Message::Increment),
+        //         text(self.value).size(50),
+        //         button("decrement").on_press(Message::Decrement),
+        //     ]
+        //     .padding(20)
+        //     .align_items(Alignment::Center),
+        // )
+        // .width(Length::Fill)
+        // .height(Length::Fill)
+        // .align_x(Horizontal::Center)
+        // .align_y(Vertical::Center)
+        // .center_x()
+        // .center_y()
+        // .style(container::Appearance {
+        //     border: Border {
+        //         width: 2.0,
+        //         color: Color::BLACK,
+        //         ..Default::default()
+        //     },
+        //     ..Default::default()
+        // })
+        // .into();
+        // c.explain(Color::BLACK)
     }
 }
 
