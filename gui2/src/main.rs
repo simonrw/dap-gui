@@ -1,5 +1,5 @@
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{button, column, container, text};
+use iced::widget::{button, column, container, row, text};
 use iced::{executor, Alignment, Application, Border, Color, Command, Element, Length, Settings};
 
 #[derive(Debug, Clone)]
@@ -36,12 +36,12 @@ impl Application for Counter {
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message> {
-        let sidebar = column![];
+        let sidebar = column![text("sidebar"),].height(Length::Fill);
 
-        let main_content = column![];
+        let main_content = column![text("main content"),].height(Length::Fill);
 
-        let container: Element<_> = column![
-            sidebar.width(Length::FillPortion(1)),
+        let container: Element<_> = row![
+            sidebar.width(Length::Fixed(300.0)),
             main_content.width(Length::Fill),
         ]
         .into();
