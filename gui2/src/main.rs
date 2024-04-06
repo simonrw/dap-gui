@@ -20,10 +20,11 @@ struct Counter {
 impl Counter {
     // view helper methods
     fn view_call_stack(&self) -> iced::Element<'_, Message> {
-        title("Call Stack")
-            .height(Length::Fill)
-            .width(Length::Fill)
-            .into()
+        title("Call Stack").width(Length::Fill).into()
+    }
+
+    fn view_breakpoints(&self) -> iced::Element<'_, Message> {
+        title("Breakpoints").width(Length::Fill).into()
     }
 }
 
@@ -51,7 +52,7 @@ impl Application for Counter {
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message> {
-        let sidebar = column![self.view_call_stack(),]
+        let sidebar = column![self.view_call_stack(), self.view_breakpoints(),]
             .height(Length::Fill)
             .width(Length::Fill);
 
