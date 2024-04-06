@@ -17,8 +17,12 @@ enum TabId {
     Repl,
 }
 
-struct DebuggerApp {
-    active_tab: TabId,
+#[derive(Debug)]
+enum DebuggerApp {
+    Initialising,
+    Running,
+    Paused { active_tab: TabId },
+    Terminated,
 }
 
 impl DebuggerApp {
@@ -47,20 +51,24 @@ impl DebuggerApp {
     }
 
     fn view_bottom_panel(&self) -> iced::Element<'_, Message> {
-        Tabs::new(Message::TabSelected)
-            .tab_icon_position(iced_aw::tabs::Position::Top)
-            .push(
-                TabId::Variables,
-                iced_aw::TabLabel::Text("Variables".to_string()),
-                self.view_variables_content(),
-            )
-            .push(
-                TabId::Repl,
-                iced_aw::TabLabel::Text("Repl".to_string()),
-                self.view_repl_content(),
-            )
-            .set_active_tab(&self.active_tab)
-            .into()
+        if let Self::Paused { active_tab, .. } = self {
+            Tabs::new(Message::TabSelected)
+                .tab_icon_position(iced_aw::tabs::Position::Top)
+                .push(
+                    TabId::Variables,
+                    iced_aw::TabLabel::Text("Variables".to_string()),
+                    self.view_variables_content(),
+                )
+                .push(
+                    TabId::Repl,
+                    iced_aw::TabLabel::Text("Repl".to_string()),
+                    self.view_repl_content(),
+                )
+                .set_active_tab(active_tab)
+                .into()
+        } else {
+            panic!("programming error: state {self:?} should not have a bottom panel");
+        }
     }
 }
 
@@ -71,15 +79,19 @@ impl Application for DebuggerApp {
     type Message = Message;
 
     fn new(_flags: Self::Flags) -> (Self, Command<Self::Message>) {
-        let this = Self {
+        let this = Self::Paused {
             active_tab: TabId::Variables,
         };
         (this, Command::none())
     }
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
-        match message {
-            Message::TabSelected(selected) => self.active_tab = selected,
+        #[allow(clippy::single_match)]
+        match self {
+            Self::Paused { active_tab } => match message {
+                Message::TabSelected(selected) => *active_tab = selected,
+            },
+            _ => {}
         }
         Command::none()
     }
