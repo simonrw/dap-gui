@@ -1,3 +1,4 @@
+use dark_light::Mode;
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{button, column, container, row, text, Container, Text};
 use iced::{executor, Alignment, Application, Border, Color, Command, Element, Length, Settings};
@@ -57,7 +58,7 @@ impl Application for Counter {
             main_content.width(Length::Fill),
         ]
         .into();
-        container.explain(Color::BLACK)
+        container.explain(Color::from_rgb(0.7, 0.7, 0.7))
 
         // let c: iced::Element<_> = container(
         //     column![
@@ -84,6 +85,13 @@ impl Application for Counter {
         // })
         // .into();
         // c.explain(Color::BLACK)
+    }
+
+    fn theme(&self) -> Self::Theme {
+        match dark_light::detect() {
+            Mode::Dark | Mode::Default => iced::Theme::Dark,
+            Mode::Light => iced::Theme::Light,
+        }
     }
 }
 
