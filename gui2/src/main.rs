@@ -1,23 +1,16 @@
-use dark_light::Mode;
-use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{button, column, container, row, text, Container, Text};
-use iced::{executor, Alignment, Application, Border, Color, Command, Element, Length, Settings};
+use iced::widget::{column, container, row, text, Container};
+use iced::{executor, Application, Color, Command, Element, Length, Settings};
 
 #[derive(Debug, Clone)]
-enum Message {
-    Increment,
-    Decrement,
-}
+enum Message {}
 
 fn title<'a, Message>(input: impl ToString) -> Container<'a, Message> {
     container(text(input).size(30)).padding(20)
 }
 
-struct Counter {
-    value: i64,
-}
+struct DebuggerApp {}
 
-impl Counter {
+impl DebuggerApp {
     // view helper methods
     fn view_call_stack(&self) -> iced::Element<'_, Message> {
         title("Call Stack").width(Length::Fill).into()
@@ -28,27 +21,23 @@ impl Counter {
     }
 }
 
-impl Application for Counter {
+impl Application for DebuggerApp {
     type Executor = executor::Default;
     type Theme = iced::Theme;
     type Flags = ();
     type Message = Message;
 
     fn new(_flags: Self::Flags) -> (Self, Command<Self::Message>) {
-        let this = Self { value: 0 };
+        let this = Self {};
         (this, Command::none())
     }
 
-    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
-        match message {
-            Message::Increment => self.value += 1,
-            Message::Decrement => self.value -= 1,
-        }
+    fn update(&mut self, _message: Self::Message) -> Command<Self::Message> {
         Command::none()
     }
 
     fn title(&self) -> String {
-        "Counter".to_string()
+        "DebuggerApp".to_string()
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message> {
@@ -110,5 +99,5 @@ impl Application for Counter {
 }
 
 fn main() -> iced::Result {
-    Counter::run(Settings::default())
+    DebuggerApp::run(Settings::default())
 }
