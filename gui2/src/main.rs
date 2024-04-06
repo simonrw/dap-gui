@@ -101,10 +101,11 @@ impl Application for Counter {
     }
 
     fn theme(&self) -> Self::Theme {
-        match dark_light::detect() {
-            Mode::Dark | Mode::Default => iced::Theme::Dark,
-            Mode::Light => iced::Theme::Light,
-        }
+        iced::Theme::Dark
+        // match dark_light::detect() {
+        //     Mode::Dark | Mode::Default => iced::Theme::Dark,
+        //     Mode::Light => iced::Theme::Light,
+        // }
     }
 }
 
