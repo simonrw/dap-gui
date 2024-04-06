@@ -38,18 +38,26 @@ impl DebuggerApp {
             .into()
     }
 
+    fn view_variables_content(&self) -> iced::Element<'_, Message> {
+        text("variables").into()
+    }
+
+    fn view_repl_content(&self) -> iced::Element<'_, Message> {
+        text("repl").into()
+    }
+
     fn view_bottom_panel(&self) -> iced::Element<'_, Message> {
         Tabs::new(Message::TabSelected)
             .tab_icon_position(iced_aw::tabs::Position::Top)
             .push(
                 TabId::Variables,
                 iced_aw::TabLabel::Text("Variables".to_string()),
-                text("variables"),
+                self.view_variables_content(),
             )
             .push(
                 TabId::Repl,
                 iced_aw::TabLabel::Text("Repl".to_string()),
-                text("repl"),
+                self.view_repl_content(),
             )
             .set_active_tab(&self.active_tab)
             .into()
