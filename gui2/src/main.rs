@@ -1,14 +1,25 @@
 use iced::widget::{column, container, row, text, Container};
 use iced::{executor, Application, Color, Command, Element, Length, Settings};
+use iced_aw::Tabs;
 
 #[derive(Debug, Clone)]
-enum Message {}
+enum Message {
+    TabSelected(TabId),
+}
 
 fn title<'a, Message>(input: impl ToString) -> Container<'a, Message> {
     container(text(input).size(30)).padding(20)
 }
 
-struct DebuggerApp {}
+#[derive(Clone, PartialEq, Eq, Debug)]
+enum TabId {
+    Variables,
+    Repl,
+}
+
+struct DebuggerApp {
+    active_tab: TabId,
+}
 
 impl DebuggerApp {
     // view helper methods
@@ -19,6 +30,30 @@ impl DebuggerApp {
     fn view_breakpoints(&self) -> iced::Element<'_, Message> {
         title("Breakpoints").width(Length::Fill).into()
     }
+
+    fn view_main_content(&self) -> iced::Element<'_, Message> {
+        title("main content")
+            .height(Length::Fill)
+            .width(Length::Fill)
+            .into()
+    }
+
+    fn view_bottom_panel(&self) -> iced::Element<'_, Message> {
+        Tabs::new(Message::TabSelected)
+            .tab_icon_position(iced_aw::tabs::Position::Top)
+            .push(
+                TabId::Variables,
+                iced_aw::TabLabel::Text("Variables".to_string()),
+                text("variables"),
+            )
+            .push(
+                TabId::Repl,
+                iced_aw::TabLabel::Text("Repl".to_string()),
+                text("repl"),
+            )
+            .set_active_tab(&self.active_tab)
+            .into()
+    }
 }
 
 impl Application for DebuggerApp {
@@ -28,11 +63,16 @@ impl Application for DebuggerApp {
     type Message = Message;
 
     fn new(_flags: Self::Flags) -> (Self, Command<Self::Message>) {
-        let this = Self {};
+        let this = Self {
+            active_tab: TabId::Variables,
+        };
         (this, Command::none())
     }
 
-    fn update(&mut self, _message: Self::Message) -> Command<Self::Message> {
+    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
+        match message {
+            Message::TabSelected(selected) => self.active_tab = selected,
+        }
         Command::none()
     }
 
@@ -45,15 +85,8 @@ impl Application for DebuggerApp {
             .height(Length::Fill)
             .width(Length::Fill);
 
-        let main_content = column![
-            title("main content")
-                .height(Length::Fill)
-                .width(Length::Fill),
-            title("bottom panel")
-                .height(Length::Fixed(300.0))
-                .width(Length::Fill),
-        ]
-        .height(Length::Fill);
+        let main_content =
+            column![self.view_main_content(), self.view_bottom_panel(),].height(Length::Fill);
 
         let container: Element<_> = row![
             sidebar.width(Length::Fixed(300.0)),
