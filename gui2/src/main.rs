@@ -1,11 +1,15 @@
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{button, column, container, row, text};
+use iced::widget::{button, column, container, row, text, Container, Text};
 use iced::{executor, Alignment, Application, Border, Color, Command, Element, Length, Settings};
 
 #[derive(Debug, Clone)]
 enum Message {
     Increment,
     Decrement,
+}
+
+fn title<'a, Message>(input: impl ToString) -> Container<'a, Message> {
+    container(text(input).size(30)).padding(20)
 }
 
 struct Counter {
@@ -36,9 +40,17 @@ impl Application for Counter {
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message> {
-        let sidebar = column![text("sidebar"),].height(Length::Fill);
+        let sidebar = column![title("sidebar"),].height(Length::Fill);
 
-        let main_content = column![text("main content"),].height(Length::Fill);
+        let main_content = column![
+            title("main content")
+                .height(Length::Fill)
+                .width(Length::Fill),
+            title("bottom panel")
+                .height(Length::Fixed(300.0))
+                .width(Length::Fill),
+        ]
+        .height(Length::Fill);
 
         let container: Element<_> = row![
             sidebar.width(Length::Fixed(300.0)),
