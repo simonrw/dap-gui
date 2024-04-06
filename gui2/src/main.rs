@@ -17,6 +17,16 @@ struct Counter {
     value: i64,
 }
 
+impl Counter {
+    // view helper methods
+    fn view_call_stack(&self) -> iced::Element<'_, Message> {
+        title("Call Stack")
+            .height(Length::Fill)
+            .width(Length::Fill)
+            .into()
+    }
+}
+
 impl Application for Counter {
     type Executor = executor::Default;
     type Theme = iced::Theme;
@@ -41,7 +51,9 @@ impl Application for Counter {
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message> {
-        let sidebar = column![title("sidebar"),].height(Length::Fill);
+        let sidebar = column![self.view_call_stack(),]
+            .height(Length::Fill)
+            .width(Length::Fill);
 
         let main_content = column![
             title("main content")
