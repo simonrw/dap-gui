@@ -23,6 +23,7 @@ mkShell {
       custom-python
       cargo-hack
       cargo-expand
+      cargo-watch
       act
       go
       delve

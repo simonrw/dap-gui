@@ -1,33 +1,35 @@
-use std::io::{self, BufRead};
+use std::pin::Pin;
 
-use eyre::WrapErr;
+use eyre::Context;
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt};
 
-use crate::Reader;
-
-pub struct HandWrittenReader<R> {
-    input: R,
-}
-
+use std::io;
 enum ReaderState {
     Header,
     Content,
 }
 
-impl<R> Reader<R> for HandWrittenReader<R>
+struct HandWrittenReader<R> {
+    input: Pin<Box<R>>,
+}
+
+impl<R> HandWrittenReader<R>
 where
-    R: BufRead,
+    R: AsyncBufRead,
 {
     fn new(input: R) -> Self {
-        Self { input }
+        Self {
+            input: Box::pin(input),
+        }
     }
 
-    fn poll_message(&mut self) -> eyre::Result<Option<crate::Message>> {
+    async fn poll_message(&mut self) -> eyre::Result<Option<crate::Message>> {
         let mut state = ReaderState::Header;
         let mut buffer = String::new();
         let mut content_length: usize = 0;
 
         loop {
-            match self.input.read_line(&mut buffer) {
+            match self.input.read_line(&mut buffer).await {
                 Ok(read_size) => {
                     if read_size == 0 {
                         return Ok(None);
@@ -58,10 +60,11 @@ where
                             let mut content = vec![0; content_length];
                             self.input
                                 .read_exact(content.as_mut_slice())
+                                .await
                                 .map_err(|e| eyre::eyre!("failed to read: {:?}", e))?;
                             let content =
-                                std::str::from_utf8(content.as_slice()).context("invalid utf8")?;
-                            let message = serde_json::from_str(content).with_context(|| {
+                                std::str::from_utf8(content.as_slice()).wrap_err("invalid utf8")?;
+                            let message = serde_json::from_str(content).wrap_err_with(|| {
                                 format!("could not construct message from: {content}")
                             })?;
                             return Ok(Some(message));
@@ -81,56 +84,63 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        io::{BufReader, Write},
-        net::{TcpListener, TcpStream},
-    };
+    use tokio::io::{AsyncWriteExt, BufReader};
+    use tokio::net::{TcpListener, TcpStream};
 
-    use crate::{bindings::get_random_tcp_port, events, responses, Message, Reader};
-
-    use super::HandWrittenReader;
+    use crate::bindings::get_random_tcp_port;
+    use crate::{events, responses, Message};
 
     macro_rules! execute_test {
-        // multiple bodies for single message
         ($($body:expr),+ => $match_expr:pat) => {{
             let port = get_random_tcp_port().expect("getting random port");
-            let server =
-                TcpListener::bind(format!("127.0.0.1:{port}")).expect("binding to address");
-            let mut client =
-                TcpStream::connect(format!("127.0.0.1:{port}")).expect("connecting to server");
-            let (conn, _) = server.accept().expect("accepting connection");
+            let server = TcpListener::bind(format!("127.0.0.1:{port}"))
+                .await
+                .expect("binding to address");
+            let mut client = TcpStream::connect(format!("127.0.0.1:{port}"))
+                .await
+                .expect("connecting to server");
+            let (conn, _) = server.accept().await.expect("accepting connection");
 
-            let mut reader = HandWrittenReader::new(BufReader::new(conn));
+            let mut reader = crate::codec::HandWrittenReader::new(BufReader::new(conn));
 
-            $(write!(&mut client, "{}", $body).expect("sending message");)+
+            $(client
+                .write_all($body.as_bytes())
+                .await
+                .expect("sending message");)*
 
-            let message = reader.poll_message().expect("polling message");
+            let message = reader.poll_message().await.expect("polling message");
 
             match message {
                 Some(msg) => {
-                    assert!(matches!(msg, $match_expr), "Got message {:?}", msg);
+                    assert!(
+                        matches!(msg, $match_expr),
+                        "Got message {:?}",
+                        msg
+                    );
                 }
                 None => eyre::bail!("no message found"),
             }
         }};
-
         // multiple messages for single body
         ($body:expr => $($match_expr:pat),+) => {{
             let port = get_random_tcp_port().expect("getting random port");
             let server =
-                TcpListener::bind(format!("127.0.0.1:{port}")).expect("binding to address");
+                TcpListener::bind(format!("127.0.0.1:{port}")).await.expect("binding to address");
             let mut client =
-                TcpStream::connect(format!("127.0.0.1:{port}")).expect("connecting to server");
-            let (conn, _) = server.accept().expect("accepting connection");
+                TcpStream::connect(format!("127.0.0.1:{port}")).await.expect("connecting to server");
+            let (conn, _) = server.accept().await.expect("accepting connection");
 
-            let mut reader = HandWrittenReader::new(BufReader::new(conn));
+            let mut reader = crate::codec::HandWrittenReader::new(BufReader::new(conn));
 
 
-            write!(&mut client, "{}", $body).expect("sending message");
+            client
+                .write_all($body.as_bytes())
+                .await
+                .expect("sending message");
 
             $(
 
-            let message = reader.poll_message().expect("polling message");
+            let message = reader.poll_message().await.expect("polling message");
 
             match message {
                 Some(msg) => {
@@ -143,8 +153,8 @@ mod tests {
         }};
     }
 
-    #[test]
-    fn single_message() -> eyre::Result<()> {
+    #[tokio::test]
+    async fn single_message() -> eyre::Result<()> {
         let body = "Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}";
 
         execute_test!(body => Message::Event(events::Event::Terminated));
@@ -152,8 +162,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn split_between_requests() -> eyre::Result<()> {
+    #[tokio::test]
+    async fn split_between_requests() -> eyre::Result<()> {
         execute_test!(
             "Content-Length: 37\r\n\r\n{\"ty",
             "pe\":\"event\",\"event\":\"terminated\"}" => 
@@ -161,18 +171,16 @@ mod tests {
 
         Ok(())
     }
-
-    #[test]
-    fn multiple_messages() -> eyre::Result<()> {
+    #[tokio::test]
+    async fn multiple_messages() -> eyre::Result<()> {
         let body = "Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}";
 
         execute_test!(body => Message::Event(events::Event::Terminated), Message::Event(events::Event::Terminated));
 
         Ok(())
     }
-
-    #[test]
-    fn evaluate_error() -> eyre::Result<()> {
+    #[tokio::test]
+    async fn evaluate_error() -> eyre::Result<()> {
         let body = r#"Content-Length: 220"#.to_owned()
             + "\r\n\r\n"
             + r#"{"seq": 21, "type": "response", "request_seq": 13, "success": false, "command": "evaluate", "message": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nNameError: name 'b' is not defined\n"}"#;
