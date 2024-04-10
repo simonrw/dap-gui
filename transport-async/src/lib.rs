@@ -57,8 +57,11 @@ impl Client {
 
     fn handle_message(&mut self, msg: ClientMessage) {
         match msg {
-            ClientMessage::Send { body, respond_to } => todo!(),
-            ClientMessage::Execute { body } => todo!(),
+            ClientMessage::Send {
+                body: _,
+                respond_to: _,
+            } => todo!(),
+            ClientMessage::Execute { body: _ } => todo!(),
         }
     }
 }

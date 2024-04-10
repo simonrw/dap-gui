@@ -9,7 +9,7 @@ impl Decoder for MessageDecoder {
 
     type Error = eyre::Error;
 
-    fn decode(&mut self, src: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+    fn decode(&mut self, _src: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         todo!()
     }
 }
