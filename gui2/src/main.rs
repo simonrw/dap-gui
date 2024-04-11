@@ -1,10 +1,12 @@
-use iced::widget::{column, container, row, text, Container};
+use iced::widget::{button, column, container, row, text, Container};
 use iced::{executor, Application, Color, Command, Element, Length, Settings};
 use iced_aw::Tabs;
 
 #[derive(Debug, Clone)]
 enum Message {
     TabSelected(TabId),
+    Foo,
+    GotResult(usize),
 }
 
 fn title<'a, Message>(input: impl ToString) -> Container<'a, Message> {
@@ -90,6 +92,15 @@ impl Application for DebuggerApp {
         match self {
             Self::Paused { active_tab } => match message {
                 Message::TabSelected(selected) => *active_tab = selected,
+                Message::Foo => {
+                    return Command::perform(
+                        async { tokio::task::spawn_blocking(move || 10).await.unwrap() },
+                        Message::GotResult,
+                    )
+                }
+                Message::GotResult(value) => {
+                    println!("Got result: {value}");
+                }
             },
             _ => {}
         }
@@ -101,6 +112,7 @@ impl Application for DebuggerApp {
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message> {
+        return column![button("increment").on_press(Message::Foo),].into();
         let sidebar = column![self.view_call_stack(), self.view_breakpoints(),]
             .height(Length::Fill)
             .width(Length::Fill);

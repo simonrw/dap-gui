@@ -2287,6 +2287,7 @@ dependencies = [
  "futures",
  "iced",
  "iced_aw",
+ "tokio",
 ]
 
 [[package]]

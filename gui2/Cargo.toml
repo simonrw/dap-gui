@@ -10,3 +10,4 @@ futures = "0.3.30"
 iced = "0.12.1"
 dark-light = "1.0.0"
 iced_aw = "0.8"
+tokio.workspace = true
