@@ -96,8 +96,8 @@ impl Debugger {
                     .context("connecting to server")?;
 
                 let (ttx, trx) = crossbeam_channel::unbounded();
-                let client =
-                    transport::Client::new(stream, ttx).context("creating transport client")?;
+                let client = transport::ClientHandle::new(stream, ttx)
+                    .context("creating transport client")?;
 
                 let internals = DebuggerInternals::new(client, tx, Some(s));
                 (internals, trx)
@@ -107,8 +107,8 @@ impl Debugger {
                     .context("connecting to server")?;
 
                 let (ttx, trx) = crossbeam_channel::unbounded();
-                let client =
-                    transport::Client::new(stream, ttx).context("creating transport client")?;
+                let client = transport::ClientHandle::new(stream, ttx)
+                    .context("creating transport client")?;
 
                 let internals = DebuggerInternals::new(client, tx, None);
                 (internals, trx)

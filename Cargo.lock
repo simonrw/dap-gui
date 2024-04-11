@@ -1221,9 +1221,10 @@ dependencies = [
  "retry",
  "serde",
  "server",
+ "tokio",
  "tracing",
  "tracing-subscriber",
- "transport",
+ "transport-async",
 ]
 
 [[package]]

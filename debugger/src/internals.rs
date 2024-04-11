@@ -5,7 +5,7 @@ use transport::{
     requests::{self, Initialize, PathFormat},
     responses,
     types::{Source, SourceBreakpoint, StackFrame, StackFrameId, ThreadId},
-    Client,
+    ClientHandle,
 };
 
 use crate::{
@@ -22,7 +22,7 @@ pub struct FileSource {
 }
 
 pub(crate) struct DebuggerInternals {
-    pub(crate) client: Client,
+    pub(crate) client: ClientHandle,
     pub(crate) publisher: crossbeam_channel::Sender<Event>,
 
     // debugger specific details
@@ -37,7 +37,7 @@ pub(crate) struct DebuggerInternals {
 
 impl DebuggerInternals {
     pub(crate) fn new(
-        client: Client,
+        client: ClientHandle,
         publisher: crossbeam_channel::Sender<Event>,
         server: Option<Box<dyn Server + Send>>,
     ) -> Self {
@@ -161,7 +161,7 @@ impl DebuggerInternals {
     }
 
     pub(crate) fn with_breakpoints(
-        client: Client,
+        client: ClientHandle,
         publisher: crossbeam_channel::Sender<Event>,
         existing_breakpoints: impl Into<HashMap<BreakpointId, Breakpoint>>,
         server: Option<Box<dyn Server + Send>>,

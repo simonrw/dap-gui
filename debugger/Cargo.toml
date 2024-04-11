@@ -11,9 +11,10 @@ crossbeam-channel.workspace = true
 tracing.workspace = true
 server = { path = "../server" }
 serde.workspace = true
-transport = { path = "../transport" }
+transport = { package = "transport-async", path = "../transport-async" }
 retry = "2.0.0"
 dirs.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 color-eyre.workspace = true

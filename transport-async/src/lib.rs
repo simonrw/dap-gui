@@ -9,11 +9,14 @@ use tokio::{
 mod bindings;
 mod codec;
 mod decoder;
-mod events;
+pub mod events;
 mod request_store;
-mod requests;
-mod responses;
-mod types;
+pub mod requests;
+pub mod responses;
+pub mod types;
+
+/// The default port the DAP protocol listens on
+pub const DEFAULT_DAP_PORT: u16 = 5678;
 
 #[derive(Debug)]
 pub struct Reply {
@@ -36,7 +39,7 @@ pub async fn run_client(mut client: Client) {
     }
 }
 
-pub struct Client {
+struct Client {
     receiver: mpsc::Receiver<ClientMessage>,
 
     sequence_number: i64,
