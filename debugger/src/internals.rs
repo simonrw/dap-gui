@@ -1,8 +1,9 @@
 use eyre::WrapErr;
 use server::Server;
 use std::{collections::HashMap, path::PathBuf};
+use tokio::runtime::Handle;
 use transport::{
-    requests::{self, Initialize, PathFormat},
+    requests::{self, Disconnect, Initialize, PathFormat},
     responses,
     types::{Source, SourceBreakpoint, StackFrame, StackFrameId, ThreadId},
     ClientHandle,
@@ -12,7 +13,7 @@ use crate::{
     debugger::InitialiseArguments,
     state::DebuggerState,
     types::{Breakpoint, BreakpointId, PausedFrame},
-    Event,
+    EvaluateResult, Event,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -33,6 +34,8 @@ pub(crate) struct DebuggerInternals {
     pub(crate) current_source: Option<FileSource>,
 
     pub(crate) _server: Option<Box<dyn Server + Send>>,
+
+    handle: Handle,
 }
 
 impl DebuggerInternals {
@@ -40,10 +43,119 @@ impl DebuggerInternals {
         client: ClientHandle,
         publisher: crossbeam_channel::Sender<Event>,
         server: Option<Box<dyn Server + Send>>,
+        handle: Handle,
     ) -> Self {
-        Self::with_breakpoints(client, publisher, HashMap::new(), server)
+        Self::with_breakpoints(client, publisher, HashMap::new(), server, handle)
     }
 
+    pub(crate) fn launch(&mut self) -> eyre::Result<()> {
+        self.handle
+            .block_on(self.client.send(requests::RequestBody::ConfigurationDone))
+            .wrap_err("completing configuration")?;
+        self.set_state(DebuggerState::Running);
+        Ok(())
+    }
+
+    pub(crate) fn evaluate(
+        &mut self,
+        input: &str,
+        frame_id: StackFrameId,
+    ) -> eyre::Result<Option<EvaluateResult>> {
+        let req = requests::RequestBody::Evaluate(requests::Evaluate {
+            expression: input.to_string(),
+            frame_id: Some(frame_id),
+            context: Some("repl".to_string()),
+        });
+        let res = self
+            .handle
+            .block_on(self.client.send(req))
+            .context("sending evaluate request")?;
+        match res {
+            responses::Response {
+                body:
+                    Some(responses::ResponseBody::Evaluate(responses::EvaluateResponse {
+                        result, ..
+                    })),
+                success: true,
+                ..
+            } => Ok(Some(EvaluateResult {
+                output: result,
+                error: false,
+            })),
+            responses::Response {
+                message: Some(msg),
+                success: false,
+                ..
+            } => Ok(Some(EvaluateResult {
+                output: msg,
+                error: true,
+            })),
+            other => {
+                tracing::warn!(response = ?other, "unhandled response");
+                Ok(None)
+            }
+        }
+    }
+
+    pub(crate) fn r#continue(&self) -> eyre::Result<()> {
+        match self.current_thread_id {
+            Some(thread_id) => {
+                self.handle
+                    .block_on(self.client.execute(requests::RequestBody::Continue(
+                        requests::Continue {
+                            thread_id,
+                            single_thread: false,
+                        },
+                    )))
+                    .context("sending continue request")?;
+            }
+            None => eyre::bail!("logic error: no current thread id"),
+        }
+        Ok(())
+    }
+
+    pub fn step_over(&self) -> eyre::Result<()> {
+        match self.current_thread_id {
+            Some(thread_id) => {
+                self.handle
+                    .block_on(
+                        self.client
+                            .execute(requests::RequestBody::Next(requests::Next { thread_id })),
+                    )
+                    .context("sending step_over request")?;
+            }
+            None => eyre::bail!("logic error: no current thread id"),
+        }
+        Ok(())
+    }
+
+    pub(crate) fn step_in(&self) -> eyre::Result<()> {
+        match self.current_thread_id {
+            Some(thread_id) => {
+                self.handle
+                    .block_on(self.client.execute(requests::RequestBody::StepIn(
+                        requests::StepIn { thread_id },
+                    )))
+                    .context("sending step_in` request")?;
+            }
+            None => eyre::bail!("logic error: no current thread id"),
+        }
+        Ok(())
+    }
+
+    pub(crate) fn step_out(&self) -> eyre::Result<()> {
+        match self.current_thread_id {
+            Some(thread_id) => {
+                self.handle
+                    .block_on(self.client.execute(requests::RequestBody::StepOut(
+                        requests::StepOut { thread_id },
+                    )))
+                    .context("sending `step_out` request")?;
+            }
+            None => eyre::bail!("logic error: no current thread id"),
+        }
+        Ok(())
+    }
     pub(crate) fn change_scope(&mut self, stack_frame_id: StackFrameId) -> eyre::Result<()> {
         let current_thread_id = self
             .current_thread_id
@@ -56,13 +168,15 @@ impl DebuggerInternals {
                 })),
             success: true,
             ..
-        } = self
-            .client
-            .send(requests::RequestBody::StackTrace(requests::StackTrace {
-                thread_id: current_thread_id,
-                ..Default::default()
-            }))
-            .unwrap()
+        } =
+            self.handle
+                .block_on(self.client.send(requests::RequestBody::StackTrace(
+                    requests::StackTrace {
+                        thread_id: current_thread_id,
+                        ..Default::default()
+                    },
+                )))
+                .unwrap()
         else {
             unreachable!()
         };
@@ -90,10 +204,13 @@ impl DebuggerInternals {
             success: true,
             ..
         } = self
-            .client
-            .send(requests::RequestBody::Scopes(requests::Scopes {
-                frame_id: stack_frame.id,
-            }))
+            .handle
+            .block_on(
+                self.client
+                    .send(requests::RequestBody::Scopes(requests::Scopes {
+                        frame_id: stack_frame.id,
+                    })),
+            )
             .expect("requesting scopes")
         else {
             unreachable!()
@@ -104,7 +221,11 @@ impl DebuggerInternals {
             let req = requests::RequestBody::Variables(requests::Variables {
                 variables_reference: scope.variables_reference,
             });
-            match self.client.send(req).expect("fetching variables") {
+            match self
+                .handle
+                .block_on(self.client.send(req))
+                .expect("fetching variables")
+            {
                 responses::Response {
                     body:
                         Some(responses::ResponseBody::Variables(responses::VariablesResponse {
@@ -143,17 +264,24 @@ impl DebuggerInternals {
         });
 
         // TODO: deal with capabilities from the response
-        let _ = self.client.send(req).context("sending initialize event")?;
+        let _ = self
+            .handle
+            .block_on(self.client.send(req))
+            .context("sending initialize event")?;
 
         match arguments {
             InitialiseArguments::Launch(launch_arguments) => {
                 // send launch event
                 let req = launch_arguments.to_request();
-                self.client.execute(req).context("sending launch request")?;
+                self.handle
+                    .block_on(self.client.execute(req))
+                    .context("sending launch request")?;
             }
             InitialiseArguments::Attach(attach_arguments) => {
                 let req = attach_arguments.to_request();
-                self.client.execute(req).context("sending attach request")?;
+                self.handle
+                    .block_on(self.client.execute(req))
+                    .context("sending attach request")?;
             }
         }
 
@@ -165,6 +293,7 @@ impl DebuggerInternals {
         publisher: crossbeam_channel::Sender<Event>,
         existing_breakpoints: impl Into<HashMap<BreakpointId, Breakpoint>>,
         server: Option<Box<dyn Server + Send>>,
+        handle: Handle,
     ) -> Self {
         let breakpoints = existing_breakpoints.into();
         let current_breakpoint_id = *breakpoints.keys().max().unwrap_or(&0);
@@ -177,6 +306,7 @@ impl DebuggerInternals {
             current_breakpoint_id,
             current_source: None,
             _server: server,
+            handle,
         }
     }
 
@@ -209,12 +339,14 @@ impl DebuggerInternals {
                     success: true,
                     ..
                 } = self
-                    .client
-                    .send(requests::RequestBody::StackTrace(requests::StackTrace {
-                        thread_id,
-                        levels: Some(1),
-                        ..Default::default()
-                    }))
+                    .handle
+                    .block_on(self.client.send(requests::RequestBody::StackTrace(
+                        requests::StackTrace {
+                            thread_id,
+                            levels: Some(1),
+                            ..Default::default()
+                        },
+                    )))
                     .unwrap()
                 else {
                     unreachable!()
@@ -241,11 +373,13 @@ impl DebuggerInternals {
                     success: true,
                     ..
                 } = self
-                    .client
-                    .send(requests::RequestBody::StackTrace(requests::StackTrace {
-                        thread_id,
-                        ..Default::default()
-                    }))
+                    .handle
+                    .block_on(self.client.send(requests::RequestBody::StackTrace(
+                        requests::StackTrace {
+                            thread_id,
+                            ..Default::default()
+                        },
+                    )))
                     .unwrap()
                 else {
                     unreachable!()
@@ -327,8 +461,8 @@ impl DebuggerInternals {
             });
 
             let _ = self
-                .client
-                .send(req)
+                .handle
+                .block_on(self.client.send(req))
                 .context("broadcasting breakpoints to debugee")?;
         }
         Ok(())
@@ -353,5 +487,19 @@ impl DebuggerInternals {
         tracing::debug!("setting debugger state");
         let event = Event::from(&new_state);
         self.emit(event);
+    }
+}
+
+impl Drop for DebuggerInternals {
+    fn drop(&mut self) {
+        tracing::debug!("dropping debugger");
+        self.handle
+            .block_on(
+                self.client
+                    .execute(requests::RequestBody::Disconnect(Disconnect {
+                        terminate_debugee: true,
+                    })),
+            )
+            .unwrap();
     }
 }

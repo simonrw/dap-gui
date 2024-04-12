@@ -1,12 +1,14 @@
 use eyre::Context;
+use requests::RequestBody;
 use responses::Response;
 use serde::{Deserialize, Serialize};
 use tokio::{
+    io::AsyncWriteExt,
     net::TcpStream,
     sync::{mpsc, oneshot},
 };
 
-mod bindings;
+pub mod bindings;
 mod codec;
 mod decoder;
 pub mod events;
@@ -35,7 +37,9 @@ pub enum Message {
 
 pub async fn run_client(mut client: Client) {
     while let Some(msg) = client.receiver.recv().await {
-        client.handle_message(msg);
+        if let Err(e) = client.handle_message(&msg).await {
+            tracing::warn!(error = %e, message = ?msg, "handling message");
+        }
     }
 }
 
@@ -58,17 +62,28 @@ impl Client {
         })
     }
 
-    fn handle_message(&mut self, msg: ClientMessage) {
+    async fn handle_message(&mut self, msg: &ClientMessage) -> eyre::Result<()> {
         match msg {
             ClientMessage::Send {
-                body: _,
+                body,
                 respond_to: _,
-            } => todo!(),
+            } => {
+                let res = self
+                    .send(body)
+                    .await
+                    .wrap_err("sending message to server")?;
+                todo!()
+            }
             ClientMessage::Execute { body: _ } => todo!(),
         }
     }
+
+    async fn send(&mut self, body: &RequestBody) -> eyre::Result<()> {
+        todo!()
+    }
 }
 
+#[derive(Debug)]
 pub enum ClientMessage {
     Send {
         body: requests::RequestBody,
