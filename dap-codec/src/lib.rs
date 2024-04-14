@@ -12,3 +12,20 @@ impl Decoder for DapDecoder {
         todo!()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use dap::events::Event;
+    use futures::prelude::*;
+    use tokio_util::codec::FramedRead;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn ping() {
+        let input = br#"Content-Length: 78\r\n\r\n{"seq":1,"type":"event","body":"Initialized"}"#;
+        let mut framed_read = FramedRead::new(&input[..], DapDecoder {});
+        let message = framed_read.next().await.unwrap().unwrap();
+        assert!(matches!(message, Sendable::Event(Event::Initialized)));
+    }
+}

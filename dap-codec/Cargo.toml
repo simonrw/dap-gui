@@ -11,3 +11,7 @@ tokio-util = { version = "0.7.10", features = ["codec"] }
 dap = { git = "https://github.com/simonrw/dap-rs", rev = "5bdc158225c995219ca71a2887d871a156a117d9" }
 bytes = "1.6.0"
 thiserror = "1.0.58"
+
+[dev-dependencies]
+futures = "0.3.30"
+tokio = { version = "1.37.0", features = ["full"] }
