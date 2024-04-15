@@ -8,7 +8,8 @@ members = [
     "pcaplog",
     "gui",
     "state",
-    "launch_configuration", "dap-codec",
+    "launch_configuration",
+    "dap-codec",
 ]
 
 [profile.dev]

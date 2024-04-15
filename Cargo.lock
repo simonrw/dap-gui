@@ -1166,7 +1166,8 @@ checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 [[package]]
 name = "dap"
 version = "0.4.1-alpha1"
-source = "git+https://github.com/simonrw/dap-rs?rev=5bdc158225c995219ca71a2887d871a156a117d9#5bdc158225c995219ca71a2887d871a156a117d9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35c7fc89d334ab745ba679f94c7314c9b17ecdcd923c111df6206e9fd7729fa9"
 dependencies = [
  "serde",
  "serde_json",

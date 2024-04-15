@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 bytes = "1.6.0"
-dap = { git = "https://github.com/simonrw/dap-rs", rev = "5bdc158225c995219ca71a2887d871a156a117d9", features = ["client"] }
+dap = { version = "0.4.1-alpha1", features = ["client"] }
 serde_json = "1.0.115"
 thiserror = "1.0.58"
 tokio = { version = "1.37.0", features = ["net"] }
