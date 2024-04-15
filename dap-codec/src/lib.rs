@@ -70,18 +70,32 @@ mod tests {
 
     use super::*;
 
-    #[tokio::test]
-    async fn initialized() {
-        let body = serde_json::to_string(&serde_json::json!({
-            "seq":1,
-            "type":"event",
-            "event": "initialized",
-        }))
-        .unwrap();
-        let input = format!("Content-Length: {}\r\n\r\n{}", body.len(), body).into_bytes();
-
-        let mut framed_read = FramedRead::new(&input[..], DapDecoder {});
-        let message = framed_read.next().await.unwrap().unwrap();
-        assert!(matches!(message, Sendable::Event(Event::Initialized)));
+    fn construct_message(message: &serde_json::Value) -> Vec<u8> {
+        let body = serde_json::to_string(message).unwrap();
+        format!("Content-Length: {}\r\n\r\n{}", body.len(), body).into_bytes()
     }
+
+    macro_rules! create_test {
+        ($name:ident, $input:expr, $expected:pat) => {
+            #[tokio::test]
+            async fn $name() {
+                let input = construct_message(&$input);
+                let mut framed_read = FramedRead::new(&input[..], DapDecoder {});
+                while let Some(msg) = framed_read.next().await {
+                    let msg = msg.unwrap();
+                    assert!(matches!(msg, $expected));
+                }
+            }
+        };
+    }
+
+    create_test!(
+        initialized,
+        serde_json::json!({
+            "seq": 1,
+            "type": "event",
+            "event": "initialized",
+        }),
+        Sendable::Event(Event::Initialized)
+    );
 }
