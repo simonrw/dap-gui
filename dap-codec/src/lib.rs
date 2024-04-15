@@ -77,19 +77,7 @@ mod tests {
     }
 
     macro_rules! create_test {
-        ($name:ident, $input:expr, $expected:pat) => {
-            #[tokio::test]
-            async fn $name() {
-                let input = construct_message(&$input);
-                let mut framed_read = FramedRead::new(&input[..], DapDecoder {});
-                while let Some(msg) = framed_read.next().await {
-                    let msg = msg.unwrap();
-                    assert!(matches!(msg, $expected));
-                }
-            }
-        };
-
-        ($name:ident, $($input:expr => $expected:pat),+) => {
+        ($name:ident, $extra:expr, $($input:expr => $expected:pat),+) => {
             #[tokio::test]
             async fn $name() {
                 let mut messages = bytes::BytesMut::new();
@@ -97,6 +85,8 @@ mod tests {
                     let input = construct_message(&$input);
                     messages.put(&input[..]);
                 )+
+
+                messages.put(&$extra[..]);
 
                 let mut framed_read = FramedRead::new(&messages[..], DapDecoder {});
 
@@ -110,6 +100,10 @@ mod tests {
                     assert!(matches!(msg, $expected));
                 )+
             }
+        };
+
+        ($name:ident, $($input:expr => $expected:pat),+) => {
+            create_test!($name, b"", $($input => $expected),+);
         };
     }
 
@@ -129,6 +123,16 @@ mod tests {
             "type": "event",
             "event": "initialized",
         }) => Sendable::Event(Event::Initialized),
+        serde_json::json!({
+            "seq": 1,
+            "type": "event",
+            "event": "initialized",
+        }) => Sendable::Event(Event::Initialized)
+    );
+
+    create_test!(
+        remaining_data,
+        b"abc",
         serde_json::json!({
             "seq": 1,
             "type": "event",

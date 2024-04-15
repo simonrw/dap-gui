@@ -22,6 +22,7 @@ mkShell {
       cargo-flamegraph
       custom-python
       cargo-hack
+      cargo-expand
       act
       go
       delve
