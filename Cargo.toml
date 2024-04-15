@@ -9,6 +9,7 @@ members = [
     "gui",
     "state",
     "launch_configuration",
+    "dap-codec",
 ]
 
 [profile.dev]
