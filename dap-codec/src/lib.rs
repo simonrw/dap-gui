@@ -64,6 +64,7 @@ impl Decoder for DapDecoder {
 
 #[cfg(test)]
 mod tests {
+    use bytes::BufMut;
     use dap::events::Event;
     use futures::prelude::*;
     use tokio_util::codec::FramedRead;
@@ -87,6 +88,29 @@ mod tests {
                 }
             }
         };
+
+        ($name:ident, $($input:expr => $expected:pat),+) => {
+            #[tokio::test]
+            async fn $name() {
+                let mut messages = bytes::BytesMut::new();
+                $(
+                    let input = construct_message(&$input);
+                    messages.put(&input[..]);
+                )+
+
+                let mut framed_read = FramedRead::new(&messages[..], DapDecoder {});
+
+                $(
+                    let Some(msg) = framed_read.next().await else {
+                        panic!()
+                    };
+
+                    let msg = msg.unwrap();
+                    dbg!(&msg);
+                    assert!(matches!(msg, $expected));
+                )+
+            }
+        };
     }
 
     create_test!(
@@ -95,7 +119,20 @@ mod tests {
             "seq": 1,
             "type": "event",
             "event": "initialized",
-        }),
-        Sendable::Event(Event::Initialized)
+        }) => Sendable::Event(Event::Initialized)
+    );
+
+    create_test!(
+        initialized_two,
+        serde_json::json!({
+            "seq": 1,
+            "type": "event",
+            "event": "initialized",
+        }) => Sendable::Event(Event::Initialized),
+        serde_json::json!({
+            "seq": 1,
+            "type": "event",
+            "event": "initialized",
+        }) => Sendable::Event(Event::Initialized)
     );
 }
