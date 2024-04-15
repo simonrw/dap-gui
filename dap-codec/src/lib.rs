@@ -22,6 +22,17 @@ impl Decoder for DapDecoder {
     type Error = Box<dyn std::error::Error>;
 
     fn decode(&mut self, src: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        // skip to the start of the first header
+        // TODO: we assume Content-Length for now
+        let Some(start_pos) = src
+            .windows("Content-Length".len())
+            .position(|s| s == b"Content-Length")
+        else {
+            return Ok(None);
+        };
+
+        src.advance(start_pos);
+
         let Some(split_point) = src.windows(4).position(|s| s == b"\r\n\r\n") else {
             // TODO: is this always lack of input?
             return Ok(None);
