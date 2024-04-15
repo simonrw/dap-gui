@@ -6,3 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+color-eyre.workspace = true
+tracing.workspace = true
+dap-codec = { path = "../dap-codec" }
+tracing-subscriber.workspace = true
+tokio.workspace = true
