@@ -1,8 +1,15 @@
-use dap_codec::dap::requests::{Command, PathFormat};
+use std::{path::PathBuf, time::Duration};
+
+use dap_codec::dap::{
+    events,
+    requests::{self, Command, PathFormat},
+    types,
+};
 use eyre::WrapErr;
 use tokio::{net::TcpListener, sync::mpsc};
 
 use server::for_implementation_on_port;
+use tracing_subscriber::EnvFilter;
 use transport::{handle_messages, Client, ClientMessage};
 
 async fn get_random_tcp_port() -> eyre::Result<u16> {
@@ -24,6 +31,10 @@ async fn get_random_tcp_port() -> eyre::Result<u16> {
 
 #[tokio::test]
 async fn test_loop() -> eyre::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
     let port = get_random_tcp_port().await.wrap_err("getting free port")?;
     let _server = for_implementation_on_port(server::Implementation::Debugpy, port)
         .wrap_err("creating server process")?;
@@ -33,21 +44,98 @@ async fn test_loop() -> eyre::Result<()> {
         .wrap_err("connecting to server")?;
 
     // events channel
-    let (tx, _events) = mpsc::channel(10);
+    let (tx, mut events_rx) = mpsc::channel(10);
 
     let client = Client::new(stream, tx);
 
     // initialise
     let res = client
-        .send(Command::Initialize(
-            dap_codec::dap::requests::InitializeArguments {
-                adapter_id: "test".to_string(),
-                ..Default::default()
+        .send(Command::Initialize(requests::InitializeArguments {
+            adapter_id: "test".to_string(),
+            ..Default::default()
+        }))
+        .await;
+    assert!(res.success);
+
+    // launch
+    client
+        .execute(Command::Launch(requests::LaunchRequestArguments {
+            additional_data: Some(serde_json::json!({
+                "program": PathBuf::from("./test.py"),
+                "launch_arguments": serde_json::json!({
+                    "just_my_code": true,
+                    "cwd": std::env::current_dir().unwrap().join(".."),
+                    "show_return_value": true,
+                    "debug_options": vec!["DebugStdLib".to_string(), "ShowReturnValue".to_string()],
+                    "stop_on_entry": false,
+                    "is_output_redirected": false,
+                }),
+            })),
+            ..Default::default()
+        }))
+        .await;
+
+    let res = wait_for_event(&mut events_rx, Duration::from_secs(2), |e| {
+        matches!(e, events::Event::Initialized { .. })
+    })
+    .await;
+    dbg!(&res);
+
+    let res = client
+        .send(Command::SetFunctionBreakpoints(
+            requests::SetFunctionBreakpointsArguments {
+                breakpoints: vec![types::FunctionBreakpoint {
+                    name: "main".to_string(),
+                    ..Default::default()
+                }],
             },
         ))
         .await;
-    dbg!(&res);
     assert!(res.success);
+    // let req = requests::RequestBody::SetFunctionBreakpoints(requests::SetFunctionBreakpoints {
+    //     breakpoints: vec![requests::Breakpoint {
+    //         name: "main".to_string(),
+    //     }],
+    // });
+    // let _ = client.send(req).unwrap();
+
+    // configuration done
+    // let res = client.send(Command::ConfigurationDone).await;
+    // dbg!(&res);
+    // assert!(res.success);
 
     Ok(())
+}
+
+async fn wait_for_event<F>(
+    rx: &mut mpsc::Receiver<events::Event>,
+    timeout: Duration,
+    pred: F,
+) -> events::Event
+where
+    F: Fn(&events::Event) -> bool,
+{
+    let poll_fut = async {
+        let mut n = 0;
+        loop {
+            tokio::select! {
+                evt = rx.recv() => {
+                    let evt = evt.unwrap();
+                    dbg!(&evt);
+                    if n >= 100 {
+                        panic!("did not receive event");
+                    }
+
+                    if pred(&evt) {
+                        return evt;
+                    }
+                    n += 1;
+                }
+            }
+        }
+    };
+
+    tokio::time::timeout(timeout, poll_fut)
+        .await
+        .expect("didn't receive message")
 }

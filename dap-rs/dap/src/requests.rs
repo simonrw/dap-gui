@@ -132,12 +132,13 @@ pub struct SetFunctionBreakpointsArguments {
   pub breakpoints: Vec<FunctionBreakpoint>,
 }
 
-//// Arguments for a Launch request.
+/// Arguments for a Launch request.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchRequestArguments {
   /// If true, the launch request should launch the program without enabling
   /// debugging.
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub no_debug: Option<bool>,
   /// Arbitrary data from the previous, restarted session.
   /// The data is sent as the `restart` attribute of the `terminated` event.
@@ -145,10 +146,9 @@ pub struct LaunchRequestArguments {
   ///
   /// Rust-specific: this data must be a string. Server requiring storing binary data should use
   /// an encoding that is suitable for string (e.g. base85 or similar).
-  #[serde(rename = "__restart")]
+  #[serde(rename = "__restart", skip_serializing_if = "Option::is_none")]
   pub restart_data: Option<Value>,
   /// The request may include additional implementation specific attributes.
-  #[serde(flatten)]
   pub additional_data: Option<Value>,
 }
 
