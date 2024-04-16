@@ -1,0 +1,3 @@
+[workspace]
+members = ["dap", "integration_tests"]
+resolver = "2"
