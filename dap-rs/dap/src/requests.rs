@@ -27,39 +27,51 @@ pub enum PathFormat {
 #[serde(rename_all = "camelCase")]
 pub struct InitializeArguments {
   /// The ID of the client using this adapter.
-  #[serde(rename = "clientID")]
+  #[serde(rename = "clientID", skip_serializing_if = "Option::is_none")]
   pub client_id: Option<String>,
   /// The human-readable name of the client using this adapter.
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub client_name: Option<String>,
   /// The ID of the debug adapter.
   #[serde(rename = "adapterID")]
   pub adapter_id: String,
-  /// The ISO-639 locale of the client using this adapter, e.g. en-US or de-CH.
-  pub locale: Option<String>,
+  /// The ISO-639 locale of the client using this adapter, e.g. en-US or de-CH. pub locale: Option<String>,
   /// If true all line i64s are 1-based (default).
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub lines_start_at1: Option<bool>,
   /// If true all column i64s are 1-based (default).
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub columns_start_at1: Option<bool>,
   /// Determines in what format paths are specified. The default is `path`, which
   /// is the native format.
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub path_format: Option<PathFormat>,
   /// Client supports the `type` attribute for variables.
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub supports_variable_type: Option<bool>,
   /// Client supports the paging of variables.
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub supports_variable_paging: Option<bool>,
   /// Client supports the `runInTerminal` request.
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub supports_run_in_terminal_request: Option<bool>,
   /// Client supports memory references.
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub supports_memory_references: Option<bool>,
   /// Client supports progress reporting.
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub supports_progress_reporting: Option<bool>,
   /// Client supports the `invalidated` event.
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub supports_invalidated_event: Option<bool>,
   /// Client supports the `memory` event.
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub supports_memory_event: Option<bool>,
   /// Client supports the `argsCanBeInterpretedByShell` attribute on the `runInTerminal` request.
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub supports_args_can_be_interpreted_by_shell: Option<bool>,
   /// Client supports the `startDebugging` request.
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub supports_start_debugging_request: Option<bool>,
 }
 
