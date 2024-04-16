@@ -21,7 +21,7 @@ strip = "debuginfo"
 anyhow = "1.0.82"
 eyre = "0.6.12"
 color-eyre = "0.6.3"
-ctor = "0.2.7"
+ctor = "0.2.8"
 crossbeam-channel = "0.5.12"
 tracing = "0.1.40"
 serde = { version = "1.0.198", features = ["derive"] }
