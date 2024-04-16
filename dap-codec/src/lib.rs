@@ -2,8 +2,10 @@ use bytes::Buf;
 use dap::base_message::{BaseMessage, Sendable};
 use tokio_util::codec::Decoder;
 
+pub use dap;
+
 #[derive(thiserror::Error, Debug)]
-enum CodecError {
+pub enum CodecError {
     #[error("invalid utf8")]
     InvalidUtf8(#[from] std::str::Utf8Error),
     #[error("invalid integer")]
@@ -12,14 +14,16 @@ enum CodecError {
     MissingContentLengthHeader,
     #[error("deserializing message content")]
     Deserializing(#[from] serde_json::Error),
+    #[error("io error")]
+    IO(#[from] std::io::Error),
 }
 
-struct DapDecoder {}
+pub struct DapDecoder {}
 
 impl Decoder for DapDecoder {
     type Item = Sendable;
 
-    type Error = Box<dyn std::error::Error>;
+    type Error = CodecError;
 
     fn decode(&mut self, src: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         // skip to the start of the first header
@@ -54,7 +58,7 @@ impl Decoder for DapDecoder {
                     break 'cl value.parse::<usize>().map_err(CodecError::InvalidInteger)?;
                 };
             }
-            return Err(CodecError::MissingContentLengthHeader.into());
+            return Err(CodecError::MissingContentLengthHeader);
         };
 
         // check the buffer has enough bytes (including \r\n\r\n)
@@ -76,7 +80,10 @@ impl Decoder for DapDecoder {
 #[cfg(test)]
 mod tests {
     use bytes::BufMut;
-    use dap::events::Event;
+    use dap::{
+        events::Event,
+        requests::{Command, ContinueArguments},
+    };
     use futures::prelude::*;
     use tokio_util::codec::FramedRead;
 
@@ -149,5 +156,22 @@ mod tests {
             "type": "event",
             "event": "initialized",
         }) => Sendable::Event(Event::Initialized)
+    );
+
+    create_test!(
+        request,
+        serde_json::json!({
+            "seq": 1,
+            "type": "request",
+            "command": "continue",
+            "arguments": {
+                "threadId": 1,
+                "singleThread": true,
+            },
+        }) =>
+        Sendable::Request(Command::Continue(ContinueArguments {
+            thread_id: 1,
+            single_thread: Some(true),
+        }))
     );
 }
