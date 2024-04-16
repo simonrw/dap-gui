@@ -83,6 +83,7 @@ mod tests {
     use dap::{
         events::Event,
         requests::{Command, ContinueArguments},
+        responses::{ContinueResponse, ResponseBody},
     };
     use futures::prelude::*;
     use tokio_util::codec::FramedRead;
@@ -173,5 +174,28 @@ mod tests {
             thread_id: 1,
             single_thread: Some(true),
         }))
+    );
+
+    create_test!(
+        response,
+        serde_json::json!({
+            "seq": 2,
+            "type": "response",
+            "request_seq": 1,
+            "success": true,
+            "command": "continue",
+            "body": {
+                "allThreadsContinued": true,
+            },
+        }) =>
+        Sendable::Response(dap::responses::Response {
+            request_seq: 1,
+            success: true,
+            message: None,
+            error: None,
+            body: Some(ResponseBody::Continue(ContinueResponse {
+                all_threads_continued: Some(true),
+            })),
+        })
     );
 }
