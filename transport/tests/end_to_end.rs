@@ -58,18 +58,57 @@ async fn test_loop() -> eyre::Result<()> {
     assert!(res.success);
 
     // launch
+    /*
+    {
+      "seq": 5,
+      "type": "request",
+      "command": "launch",
+      "arguments": {
+        "name": "Python: Current File",
+        "type": "python",
+        "request": "launch",
+        "program": "/home/simon/dev/dap-gui/test.py",
+        "console": "integratedTerminal",
+        "justMyCode": false,
+        "port": 5678,
+        "__configurationTarget": 6,
+        "workspaceFolder": "/home/simon/dev/dap-gui",
+        "python": [
+          "/nix/store/s6y73vxcr11h74lrvicqqwv971m48s2d-python3-3.10.12-env/bin/python"
+        ],
+        "debugAdapterPython": "/nix/store/s6y73vxcr11h74lrvicqqwv971m48s2d-python3-3.10.12-env/bin/python",
+        "debugLauncherPython": "/nix/store/s6y73vxcr11h74lrvicqqwv971m48s2d-python3-3.10.12-env/bin/python",
+        "clientOS": "unix",
+        "cwd": "/home/simon/dev/dap-gui",
+        "envFile": "/home/simon/dev/dap-gui/.env",
+        "env": {
+          "PYTHONIOENCODING": "UTF-8",
+          "PYTHONUNBUFFERED": "1"
+        },
+        "stopOnEntry": false,
+        "showReturnValue": true,
+        "internalConsoleOptions": "neverOpen",
+        "debugOptions": [
+          "DebugStdLib",
+          "ShowReturnValue"
+        ],
+        "__sessionId": "b524bb23-79fb-4582-ac9e-409a1105c980",
+        "pythonArgs": [],
+        "processName": "/home/simon/dev/dap-gui/test.py",
+        "isOutputRedirected": false
+      }
+    }
+     */
     client
         .execute(Command::Launch(requests::LaunchRequestArguments {
             additional_data: Some(serde_json::json!({
+                "name": "Python: Current File",
+                "type": "python",
+                "request": "launch",
                 "program": PathBuf::from("./test.py"),
-                "launch_arguments": serde_json::json!({
-                    "just_my_code": true,
-                    "cwd": std::env::current_dir().unwrap().join(".."),
-                    "show_return_value": true,
-                    "debug_options": vec!["DebugStdLib".to_string(), "ShowReturnValue".to_string()],
-                    "stop_on_entry": false,
-                    "is_output_redirected": false,
-                }),
+                "justMyCode": false,
+                "cwd": std::env::current_dir().unwrap().join(".."),
+                "showReturnValue": true,
             })),
             ..Default::default()
         }))

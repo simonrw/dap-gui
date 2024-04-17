@@ -149,6 +149,7 @@ pub struct LaunchRequestArguments {
   #[serde(rename = "__restart", skip_serializing_if = "Option::is_none")]
   pub restart_data: Option<Value>,
   /// The request may include additional implementation specific attributes.
+  #[serde(flatten)]
   pub additional_data: Option<Value>,
 }
 

@@ -19,6 +19,7 @@ use tokio::{
 };
 
 use tokio_util::codec::FramedRead;
+use tracing::Instrument;
 
 #[derive(Debug)]
 pub enum ClientMessage {
@@ -70,6 +71,7 @@ impl Client {
     }
 }
 
+#[tracing::instrument(skip(stream, incoming, events))]
 pub async fn handle_messages(
     stream: TcpStream,
     mut incoming: mpsc::Receiver<ClientMessage>,
@@ -78,6 +80,7 @@ pub async fn handle_messages(
     let (tx, mut rx) = mpsc::channel(100);
     let (read, mut write) = stream.into_split();
 
+    tracing::debug!("spawning receiver task");
     tokio::spawn(async { receive_messages(read, tx).await });
 
     let mut responses = HashMap::<i64, oneshot::Sender<Response>>::new();
@@ -87,34 +90,55 @@ pub async fn handle_messages(
             cmd = incoming.recv() => {
                 let cmd = cmd.unwrap();
 
-                match cmd {
-                    ClientMessage::Send { request, response_chan } => {
-                        let current_seq_num = seq_num;
-                        let bytes_to_send = encode_message(current_seq_num, request);
-                        write.write_all(&bytes_to_send).await.unwrap();
-                        responses.insert(current_seq_num, response_chan);
-                        seq_num += 1;
-                    },
-                    ClientMessage::Execute { request } => {
-                        let current_seq_num = seq_num;
-                        let bytes_to_send = encode_message(current_seq_num, request);
-                        write.write_all(&bytes_to_send).await.unwrap();
-                        seq_num += 1;
-                    },
-                }
+                let span = tracing::debug_span!("received command", command = ?cmd);
+
+                // async block to ensure correct spans
+                async {
+                    match cmd {
+                        ClientMessage::Send { request, response_chan } => {
+                            tracing::debug!("received send request");
+
+                            let current_seq_num = seq_num;
+                            let bytes_to_send = encode_message(current_seq_num, request);
+                            tracing::trace!(bytes = ?std::str::from_utf8(&bytes_to_send).unwrap(), "sending bytes");
+                            write.write_all(&bytes_to_send).await.unwrap();
+                            responses.insert(current_seq_num, response_chan);
+                            seq_num += 1;
+                        },
+                        ClientMessage::Execute { request } => {
+                            tracing::debug!("received execute request");
+
+                            let current_seq_num = seq_num;
+                            let bytes_to_send = encode_message(current_seq_num, request);
+                            tracing::trace!(bytes = ?std::str::from_utf8(&bytes_to_send).unwrap(), "sending bytes");
+                            write.write_all(&bytes_to_send).await.unwrap();
+                            seq_num += 1;
+                        },
+                    }
+                }.instrument(span).await
             }
             event = rx.recv() => {
                 match event {
                     Some(Sendable::Event(evt)) => {
+                        tracing::debug!(event = ?evt, "received event");
                         let _ = events.send(evt).await;
                     },
                     Some(Sendable::Response(resp)) => {
+                        let span = tracing::debug_span!("received response", response = ?resp);
+                        let _guard = span.enter();
+
+                        if !resp.success {
+                            tracing::warn!("response was unsuccessful");
+                        }
+
                         // lookup response channel in responses hashmap
                         if let Some(tx) = responses.remove(&resp.request_seq) {
                             let _ = tx.send(resp);
                         }
                     },
-                    Some(_) => unreachable!(),
+                    Some(other) => {
+                        tracing::warn!(event = ?other, "unexpected event type");
+                    },
                     None => tracing::warn!("no message received"),
                 }
             }
@@ -122,6 +146,7 @@ pub async fn handle_messages(
     }
 }
 
+#[tracing::instrument(skip(incoming, outbox))]
 async fn receive_messages(
     incoming: OwnedReadHalf,
     outbox: tokio::sync::mpsc::Sender<Sendable>,
@@ -132,6 +157,7 @@ async fn receive_messages(
     while let Some(msg) = stream.next().await {
         match msg {
             Ok(msg) => {
+                tracing::trace!("received message from server");
                 let _ = outbox.send(msg).await;
             }
             Err(_) => todo!(),
