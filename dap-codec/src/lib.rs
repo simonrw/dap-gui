@@ -16,8 +16,28 @@ pub enum CodecError {
     Deserializing(#[from] serde_json::Error),
     #[error("io error")]
     IO(#[from] std::io::Error),
+    #[error("parsing header {0}")]
+    ParseHeaderError(String),
 }
 
+struct Header {
+    key: String,
+    value: String,
+}
+
+fn parse_header(input: &str) -> Result<Header, CodecError> {
+    let mut parts = input.splitn(2, ':');
+    let key = parts
+        .next()
+        .ok_or(CodecError::ParseHeaderError(input.to_owned()))?;
+    let value = parts
+        .next()
+        .ok_or(CodecError::ParseHeaderError(input.to_owned()))?;
+    Ok(Header {
+        key: key.trim().to_owned(),
+        value: value.trim().to_owned(),
+    })
+}
 pub struct DapDecoder {}
 
 impl Decoder for DapDecoder {
@@ -25,45 +45,58 @@ impl Decoder for DapDecoder {
 
     type Error = CodecError;
 
+    #[tracing::instrument(skip(self, src))]
     fn decode(&mut self, src: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        let span = tracing::debug_span!("parsing header");
+        let guard = span.enter();
+
         // skip to the start of the first header
         // TODO: we assume Content-Length for now
         let Some(start_pos) = src
             .windows("Content-Length".len())
             .position(|s| s == b"Content-Length")
         else {
+            tracing::debug!("no Content-Length header found");
             return Ok(None);
         };
 
-        src.advance(start_pos);
+        if start_pos > 0 {
+            tracing::debug!(num_bytes = %start_pos, "skipping junk bytes");
+            src.advance(start_pos);
+        }
 
         let Some(split_point) = src.windows(4).position(|s| s == b"\r\n\r\n") else {
             // TODO: is this always lack of input?
+            tracing::debug!("no end of headers found");
             return Ok(None);
         };
 
         let headers = &src[..split_point];
         let header_len = headers.len();
+        tracing::trace!(num_header_bytes = %header_len, "found headers");
         // TOOD: parse other headers when they are added
         let content_length = 'cl: {
             let headers_str = std::str::from_utf8(headers).map_err(CodecError::InvalidUtf8)?;
             for header_str in headers_str.split("\r\n") {
-                let (key, value) = {
-                    let mut raw_key_and_value = header_str.split(':').take(2);
-                    let key = raw_key_and_value.next().unwrap().trim();
-                    let value = raw_key_and_value.next().unwrap().trim();
-                    (key, value)
-                };
-                if key == "Content-Length" {
-                    break 'cl value.parse::<usize>().map_err(CodecError::InvalidInteger)?;
+                let header = parse_header(header_str)?;
+                if header.key == "Content-Length" {
+                    break 'cl header
+                        .value
+                        .parse::<usize>()
+                        .map_err(CodecError::InvalidInteger)?;
                 };
             }
             return Err(CodecError::MissingContentLengthHeader);
         };
+        drop(guard);
+
+        let span = tracing::debug_span!("parsing body", content_length);
+        let _guard = span.enter();
 
         // check the buffer has enough bytes (including \r\n\r\n)
         let message_len_bytes = header_len + 4 + content_length;
         if src.len() < message_len_bytes {
+            tracing::debug!(buffer_len = %src.len(), "not enough bytes for body");
             return Ok(None);
         }
 
@@ -71,6 +104,8 @@ impl Decoder for DapDecoder {
         let base_message: BaseMessage =
             serde_json::from_slice(&src[header_len + 4..message_len_bytes])
                 .map_err(CodecError::Deserializing)?;
+
+        tracing::debug!("body parsed");
 
         src.advance(message_len_bytes);
         Ok(Some(base_message.message))
@@ -99,6 +134,8 @@ mod tests {
         ($name:ident, $extra:expr, $($input:expr => $expected:pat),+) => {
             #[tokio::test]
             async fn $name() {
+                let _ = tracing_subscriber::fmt::try_init();
+
                 let mut messages = bytes::BytesMut::new();
                 $(
                     let input = construct_message(&$input);
