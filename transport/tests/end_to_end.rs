@@ -12,23 +12,6 @@ use server::for_implementation_on_port;
 use tracing_subscriber::EnvFilter;
 use transport::Client;
 
-async fn get_random_tcp_port() -> eyre::Result<u16> {
-    for _ in 0..50 {
-        match TcpListener::bind("127.0.0.1:0").await {
-            Ok(listener) => {
-                let addr = listener.local_addr().unwrap();
-                let port = addr.port();
-                return Ok(port);
-            }
-            Err(e) => {
-                tracing::warn!(%e, "binding");
-            }
-        }
-    }
-
-    eyre::bail!("could not get free port");
-}
-
 #[tokio::test]
 async fn test_loop() -> eyre::Result<()> {
     tracing_subscriber::fmt()

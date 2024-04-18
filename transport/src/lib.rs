@@ -2,6 +2,27 @@ use std::collections::HashMap;
 
 pub const DEFAULT_DAP_PORT: u16 = 5678;
 
+pub mod bindings {
+    use tokio::net::TcpListener;
+
+    pub async fn get_random_tcp_port() -> eyre::Result<u16> {
+        for _ in 0..50 {
+            match TcpListener::bind("127.0.0.1:0").await {
+                Ok(listener) => {
+                    let addr = listener.local_addr().unwrap();
+                    let port = addr.port();
+                    return Ok(port);
+                }
+                Err(e) => {
+                    tracing::warn!(%e, "binding");
+                }
+            }
+        }
+
+        eyre::bail!("could not get free port");
+    }
+}
+
 use dap_codec::{
     dap::{
         base_message::{BaseMessage, Sendable},

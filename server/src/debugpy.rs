@@ -97,11 +97,13 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_create() -> eyre::Result<()> {
+    #[tokio::test]
+    async fn test_create() -> eyre::Result<()> {
         init_test_logger();
 
-        let port = get_random_tcp_port().context("reserving custom port")?;
+        let port = get_random_tcp_port()
+            .await
+            .context("reserving custom port")?;
         let _server =
             for_implementation_on_port(Implementation::Debugpy, port).context("creating server")?;
 
