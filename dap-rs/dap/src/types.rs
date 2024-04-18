@@ -570,6 +570,8 @@ pub enum ModuleId {
   Number,
   #[serde(untagged)]
   String(String),
+  #[serde(untagged)]
+  Value(Value),
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
