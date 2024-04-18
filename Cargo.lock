@@ -4139,6 +4139,7 @@ dependencies = [
  "futures",
  "serde_json",
  "server",
+ "thiserror",
  "tokio",
  "tokio-util",
  "tracing",

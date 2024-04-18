@@ -12,8 +12,12 @@ pub enum CodecError {
     InvalidInteger(#[from] std::num::ParseIntError),
     #[error("missing content-length header")]
     MissingContentLengthHeader,
-    #[error("deserializing message content")]
-    Deserializing(#[from] serde_json::Error),
+    #[error("deserializing message content: {serde_error} ({body})")]
+    Deserializing {
+        #[source]
+        serde_error: serde_json::Error,
+        body: String,
+    },
     #[error("io error")]
     IO(#[from] std::io::Error),
     #[error("parsing header {0}")]
@@ -102,8 +106,16 @@ impl Decoder for DapDecoder {
 
         // parse the body
         let base_message: BaseMessage =
-            serde_json::from_slice(&src[header_len + 4..message_len_bytes])
-                .map_err(CodecError::Deserializing)?;
+            serde_json::from_slice(&src[header_len + 4..message_len_bytes]).map_err(|e| {
+                let body = std::str::from_utf8(&src[header_len + 4..message_len_bytes])
+                    .unwrap()
+                    .to_owned();
+
+                CodecError::Deserializing {
+                    serde_error: e,
+                    body,
+                }
+            })?;
 
         tracing::debug!("body parsed");
 

@@ -2,15 +2,15 @@ use std::{path::PathBuf, time::Duration};
 
 use dap_codec::dap::{
     events,
-    requests::{self, Command, PathFormat},
-    types,
+    requests::{self, Command},
+    responses, types,
 };
 use eyre::WrapErr;
 use tokio::{net::TcpListener, sync::mpsc};
 
 use server::for_implementation_on_port;
 use tracing_subscriber::EnvFilter;
-use transport::{handle_messages, Client, ClientMessage};
+use transport::Client;
 
 async fn get_random_tcp_port() -> eyre::Result<u16> {
     for _ in 0..50 {
@@ -54,7 +54,8 @@ async fn test_loop() -> eyre::Result<()> {
             adapter_id: "test".to_string(),
             ..Default::default()
         }))
-        .await;
+        .await
+        .expect("sending initialize request");
     assert!(res.success);
 
     // launch
@@ -112,13 +113,13 @@ async fn test_loop() -> eyre::Result<()> {
             })),
             ..Default::default()
         }))
-        .await;
+        .await
+        .expect("executing launch request");
 
-    let res = wait_for_event(&mut events_rx, Duration::from_secs(2), |e| {
+    wait_for_event(&mut events_rx, Duration::from_secs(2), |e| {
         matches!(e, events::Event::Initialized { .. })
     })
     .await;
-    dbg!(&res);
 
     let res = client
         .send(Command::SetFunctionBreakpoints(
@@ -129,19 +130,153 @@ async fn test_loop() -> eyre::Result<()> {
                 }],
             },
         ))
-        .await;
+        .await
+        .expect("sending set function breakpoints request");
     assert!(res.success);
-    // let req = requests::RequestBody::SetFunctionBreakpoints(requests::SetFunctionBreakpoints {
-    //     breakpoints: vec![requests::Breakpoint {
-    //         name: "main".to_string(),
-    //     }],
-    // });
-    // let _ = client.send(req).unwrap();
 
     // configuration done
-    // let res = client.send(Command::ConfigurationDone).await;
-    // dbg!(&res);
-    // assert!(res.success);
+    let res = client
+        .send(Command::ConfigurationDone)
+        .await
+        .expect("sending configuration done request");
+    assert!(res.success);
+
+    // wait for stopped event
+    let event = wait_for_event(&mut events_rx, Duration::from_secs(2), |e| {
+        matches!(e, events::Event::Stopped(_))
+    })
+    .await;
+
+    let events::Event::Stopped(events::StoppedEventBody {
+        thread_id: Some(thread_id),
+        ..
+    }) = event
+    else {
+        panic!("unexpected event");
+    };
+
+    // fetch thread info
+    let res = client
+        .send(Command::Threads)
+        .await
+        .expect("sending threads request");
+    let Some(responses::ResponseBody::Threads(responses::ThreadsResponse { threads })) = res.body
+    else {
+        panic!("no thread info");
+    };
+    assert_eq!(threads.len(), 1);
+
+    // fetch stack info
+    let res = client
+        .send(Command::StackTrace(requests::StackTraceArguments {
+            thread_id,
+            ..Default::default()
+        }))
+        .await
+        .expect("sending stacktrace request");
+    assert!(res.success);
+
+    let Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+        stack_frames,
+        ..
+    })) = res.body
+    else {
+        panic!("no stack info");
+    };
+
+    for frame in stack_frames {
+        // fetch scopes
+        let res = client
+            .send(Command::Scopes(requests::ScopesArguments {
+                frame_id: frame.id,
+            }))
+            .await
+            .unwrap_or_else(|_| panic!("sending scopes request for frame {frame:?}"));
+        assert!(res.success);
+        let Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })) = res.body
+        else {
+            panic!("no scopes");
+        };
+
+        // fetch variables
+        for scope in scopes {
+            let res = client
+                .send(Command::Variables(requests::VariablesArguments {
+                    variables_reference: scope.variables_reference,
+                    ..Default::default()
+                }))
+                .await
+                .unwrap_or_else(|_| panic!("sending variables request for scope {scope:?}"));
+            assert!(res.success);
+
+            let Some(responses::ResponseBody::Variables(responses::VariablesResponse {
+                ..
+                // variables,
+            })) = res.body
+            else {
+                panic!("no variables");
+            };
+
+            // for variable in variables {
+            //     let res = client
+            //         .send(Command::Evaluate(requests::EvaluateArguments {
+            //             expression: variable.name.clone(),
+            //             frame_id: Some(frame.id),
+            //             context: None,
+            //             format: Some(PathFormat::Auto),
+            //         }))
+            //         .await;
+            //     assert!(res.success);
+            //     let Some(responses::ResponseBody::Evaluate(responses::EvaluateResponse {
+            //         result,
+            //         ..
+            //     })) = res.body
+            //     else {
+            //         panic!("no evaluation result");
+            //     };
+            //     assert_eq!(result, variable.value);
+            // }
+        }
+    }
+
+    // continue
+    let res = client
+        .send(Command::Continue(requests::ContinueArguments {
+            thread_id,
+            single_thread: Some(false),
+        }))
+        .await
+        .expect("sending continue request");
+    assert!(res.success);
+
+    wait_for_event(&mut events_rx, Duration::from_secs(2), |e| {
+        matches!(e, events::Event::Continued(_))
+    })
+    .await;
+
+    wait_for_event(&mut events_rx, Duration::from_secs(2), |e| {
+        matches!(e, events::Event::Terminated(_))
+    })
+    .await;
+
+    // terminate
+    let res = client
+        .send(Command::Terminate(requests::TerminateArguments {
+            ..Default::default()
+        }))
+        .await
+        .expect("sending terminate request");
+    assert!(res.success);
+
+    // disconnect
+    let res = client
+        .send(Command::Disconnect(requests::DisconnectArguments {
+            terminate_debuggee: Some(true),
+            ..Default::default()
+        }))
+        .await
+        .expect("sending disconnect request");
+    assert!(res.success);
 
     Ok(())
 }
@@ -160,7 +295,6 @@ where
             tokio::select! {
                 evt = rx.recv() => {
                     let evt = evt.unwrap();
-                    dbg!(&evt);
                     if n >= 100 {
                         panic!("did not receive event");
                     }

@@ -21,6 +21,14 @@ use tokio::{
 use tokio_util::codec::FramedRead;
 use tracing::Instrument;
 
+#[derive(thiserror::Error, Debug)]
+pub enum TransportError {
+    #[error("server went away")]
+    ServerDropped,
+}
+
+type Result<T> = std::result::Result<T, TransportError>;
+
 #[derive(Debug)]
 pub enum ClientMessage {
     Send {
@@ -55,19 +63,27 @@ impl Client {
         Self { sender }
     }
 
-    pub async fn send(&self, request: Command) -> Response {
+    // TODO: return a Result where the error variant represents a response that was unsuccessful
+    pub async fn send(&self, request: Command) -> Result<Response> {
         let (tx, rx) = oneshot::channel();
         let client_message = ClientMessage::Send {
             request,
             response_chan: tx,
         };
-        let _ = self.sender.send(client_message).await;
-        rx.await.unwrap()
+        self.sender
+            .send(client_message)
+            .await
+            .map_err(|_| TransportError::ServerDropped)?;
+        rx.await.map_err(|_| TransportError::ServerDropped)
     }
 
-    pub async fn execute(&self, request: Command) {
+    pub async fn execute(&self, request: Command) -> Result<()> {
         let client_message = ClientMessage::Execute { request };
-        let _ = self.sender.send(client_message).await;
+        self.sender
+            .send(client_message)
+            .await
+            .map_err(|_| TransportError::ServerDropped)?;
+        Ok(())
     }
 }
 
@@ -139,7 +155,10 @@ pub async fn handle_messages(
                     Some(other) => {
                         tracing::warn!(event = ?other, "unexpected event type");
                     },
-                    None => tracing::warn!("no message received"),
+                    None => {
+                        tracing::error!("no message received");
+                        break;
+                    }
                 }
             }
         }
@@ -160,7 +179,10 @@ async fn receive_messages(
                 tracing::trace!("received message from server");
                 let _ = outbox.send(msg).await;
             }
-            Err(_) => todo!(),
+            Err(e) => {
+                tracing::error!(error = %e, "error receiving from stream");
+                break;
+            }
         }
     }
     Ok(())
