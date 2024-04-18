@@ -6,11 +6,11 @@ use dap_codec::dap::{
     responses, types,
 };
 use eyre::WrapErr;
-use tokio::{net::TcpListener, sync::mpsc};
+use tokio::sync::mpsc;
 
 use server::for_implementation_on_port;
 use tracing_subscriber::EnvFilter;
-use transport::Client;
+use transport::{bindings::get_random_tcp_port, Client};
 
 #[tokio::test]
 async fn test_loop() -> eyre::Result<()> {
