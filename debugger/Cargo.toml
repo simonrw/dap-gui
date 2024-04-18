@@ -12,7 +12,9 @@ tracing.workspace = true
 server = { path = "../server" }
 serde.workspace = true
 transport = { path = "../transport" }
-retry = "2.0.0"
+dap-codec = { path = "../dap-codec" }
+tokio-retry = "0.3.0"
+tokio.workspace = true
 dirs.workspace = true
 
 [dev-dependencies]

@@ -1,20 +1,21 @@
 use std::{
     io,
-    net::{TcpStream, ToSocketAddrs},
     sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
 
+use tokio::net::{TcpStream, ToSocketAddrs};
+
+use dap_codec::dap::requests::{self, DisconnectArguments};
+use dap_codec::dap::responses;
 use eyre::WrapErr;
-use retry::{delay::Exponential, retry};
 use server::Implementation;
-use transport::{
-    requests::{self, Disconnect},
-    responses,
-    types::StackFrameId,
-    DEFAULT_DAP_PORT,
+use tokio_retry::{
+    strategy::{jitter, ExponentialBackoff},
+    Retry,
 };
+use transport::DEFAULT_DAP_PORT;
 
 use crate::{
     internals::{DebuggerInternals, FileSource},
@@ -40,17 +41,15 @@ impl From<state::AttachArguments> for InitialiseArguments {
     }
 }
 
-fn retry_scale() -> impl Iterator<Item = Duration> {
-    Exponential::from_millis(200).take(5)
-}
-
-fn reliable_tcp_stream<A>(addr: A) -> Result<TcpStream, retry::Error<io::Error>>
+async fn reliable_tcp_stream<A>(addr: A) -> std::io::Result<TcpStream>
 where
-    A: ToSocketAddrs + Clone,
+    A: ToSocketAddrs,
 {
-    retry(retry_scale(), || {
+    let retry_strategy = ExponentialBackoff::from_millis(100).map(jitter).take(3);
+
+    Retry::spawn(retry_strategy, || async {
         tracing::debug!("trying to make connection");
-        match TcpStream::connect(addr.clone()) {
+        match TcpStream::connect(&addr).await {
             Ok(stream) => {
                 tracing::debug!("connection made");
                 Ok(stream)
@@ -61,6 +60,7 @@ where
             }
         }
     })
+    .await
 }
 
 pub struct Debugger {
@@ -314,8 +314,9 @@ impl Debugger {
 impl Drop for Debugger {
     fn drop(&mut self) {
         tracing::debug!("dropping debugger");
-        self.execute(requests::RequestBody::Disconnect(Disconnect {
-            terminate_debugee: true,
+        self.execute(requests::Command::Disconnect(DisconnectArguments {
+            terminate_debuggee: Some(true),
+            ..Default::default()
         }))
         .unwrap();
     }
