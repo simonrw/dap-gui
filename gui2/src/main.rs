@@ -1,10 +1,11 @@
-use iced::widget::{column, container, row, text, Container};
+use iced::widget::{self, column, container, row, text, text_editor, Container};
 use iced::{executor, Application, Color, Command, Element, Length, Settings};
 use iced_aw::Tabs;
 
 #[derive(Debug, Clone)]
 enum Message {
     TabSelected(TabId),
+    EditorActionPerformed(widget::text_editor::Action),
 }
 
 fn title<'a, Message>(input: impl ToString) -> Container<'a, Message> {
@@ -21,7 +22,10 @@ enum TabId {
 enum DebuggerApp {
     Initialising,
     Running,
-    Paused { active_tab: TabId },
+    Paused {
+        active_tab: TabId,
+        content: text_editor::Content,
+    },
     Terminated,
 }
 
@@ -36,10 +40,17 @@ impl DebuggerApp {
     }
 
     fn view_main_content(&self) -> iced::Element<'_, Message> {
-        title("main content")
-            .height(Length::Fill)
-            .width(Length::Fill)
-            .into()
+        match self {
+            DebuggerApp::Initialising => todo!(),
+            DebuggerApp::Running => todo!(),
+            DebuggerApp::Paused { ref content, .. } => column![text_editor(content)
+                .height(Length::Fill)
+                .on_action(Message::EditorActionPerformed)]
+            .spacing(10)
+            .padding(10)
+            .into(),
+            DebuggerApp::Terminated => todo!(),
+        }
     }
 
     fn view_variables_content(&self) -> iced::Element<'_, Message> {
@@ -81,6 +92,7 @@ impl Application for DebuggerApp {
     fn new(_flags: Self::Flags) -> (Self, Command<Self::Message>) {
         let this = Self::Paused {
             active_tab: TabId::Variables,
+            content: text_editor::Content::new(),
         };
         (this, Command::none())
     }
@@ -88,8 +100,12 @@ impl Application for DebuggerApp {
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         #[allow(clippy::single_match)]
         match self {
-            Self::Paused { active_tab } => match message {
+            Self::Paused {
+                active_tab,
+                content,
+            } => match message {
                 Message::TabSelected(selected) => *active_tab = selected,
+                Message::EditorActionPerformed(action) => content.perform(action),
             },
             _ => {}
         }
