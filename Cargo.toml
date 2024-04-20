@@ -30,4 +30,3 @@ serde_json = "1.0.117"
 clap = { version = "4.5.4", features = ["derive"] }
 tracing-subscriber = { version = "0.3.17", features = ["json", "env-filter"] }
 dirs = "5.0.1"
-tokio = { version = "1.37.0", features = ["full"] }
