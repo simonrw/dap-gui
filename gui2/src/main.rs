@@ -1,5 +1,5 @@
 use iced::widget::{self, column, container, row, text, text_editor, Container};
-use iced::{executor, Application, Color, Command, Element, Length, Settings};
+use iced::{executor, Application, Color, Command, Element, Length, Point, Settings};
 use iced_aw::Tabs;
 
 #[derive(Debug, Clone)]
@@ -92,7 +92,7 @@ impl Application for DebuggerApp {
     fn new(_flags: Self::Flags) -> (Self, Command<Self::Message>) {
         let this = Self::Paused {
             active_tab: TabId::Variables,
-            content: text_editor::Content::new(),
+            content: text_editor::Content::with_text(include_str!("main.rs")),
         };
         (this, Command::none())
     }
@@ -105,7 +105,21 @@ impl Application for DebuggerApp {
                 content,
             } => match message {
                 Message::TabSelected(selected) => *active_tab = selected,
-                Message::EditorActionPerformed(action) => content.perform(action),
+                Message::EditorActionPerformed(action) => match action {
+                    text_editor::Action::Edit(_) => {
+                        // override edit action to make nothing happen
+                    }
+                    ref action @ text_editor::Action::Click(Point { x, y }) => {
+                        dbg!(x, y);
+                        content.perform(action.clone())
+                    }
+                    action => content.perform(action),
+                    // text_editor::Action::Select(_) => todo!(),
+                    // text_editor::Action::SelectWord => todo!(),
+                    // text_editor::Action::SelectLine => todo!(),
+                    // text_editor::Action::Drag(_) => todo!(),
+                    // text_editor::Action::Scroll { lines } => todo!(),
+                },
             },
             _ => {}
         }
