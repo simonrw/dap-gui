@@ -1,7 +1,9 @@
-use iced::highlighter::{self, Highlighter, Theme};
+use iced::highlighter::{self, Theme};
 use iced::widget::{self, column, container, row, text, text_editor, Container};
 use iced::{executor, Application, Color, Command, Element, Length, Point, Settings};
 use iced_aw::Tabs;
+
+mod highlight;
 
 #[derive(Debug, Clone)]
 enum Message {
@@ -45,7 +47,7 @@ impl DebuggerApp {
             DebuggerApp::Initialising => todo!(),
             DebuggerApp::Running => todo!(),
             DebuggerApp::Paused { ref content, .. } => column![text_editor(content)
-                .highlight::<Highlighter>(
+                .highlight::<crate::highlight::Highlighter>(
                     highlighter::Settings {
                         theme: Theme::SolarizedDark,
                         extension: "rs".to_string(),
