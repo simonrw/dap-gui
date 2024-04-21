@@ -1,3 +1,4 @@
+use iced::highlighter::{self, Highlighter, Theme};
 use iced::widget::{self, column, container, row, text, text_editor, Container};
 use iced::{executor, Application, Color, Command, Element, Length, Point, Settings};
 use iced_aw::Tabs;
@@ -44,6 +45,13 @@ impl DebuggerApp {
             DebuggerApp::Initialising => todo!(),
             DebuggerApp::Running => todo!(),
             DebuggerApp::Paused { ref content, .. } => column![text_editor(content)
+                .highlight::<Highlighter>(
+                    highlighter::Settings {
+                        theme: Theme::SolarizedDark,
+                        extension: "rs".to_string(),
+                    },
+                    |highlight, _theme| highlight.to_format()
+                )
                 .height(Length::Fill)
                 .on_action(Message::EditorActionPerformed)]
             .spacing(10)
@@ -108,10 +116,6 @@ impl Application for DebuggerApp {
                 Message::EditorActionPerformed(action) => match action {
                     text_editor::Action::Edit(_) => {
                         // override edit action to make nothing happen
-                    }
-                    ref action @ text_editor::Action::Click(Point { x, y }) => {
-                        dbg!(x, y);
-                        content.perform(action.clone())
                     }
                     action => content.perform(action),
                     // text_editor::Action::Select(_) => todo!(),
