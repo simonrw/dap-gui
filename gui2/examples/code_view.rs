@@ -1,4 +1,5 @@
 use iced::{
+    mouse,
     widget::{
         canvas::{Frame, Path, Program},
         column, row, scrollable,
@@ -12,9 +13,10 @@ const OFFSET: u8 = 6;
 
 #[derive(Debug, Clone)]
 enum Message {
-    UiEvent(iced::Event),
     LineHeightChanged(f32),
     OffsetChanged(u8),
+    CanvasClicked(mouse::Button),
+    MouseMoved(Point),
 }
 
 struct App {
@@ -22,6 +24,7 @@ struct App {
     breakpoints: Vec<usize>,
     line_height: f32,
     offset: u8,
+    cursor_pos: Point,
 }
 
 impl Application for App {
@@ -37,6 +40,7 @@ impl Application for App {
                 breakpoints: vec![1, 8, 20],
                 line_height: LINE_HEIGHT,
                 offset: OFFSET,
+                cursor_pos: Point::default(),
             },
             Command::none(),
         )
@@ -48,19 +52,18 @@ impl Application for App {
 
     fn update(&mut self, message: Self::Message) -> Command<Message> {
         match message {
-            Message::UiEvent(iced::Event::Mouse(iced::mouse::Event::CursorMoved { .. })) => {
-                Command::none()
-            }
             Message::LineHeightChanged(value) => {
                 self.line_height = value;
-                Command::none()
             }
             Message::OffsetChanged(value) => {
                 self.offset = value;
-                Command::none()
             }
-            _ => Command::none(),
+            Message::CanvasClicked(button) => {
+                println!("{:?} {:?}", button, self.cursor_pos);
+            }
+            Message::MouseMoved(point) => self.cursor_pos = point,
         }
+        Command::none()
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message> {
@@ -90,10 +93,6 @@ impl Application for App {
 
     fn theme(&self) -> iced::Theme {
         iced::Theme::Nord
-    }
-
-    fn subscription(&self) -> iced::Subscription<Self::Message> {
-        iced::event::listen().map(Message::UiEvent)
     }
 }
 
@@ -126,6 +125,26 @@ impl<'b> Program<Message> for RenderBreakpoints<'b> {
             geometry.push(frame.into_geometry());
         }
         geometry
+    }
+
+    fn update(
+        &self,
+        _state: &mut Self::State,
+        event: iced::widget::canvas::Event,
+        _bounds: iced::Rectangle,
+        _cursor: iced::advanced::mouse::Cursor,
+    ) -> (iced::widget::canvas::event::Status, Option<Message>) {
+        match event {
+            iced::widget::canvas::Event::Mouse(mouse::Event::ButtonReleased(button)) => (
+                iced::widget::canvas::event::Status::Captured,
+                Some(Message::CanvasClicked(button)),
+            ),
+            iced::widget::canvas::Event::Mouse(mouse::Event::CursorMoved { position }) => (
+                iced::widget::canvas::event::Status::Captured,
+                Some(Message::MouseMoved(position)),
+            ),
+            _ => (iced::widget::canvas::event::Status::Ignored, None),
+        }
     }
 }
 
