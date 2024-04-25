@@ -27,9 +27,18 @@ pub enum LaunchConfiguration {
 
 pub fn load(
     name: impl AsRef<str>,
-    r: impl std::io::Read,
+    mut r: impl std::io::Read,
 ) -> eyre::Result<Option<LaunchConfiguration>> {
-    let config: ConfigFormat = serde_json::from_reader(r).context("reading and deserialising")?;
+    let mut contents = String::new();
+    r.read_to_string(&mut contents)
+        .wrap_err("reading configuration contents")?;
+    let configuration = from_str(name, &contents).wrap_err("parsing launch configuration")?;
+    Ok(configuration)
+}
+
+fn from_str(name: impl AsRef<str>, contents: &str) -> eyre::Result<Option<LaunchConfiguration>> {
+    // let config: ConfigFormat = serde_json::from_reader(r).context("reading and deserialising")?;
+    let config = jsonc_to_serde(contents).wrap_err("parsing jsonc configuration")?;
     let name = name.as_ref();
     match config {
         ConfigFormat::VsCode { configurations, .. } => {
@@ -47,6 +56,17 @@ pub fn load(
         }
     }
     Ok(None)
+}
+
+fn jsonc_to_serde(input: &str) -> eyre::Result<ConfigFormat> {
+    let value = jsonc_parser::parse_to_serde_value(input, &Default::default())
+        .wrap_err("parsing jsonc configuration")?;
+    let Some(config_format_value) = value else {
+        eyre::bail!("no configuration found");
+    };
+    let config_format = serde_json::from_value(config_format_value)
+        .wrap_err("deserializing serde_json::Value value")?;
+    Ok(config_format)
 }
 
 pub fn load_from_path(

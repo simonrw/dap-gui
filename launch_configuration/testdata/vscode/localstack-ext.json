@@ -1,5 +1,5 @@
 {
-    "version": "0.2.0",
+    "version": "0.2.0",  // required version
     "configurations": [
         {
             "name": "Python: Remote Attach",
@@ -16,6 +16,6 @@
                 }
             ],
             "justMyCode": false
-        }
-    ]
+        },
+    ],
 }
