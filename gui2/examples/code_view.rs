@@ -17,8 +17,6 @@ const GUTTER_WIDTH: f32 = 16.0;
 
 #[derive(Debug, Clone)]
 enum Message {
-    LineHeightChanged(f32),
-    OffsetChanged(u8),
     CanvasClicked(mouse::Button),
     MouseMoved(Point),
     OnScroll(Viewport),
@@ -59,12 +57,6 @@ impl Application for App {
 
     fn update(&mut self, message: Self::Message) -> Command<Message> {
         match message {
-            Message::LineHeightChanged(value) => {
-                self.line_height = value;
-            }
-            Message::OffsetChanged(value) => {
-                self.offset = value;
-            }
             Message::CanvasClicked(Button::Left) => {
                 if self.cursor_pos.x < GUTTER_WIDTH {
                     let line_no =
@@ -89,27 +81,12 @@ impl Application for App {
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message> {
-        column![
-            code_viewer(
-                &self.content,
-                self.line_height,
-                self.offset,
-                &self.breakpoints
-            ),
-            row![
-                iced::widget::slider(0.0..=100.0, self.line_height, Message::LineHeightChanged)
-                    .step(0.1),
-                iced::widget::text(format!("{:.2}", self.line_height)),
-            ]
-            .spacing(16)
-            .padding(8),
-            row![
-                iced::widget::slider(0..=255, self.offset, Message::OffsetChanged),
-                iced::widget::text(format!("{:.2}", self.offset)),
-            ]
-            .spacing(16)
-            .padding(8),
-        ]
+        column![code_viewer(
+            &self.content,
+            self.line_height,
+            self.offset,
+            &self.breakpoints
+        ),]
         .into()
     }
 

@@ -1,6 +1,6 @@
 use iced::highlighter::{self, Theme};
 use iced::widget::{self, column, container, row, text, text_editor, Container};
-use iced::{executor, Application, Color, Command, Element, Length, Point, Settings};
+use iced::{executor, Application, Color, Command, Element, Length, Settings};
 use iced_aw::Tabs;
 
 mod highlight;
@@ -23,12 +23,15 @@ enum TabId {
 
 #[derive(Debug)]
 enum DebuggerApp {
+    #[allow(dead_code)]
     Initialising,
+    #[allow(dead_code)]
     Running,
     Paused {
         active_tab: TabId,
         content: text_editor::Content,
     },
+    #[allow(dead_code)]
     Terminated,
 }
 
