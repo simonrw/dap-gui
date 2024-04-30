@@ -31,6 +31,7 @@ struct App {
     cursor_pos: Point,
     scroll_position: f32,
     scrollable_id: iced::widget::scrollable::Id,
+    gutter_highlight: Option<usize>,
 }
 
 impl Application for App {
@@ -49,6 +50,7 @@ impl Application for App {
                 cursor_pos: Point::default(),
                 scroll_position: 0.0,
                 scrollable_id: iced::widget::scrollable::Id::unique(),
+                gutter_highlight: None,
             },
             Command::none(),
         )
@@ -74,7 +76,16 @@ impl Application for App {
                 }
             }
             Message::CanvasClicked(_) => {}
-            Message::MouseMoved(point) => self.cursor_pos = point,
+            Message::MouseMoved(point) => {
+                self.cursor_pos = point;
+
+                if point.x < GUTTER_WIDTH {
+                    self.gutter_highlight =
+                        Some(((point.y + self.scroll_position) / LINE_HEIGHT).floor() as _);
+                } else {
+                    self.gutter_highlight = None;
+                }
+            }
             Message::OnScroll(viewport) => {
                 let offset = viewport.absolute_offset();
                 self.scroll_position = offset.y;
@@ -112,6 +123,7 @@ impl Application for App {
             self.offset,
             &self.breakpoints,
             self.scrollable_id.clone(),
+            self.gutter_highlight.as_ref(),
         ),]
         .into()
     }
@@ -125,6 +137,7 @@ struct RenderBreakpoints<'b> {
     breakpoints: &'b HashSet<usize>,
     line_height: f32,
     offset: u8,
+    gutter_highlight: Option<&'b usize>,
 }
 
 impl<'b> Program<Message> for RenderBreakpoints<'b> {
@@ -139,6 +152,18 @@ impl<'b> Program<Message> for RenderBreakpoints<'b> {
         _cursor: iced::advanced::mouse::Cursor,
     ) -> Vec<<iced::Renderer as iced::widget::canvas::Renderer>::Geometry> {
         let mut geometry = Vec::with_capacity(self.breakpoints.len());
+
+        if let Some(highlight) = self.gutter_highlight {
+            let mut frame = Frame::new(renderer, bounds.size());
+            let center = Point::new(
+                bounds.size().width / 2.0,
+                (*highlight as f32) * self.line_height + (self.offset as f32),
+            );
+            let circle = Path::circle(center, 4.0);
+            frame.fill(&circle, Color::from_rgb8(207, 120, 0));
+            geometry.push(frame.into_geometry());
+        }
+
         for b in self.breakpoints {
             let mut frame = Frame::new(renderer, bounds.size());
             let center = Point::new(
@@ -179,11 +204,13 @@ fn code_viewer<'a>(
     offset: u8,
     breakpoints: &'a HashSet<usize>,
     scrollable_id: iced::widget::scrollable::Id,
+    gutter_highlight: Option<&'a usize>,
 ) -> iced::Element<'a, Message> {
     let render_breakpoints = RenderBreakpoints {
         breakpoints,
         line_height,
         offset,
+        gutter_highlight,
     };
     let gutter = iced::widget::canvas(render_breakpoints)
         .height(Length::Fill)
