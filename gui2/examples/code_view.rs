@@ -99,17 +99,20 @@ impl Application for App {
     }
 
     fn theme(&self) -> iced::Theme {
-        iced::Theme::Nord
+        iced::Theme::Dark
     }
 }
 
-struct RenderBreakpoints<'b> {
-    breakpoints: &'b [usize],
+struct RenderBreakpoints<I> {
+    breakpoints: I,
     line_height: f32,
     offset: u8,
 }
 
-impl<'b> Program<Message> for RenderBreakpoints<'b> {
+impl<I> Program<Message> for RenderBreakpoints<I>
+where
+    I: Iterator<Item = &'a usize>,
+{
     type State = ();
 
     fn draw(
