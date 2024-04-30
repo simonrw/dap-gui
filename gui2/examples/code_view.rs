@@ -24,7 +24,7 @@ enum Message {
 
 struct App {
     content: Content,
-    breakpoints: Vec<usize>,
+    breakpoints: HashSet<usize>,
     line_height: f32,
     offset: u8,
     cursor_pos: Point,
@@ -40,7 +40,7 @@ impl Application for App {
         (
             Self {
                 content: Content::with_text(include_str!("code_view.rs")),
-                breakpoints: vec![1, 8, 20],
+                breakpoints: (0..200).collect(),
                 line_height: LINE_HEIGHT,
                 offset: OFFSET,
                 cursor_pos: Point::default(),
@@ -64,7 +64,13 @@ impl Application for App {
             Message::CanvasClicked(Button::Left) => {
                 if self.cursor_pos.x < GUTTER_WIDTH {
                     let line_no = (self.cursor_pos.y / LINE_HEIGHT).floor() as usize;
-                    todo!()
+                    if self.breakpoints.contains(&line_no) {
+                        println!("Removing line {line_no}");
+                        self.breakpoints.remove(&line_no);
+                    } else {
+                        println!("Adding line {line_no}");
+                        self.breakpoints.insert(line_no);
+                    }
                 }
             }
             Message::CanvasClicked(_) => {}
@@ -103,16 +109,13 @@ impl Application for App {
     }
 }
 
-struct RenderBreakpoints<I> {
-    breakpoints: I,
+struct RenderBreakpoints<'b> {
+    breakpoints: &'b HashSet<usize>,
     line_height: f32,
     offset: u8,
 }
 
-impl<I> Program<Message> for RenderBreakpoints<I>
-where
-    I: Iterator<Item = &'a usize>,
-{
+impl<'b> Program<Message> for RenderBreakpoints<'b> {
     type State = ();
 
     fn draw(
@@ -162,7 +165,7 @@ fn code_viewer<'a>(
     content: &'a Content,
     line_height: f32,
     offset: u8,
-    breakpoints: &'a [usize],
+    breakpoints: &'a HashSet<usize>,
 ) -> iced::Element<'a, Message> {
     let render_breakpoints = RenderBreakpoints {
         breakpoints,
