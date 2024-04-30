@@ -5,6 +5,7 @@ use iced::{
     widget::{
         canvas::{Frame, Path, Program},
         column, row, scrollable,
+        scrollable::Viewport,
         text_editor::Content,
     },
     Application, Color, Command, Length, Point, Settings,
@@ -20,6 +21,7 @@ enum Message {
     OffsetChanged(u8),
     CanvasClicked(mouse::Button),
     MouseMoved(Point),
+    OnScroll(Viewport),
 }
 
 struct App {
@@ -28,6 +30,7 @@ struct App {
     line_height: f32,
     offset: u8,
     cursor_pos: Point,
+    scroll_position: f32,
 }
 
 impl Application for App {
@@ -44,6 +47,7 @@ impl Application for App {
                 line_height: LINE_HEIGHT,
                 offset: OFFSET,
                 cursor_pos: Point::default(),
+                scroll_position: 0.0,
             },
             Command::none(),
         )
@@ -63,7 +67,8 @@ impl Application for App {
             }
             Message::CanvasClicked(Button::Left) => {
                 if self.cursor_pos.x < GUTTER_WIDTH {
-                    let line_no = (self.cursor_pos.y / LINE_HEIGHT).floor() as usize;
+                    let line_no =
+                        ((self.cursor_pos.y + self.scroll_position) / LINE_HEIGHT).floor() as usize;
                     if self.breakpoints.contains(&line_no) {
                         println!("Removing line {line_no}");
                         self.breakpoints.remove(&line_no);
@@ -75,6 +80,10 @@ impl Application for App {
             }
             Message::CanvasClicked(_) => {}
             Message::MouseMoved(point) => self.cursor_pos = point,
+            Message::OnScroll(viewport) => {
+                let offset = viewport.absolute_offset();
+                self.scroll_position = offset.y;
+            }
         }
         Command::none()
     }
@@ -186,6 +195,7 @@ fn code_viewer<'a>(
     )
     .height(Length::Fill)
     .width(Length::Fill)
+    .on_scroll(Message::OnScroll)
     .into()
 }
 
