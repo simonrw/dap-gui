@@ -6,7 +6,7 @@ use iced::{
         canvas::{Frame, Path, Program},
         column, row, scrollable,
         scrollable::Viewport,
-        text_editor::Content,
+        text_editor::{Action, Content},
     },
     Application, Color, Command, Length, Point, Settings,
 };
@@ -20,6 +20,7 @@ enum Message {
     CanvasClicked(mouse::Button),
     MouseMoved(Point),
     OnScroll(Viewport),
+    EditorActionPerformed(Action),
 }
 
 struct App {
@@ -29,6 +30,7 @@ struct App {
     offset: u8,
     cursor_pos: Point,
     scroll_position: f32,
+    scrollable_id: iced::widget::scrollable::Id,
 }
 
 impl Application for App {
@@ -46,6 +48,7 @@ impl Application for App {
                 offset: OFFSET,
                 cursor_pos: Point::default(),
                 scroll_position: 0.0,
+                scrollable_id: iced::widget::scrollable::Id::unique(),
             },
             Command::none(),
         )
@@ -76,6 +79,28 @@ impl Application for App {
                 let offset = viewport.absolute_offset();
                 self.scroll_position = offset.y;
             }
+            Message::EditorActionPerformed(action) => match action {
+                Action::Edit(_) => {
+                    // override edit action to make nothing happen
+                }
+                Action::Scroll { lines } => {
+                    // override scroll action to make sure we don't break things
+                    self.scroll_position += (lines as f32) * LINE_HEIGHT;
+                    return iced::widget::scrollable::scroll_to(
+                        self.scrollable_id.clone(),
+                        scrollable::AbsoluteOffset {
+                            x: 0.0,
+                            y: self.scroll_position,
+                        },
+                    );
+                }
+                action => self.content.perform(action),
+                // text_editor::Action::Select(_) => todo!(),
+                // text_editor::Action::SelectWord => todo!(),
+                // text_editor::Action::SelectLine => todo!(),
+                // text_editor::Action::Drag(_) => todo!(),
+                // text_editor::Action::Scroll { lines } => todo!(),
+            },
         }
         Command::none()
     }
@@ -85,7 +110,8 @@ impl Application for App {
             &self.content,
             self.line_height,
             self.offset,
-            &self.breakpoints
+            &self.breakpoints,
+            self.scrollable_id.clone(),
         ),]
         .into()
     }
@@ -152,6 +178,7 @@ fn code_viewer<'a>(
     line_height: f32,
     offset: u8,
     breakpoints: &'a HashSet<usize>,
+    scrollable_id: iced::widget::scrollable::Id,
 ) -> iced::Element<'a, Message> {
     let render_breakpoints = RenderBreakpoints {
         breakpoints,
@@ -164,7 +191,8 @@ fn code_viewer<'a>(
 
     let editor = iced::widget::text_editor(content)
         .padding(16)
-        .height(Length::Fill);
+        .height(Length::Fill)
+        .on_action(Message::EditorActionPerformed);
     scrollable(
         row![gutter, editor]
             .width(Length::Fill)
@@ -173,6 +201,7 @@ fn code_viewer<'a>(
     .height(Length::Fill)
     .width(Length::Fill)
     .on_scroll(Message::OnScroll)
+    .id(scrollable_id)
     .into()
 }
 
