@@ -1,5 +1,7 @@
+use std::collections::HashSet;
+
 use iced::{
-    mouse,
+    mouse::{self, Button},
     widget::{
         canvas::{Frame, Path, Program},
         column, row, scrollable,
@@ -10,6 +12,7 @@ use iced::{
 
 const LINE_HEIGHT: f32 = 20.8;
 const OFFSET: u8 = 6;
+const GUTTER_WIDTH: f32 = 16.0;
 
 #[derive(Debug, Clone)]
 enum Message {
@@ -58,9 +61,13 @@ impl Application for App {
             Message::OffsetChanged(value) => {
                 self.offset = value;
             }
-            Message::CanvasClicked(button) => {
-                println!("{:?} {:?}", button, self.cursor_pos);
+            Message::CanvasClicked(Button::Left) => {
+                if self.cursor_pos.x < GUTTER_WIDTH {
+                    let line_no = (self.cursor_pos.y / LINE_HEIGHT).floor() as usize;
+                    todo!()
+                }
             }
+            Message::CanvasClicked(_) => {}
             Message::MouseMoved(point) => self.cursor_pos = point,
         }
         Command::none()
@@ -161,7 +168,7 @@ fn code_viewer<'a>(
     };
     let gutter = iced::widget::canvas(render_breakpoints)
         .height(Length::Fill)
-        .width(Length::Fixed(16.0));
+        .width(Length::Fixed(GUTTER_WIDTH));
 
     let editor = iced::widget::text_editor(content)
         .padding(16)
