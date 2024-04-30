@@ -43,7 +43,7 @@ impl Application for App {
         (
             Self {
                 content: Content::with_text(include_str!("code_view.rs")),
-                breakpoints: (0..200).collect(),
+                breakpoints: Default::default(),
                 line_height: LINE_HEIGHT,
                 offset: OFFSET,
                 cursor_pos: Point::default(),
