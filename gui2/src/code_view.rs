@@ -7,6 +7,7 @@ use iced::{
         row, scrollable,
         scrollable::Viewport,
         text_editor::{Action, Content},
+        Component,
     },
     Color, Length, Point,
 };
@@ -118,4 +119,22 @@ pub fn code_viewer<'a>(
     .on_scroll(CodeViewerMessage::OnScroll)
     .id(scrollable_id)
     .into()
+}
+
+pub struct CodeViewer {}
+
+impl Component<CodeViewerMessage> for CodeViewer {
+    type State = ();
+    type Event = ();
+
+    fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<CodeViewerMessage> {
+        todo!()
+    }
+
+    fn view(
+        &self,
+        state: &Self::State,
+    ) -> iced::Element<'_, Self::Event, iced::Theme, iced::Renderer> {
+        todo!()
+    }
 }
