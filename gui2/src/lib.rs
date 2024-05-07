@@ -1,7 +1,8 @@
-use iced::highlighter::{self, Theme};
-use iced::widget::scrollable::Viewport;
-use iced::widget::{self, column, container, row, text, text_editor, Container};
-use iced::{executor, Application, Color, Command, Element, Length, Point};
+use std::collections::HashSet;
+
+use code_view::{code_viewer, CodeViewerMessage};
+use iced::widget::{column, container, row, text, text_editor, Container};
+use iced::{executor, Application, Color, Command, Element, Length};
 use iced_aw::Tabs;
 
 pub mod code_view;
@@ -10,10 +11,7 @@ mod highlight;
 #[derive(Debug, Clone)]
 pub enum Message {
     TabSelected(TabId),
-    EditorActionPerformed(widget::text_editor::Action),
-    CanvasClicked(iced::mouse::Button),
-    MouseMoved(Point),
-    OnScroll(Viewport),
+    CodeViewer(CodeViewerMessage),
 }
 
 fn title<'a, Message>(input: impl ToString) -> Container<'a, Message> {
@@ -31,10 +29,12 @@ pub enum DebuggerApp {
     #[allow(dead_code)]
     Initialising,
     #[allow(dead_code)]
-    Running,
+    Running { breakpoints: HashSet<usize> },
     Paused {
         active_tab: TabId,
         content: text_editor::Content,
+        breakpoints: HashSet<usize>,
+        scrollable_id: iced::widget::scrollable::Id,
     },
     #[allow(dead_code)]
     Terminated,
@@ -53,20 +53,14 @@ impl DebuggerApp {
     fn view_main_content(&self) -> iced::Element<'_, Message> {
         match self {
             DebuggerApp::Initialising => todo!(),
-            DebuggerApp::Running => todo!(),
-            DebuggerApp::Paused { ref content, .. } => column![text_editor(content)
-                .highlight::<crate::highlight::Highlighter>(
-                    highlighter::Settings {
-                        theme: Theme::SolarizedDark,
-                        extension: "rs".to_string(),
-                    },
-                    |highlight, _theme| highlight.to_format()
-                )
-                .height(Length::Fill)
-                .on_action(Message::EditorActionPerformed)]
-            .spacing(10)
-            .padding(10)
-            .into(),
+            DebuggerApp::Running { .. } => todo!(),
+            DebuggerApp::Paused {
+                ref content,
+                breakpoints,
+                scrollable_id,
+                ..
+            } => code_viewer(content, breakpoints, scrollable_id.clone(), None)
+                .map(Message::CodeViewer),
             DebuggerApp::Terminated => todo!(),
         }
     }
@@ -111,6 +105,8 @@ impl Application for DebuggerApp {
         let this = Self::Paused {
             active_tab: TabId::Variables,
             content: text_editor::Content::with_text(include_str!("main.rs")),
+            breakpoints: HashSet::new(),
+            scrollable_id: iced::widget::scrollable::Id::unique(),
         };
         (this, Command::none())
     }
@@ -118,25 +114,9 @@ impl Application for DebuggerApp {
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         #[allow(clippy::single_match)]
         match self {
-            Self::Paused {
-                active_tab,
-                content,
-            } => match message {
+            Self::Paused { active_tab, .. } => match message {
                 Message::TabSelected(selected) => *active_tab = selected,
-                Message::EditorActionPerformed(action) => match action {
-                    text_editor::Action::Edit(_) => {
-                        // override edit action to make nothing happen
-                    }
-                    action => content.perform(action),
-                    // text_editor::Action::Select(_) => todo!(),
-                    // text_editor::Action::SelectWord => todo!(),
-                    // text_editor::Action::SelectLine => todo!(),
-                    // text_editor::Action::Drag(_) => todo!(),
-                    // text_editor::Action::Scroll { lines } => todo!(),
-                },
-                Message::CanvasClicked(_) => todo!(),
-                Message::MouseMoved(_) => todo!(),
-                Message::OnScroll(_) => todo!(),
+                Message::CodeViewer(_) => todo!(),
             },
             _ => {}
         }

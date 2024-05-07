@@ -1,9 +1,7 @@
+/*
 use std::collections::HashSet;
 
-use gui2::{
-    code_view::{code_viewer, GUTTER_WIDTH, LINE_HEIGHT, OFFSET},
-    Message,
-};
+use gui2::code_view::{code_viewer, GUTTER_WIDTH, LINE_HEIGHT, OFFSET};
 use iced::{
     mouse::Button,
     widget::{
@@ -13,6 +11,9 @@ use iced::{
     },
     Application, Command, Point, Settings,
 };
+
+#[derive(Debug, Clone)]
+enum Message {}
 
 struct App {
     content: Content,
@@ -116,7 +117,8 @@ impl Application for App {
             &self.breakpoints,
             self.scrollable_id.clone(),
             self.gutter_highlight.as_ref(),
-        )]
+        )
+        .map(Message::CodeViewer)]
         .into()
     }
 
@@ -128,3 +130,5 @@ impl Application for App {
 fn main() -> iced::Result {
     App::run(Settings::default())
 }
+*/
+fn main() {}

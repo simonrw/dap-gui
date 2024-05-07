@@ -5,26 +5,30 @@ use iced::{
     widget::{
         canvas::{Frame, Path, Program},
         row, scrollable,
-        text_editor::Content,
+        scrollable::Viewport,
+        text_editor::{Action, Content},
     },
     Color, Length, Point,
 };
-
-use crate::Message;
 
 pub const LINE_HEIGHT: f32 = 20.8;
 pub const OFFSET: u8 = 6;
 pub const GUTTER_WIDTH: f32 = 16.0;
 
+#[derive(Debug, Clone)]
+pub enum CodeViewerMessage {
+    CanvasClicked(mouse::Button),
+    MouseMoved(Point),
+    EditorActionPerformed(Action),
+    OnScroll(Viewport),
+}
+
 struct RenderBreakpoints<'b> {
     breakpoints: &'b HashSet<usize>,
-    line_height: f32,
-    offset: u8,
     gutter_highlight: Option<&'b usize>,
 }
 
-// TODO: make `Message` generic
-impl<'b> Program<Message> for RenderBreakpoints<'b> {
+impl<'b> Program<CodeViewerMessage> for RenderBreakpoints<'b> {
     type State = ();
 
     fn draw(
@@ -41,7 +45,7 @@ impl<'b> Program<Message> for RenderBreakpoints<'b> {
             let mut frame = Frame::new(renderer, bounds.size());
             let center = Point::new(
                 bounds.size().width / 2.0,
-                (*highlight as f32) * self.line_height + (self.offset as f32),
+                (*highlight as f32) * LINE_HEIGHT + (OFFSET as f32),
             );
             let circle = Path::circle(center, 4.0);
             frame.fill(&circle, Color::from_rgb8(207, 120, 0));
@@ -52,7 +56,7 @@ impl<'b> Program<Message> for RenderBreakpoints<'b> {
             let mut frame = Frame::new(renderer, bounds.size());
             let center = Point::new(
                 bounds.size().width / 2.0,
-                (*b as f32) * self.line_height + (self.offset as f32),
+                (*b as f32) * LINE_HEIGHT + (OFFSET as f32),
             );
             let circle = Path::circle(center, 4.0);
             frame.fill(&circle, Color::from_rgb8(255, 0, 0));
@@ -67,15 +71,18 @@ impl<'b> Program<Message> for RenderBreakpoints<'b> {
         event: iced::widget::canvas::Event,
         _bounds: iced::Rectangle,
         _cursor: iced::advanced::mouse::Cursor,
-    ) -> (iced::widget::canvas::event::Status, Option<Message>) {
+    ) -> (
+        iced::widget::canvas::event::Status,
+        Option<CodeViewerMessage>,
+    ) {
         match event {
             iced::widget::canvas::Event::Mouse(mouse::Event::ButtonReleased(button)) => (
                 iced::widget::canvas::event::Status::Captured,
-                Some(Message::CanvasClicked(button)),
+                Some(CodeViewerMessage::CanvasClicked(button)),
             ),
             iced::widget::canvas::Event::Mouse(mouse::Event::CursorMoved { position }) => (
                 iced::widget::canvas::event::Status::Captured,
-                Some(Message::MouseMoved(position)),
+                Some(CodeViewerMessage::MouseMoved(position)),
             ),
             _ => (iced::widget::canvas::event::Status::Ignored, None),
         }
@@ -84,16 +91,12 @@ impl<'b> Program<Message> for RenderBreakpoints<'b> {
 
 pub fn code_viewer<'a>(
     content: &'a Content,
-    line_height: f32,
-    offset: u8,
     breakpoints: &'a HashSet<usize>,
     scrollable_id: iced::widget::scrollable::Id,
     gutter_highlight: Option<&'a usize>,
-) -> iced::Element<'a, Message> {
+) -> iced::Element<'a, CodeViewerMessage> {
     let render_breakpoints = RenderBreakpoints {
         breakpoints,
-        line_height,
-        offset,
         gutter_highlight,
     };
     let gutter = iced::widget::canvas(render_breakpoints)
@@ -103,7 +106,8 @@ pub fn code_viewer<'a>(
     let editor = iced::widget::text_editor(content)
         .padding(16)
         .height(Length::Fill)
-        .on_action(Message::EditorActionPerformed);
+        .on_action(CodeViewerMessage::EditorActionPerformed);
+
     scrollable(
         row![gutter, editor]
             .width(Length::Fill)
@@ -111,7 +115,7 @@ pub fn code_viewer<'a>(
     )
     .height(Length::Fill)
     .width(Length::Fill)
-    .on_scroll(Message::OnScroll)
+    .on_scroll(CodeViewerMessage::OnScroll)
     .id(scrollable_id)
     .into()
 }
