@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use code_view::{code_viewer, CodeViewerMessage};
+use code_view::{CodeViewer, CodeViewerAction};
 use iced::widget::{column, container, row, text, text_editor, Container};
 use iced::{executor, Application, Color, Command, Element, Length};
 use iced_aw::Tabs;
@@ -11,7 +11,7 @@ mod highlight;
 #[derive(Debug, Clone)]
 pub enum Message {
     TabSelected(TabId),
-    CodeViewer(CodeViewerMessage),
+    CodeViewer(CodeViewerAction),
 }
 
 fn title<'a, Message>(input: impl ToString) -> Container<'a, Message> {
@@ -59,8 +59,9 @@ impl DebuggerApp {
                 breakpoints,
                 scrollable_id,
                 ..
-            } => code_viewer(content, breakpoints, scrollable_id.clone(), None)
-                .map(Message::CodeViewer),
+            } => CodeViewer::new(content, breakpoints, scrollable_id.clone(), None)
+                .on_change(Message::CodeViewer)
+                .into(),
             DebuggerApp::Terminated => todo!(),
         }
     }
