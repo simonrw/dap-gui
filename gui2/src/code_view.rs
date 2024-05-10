@@ -175,7 +175,7 @@ pub struct CodeViewer<'a, Message> {
     breakpoints: &'a HashSet<usize>,
     scrollable_id: iced::widget::scrollable::Id,
     gutter_highlight: Option<&'a usize>,
-    on_change: Option<Box<dyn Fn(CodeViewerAction) -> Message>>,
+    on_change: Option<Box<dyn Fn(CodeViewerAction) -> Message + 'static>>,
 }
 
 impl<'a, Message> CodeViewer<'a, Message> {
@@ -194,13 +194,16 @@ impl<'a, Message> CodeViewer<'a, Message> {
         }
     }
 
-    pub fn on_change(mut self, on_change: impl Fn(CodeViewerAction) -> Message) -> Self {
+    pub fn on_change(mut self, on_change: impl Fn(CodeViewerAction) -> Message + 'static) -> Self {
         self.on_change = Some(Box::new(on_change));
         self
     }
 }
 
-impl<'a, Message> From<CodeViewer<'a, Message>> for Element<'a, Message> {
+impl<'a, Message> From<CodeViewer<'a, Message>> for Element<'a, Message>
+where
+    Message: 'a,
+{
     fn from(value: CodeViewer<'a, Message>) -> Self {
         component(value)
     }
@@ -256,13 +259,15 @@ impl<'b, Message> Program<Message> for RenderBreakpoints<'b> {
         _cursor: iced::advanced::mouse::Cursor,
     ) -> (iced::widget::canvas::event::Status, Option<Message>) {
         match event {
-            iced::widget::canvas::Event::Mouse(mouse::Event::ButtonReleased(button)) => (
+            iced::widget::canvas::Event::Mouse(mouse::Event::ButtonReleased(_button)) => (
                 iced::widget::canvas::event::Status::Captured,
                 // Some(CodeViewerMessage::CanvasClicked(button)),
                 //`TODO
                 None,
             ),
-            iced::widget::canvas::Event::Mouse(mouse::Event::CursorMoved { position }) => (
+            iced::widget::canvas::Event::Mouse(mouse::Event::CursorMoved {
+                position: _position,
+            }) => (
                 iced::widget::canvas::event::Status::Captured,
                 // Some(CodeViewerMessage::MouseMoved(position)),
                 //`TODO
@@ -278,7 +283,7 @@ impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
 
     type Event = Event;
 
-    fn update(&mut self, _state: &mut Self::State, event: Event) -> Option<Message> {
+    fn update(&mut self, _state: &mut Self::State, _event: Event) -> Option<Message> {
         todo!()
     }
 
@@ -304,7 +309,7 @@ impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
         .height(Length::Fill)
         .width(Length::Fill)
         .on_scroll(Event::OnScroll)
-        .id(self.scrollable_id)
+        .id(self.scrollable_id.clone())
         .into()
     }
 }
