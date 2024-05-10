@@ -59,9 +59,14 @@ impl DebuggerApp {
                 breakpoints,
                 scrollable_id,
                 ..
-            } => CodeViewer::new(content, breakpoints, scrollable_id.clone(), None)
-                .on_change(Message::CodeViewer)
-                .into(),
+            } => CodeViewer::new(
+                content,
+                breakpoints,
+                scrollable_id.clone(),
+                None,
+                Message::CodeViewer,
+            )
+            .into(),
             DebuggerApp::Terminated => todo!(),
         }
     }

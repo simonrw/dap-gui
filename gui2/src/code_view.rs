@@ -175,7 +175,7 @@ pub struct CodeViewer<'a, Message> {
     breakpoints: &'a HashSet<usize>,
     scrollable_id: iced::widget::scrollable::Id,
     gutter_highlight: Option<&'a usize>,
-    on_change: Option<Box<dyn Fn(CodeViewerAction) -> Message + 'static>>,
+    on_change: Box<dyn Fn(CodeViewerAction) -> Message + 'static>,
 }
 
 impl<'a, Message> CodeViewer<'a, Message> {
@@ -184,19 +184,15 @@ impl<'a, Message> CodeViewer<'a, Message> {
         breakpoints: &'a HashSet<usize>,
         scrollable_id: iced::widget::scrollable::Id,
         gutter_highlight: Option<&'a usize>,
+        on_change: impl Fn(CodeViewerAction) -> Message + 'static,
     ) -> Self {
         Self {
             content,
             breakpoints,
             scrollable_id,
             gutter_highlight,
-            on_change: None,
+            on_change: Box::new(on_change),
         }
-    }
-
-    pub fn on_change(mut self, on_change: impl Fn(CodeViewerAction) -> Message + 'static) -> Self {
-        self.on_change = Some(Box::new(on_change));
-        self
     }
 }
 
@@ -278,13 +274,30 @@ impl<'b, Message> Program<Message> for RenderBreakpoints<'b> {
     }
 }
 
+#[derive(Default)]
+pub struct State {
+    mouse_position: Point,
+}
+
 impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
-    type State = ();
+    type State = State;
 
     type Event = Event;
 
-    fn update(&mut self, _state: &mut Self::State, _event: Event) -> Option<Message> {
-        todo!()
+    fn update(&mut self, state: &mut Self::State, event: Event) -> Option<Message> {
+        match event {
+            Event::MouseMoved(point) => {
+                state.mouse_position = point;
+                None
+            }
+            Event::CanvasClicked(mouse::Button::Left) => {
+                // TODO
+                Some((self.on_change)(CodeViewerAction::BreakpointAdded(10)))
+            }
+            Event::CanvasClicked(_) => None,
+            Event::EditorActionPerformed(_) => None,
+            Event::OnScroll(_) => None,
+        }
     }
 
     fn view(&self, _state: &Self::State) -> iced::Element<'_, Event> {
@@ -311,5 +324,41 @@ impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
         .on_scroll(Event::OnScroll)
         .id(self.scrollable_id.clone())
         .into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_breakpoints() {
+        let content = Content::new();
+        let breakpoints = HashSet::new();
+        let scrollable_id = iced::widget::scrollable::Id::unique();
+
+        enum TestMessage {
+            Event(CodeViewerAction),
+        }
+
+        let mut code_view = CodeViewer::new(
+            &content,
+            &breakpoints,
+            scrollable_id,
+            None,
+            TestMessage::Event,
+        );
+
+        // move the mouse to the gutter
+
+        let mut state = State::default();
+        code_view.update(&mut state, Event::MouseMoved(Point { x: 5.0, y: 100.0 }));
+        let TestMessage::Event(CodeViewerAction::BreakpointAdded(bp)) = code_view
+            .update(&mut state, Event::CanvasClicked(mouse::Button::Left))
+            .unwrap()
+        else {
+            unreachable!();
+        };
+        assert_eq!(bp, 10);
     }
 }
