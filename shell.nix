@@ -27,6 +27,7 @@ in
         delve
         clang
         hyperfine
+        bacon
       ]
       ++ lib.optionals stdenv.isDarwin apple-deps
       ++ lib.optionals stdenv.isLinux [
