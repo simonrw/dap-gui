@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::collections::HashSet;
+use std::rc::Rc;
 
 use code_view::{CodeViewer, CodeViewerAction};
 use iced::widget::{column, container, row, text, text_editor, Container};
@@ -32,7 +34,7 @@ pub enum DebuggerApp {
     Running { breakpoints: HashSet<usize> },
     Paused {
         active_tab: TabId,
-        content: text_editor::Content,
+        content: Rc<RefCell<text_editor::Content>>,
         breakpoints: HashSet<usize>,
         scrollable_id: iced::widget::scrollable::Id,
     },
@@ -59,14 +61,17 @@ impl DebuggerApp {
                 breakpoints,
                 scrollable_id,
                 ..
-            } => CodeViewer::new(
-                content,
-                breakpoints,
-                scrollable_id.clone(),
-                None,
-                Message::CodeViewer,
-            )
-            .into(),
+            } => {
+                let content = Rc::clone(content);
+                CodeViewer::new(
+                    content,
+                    breakpoints,
+                    scrollable_id.clone(),
+                    None,
+                    Message::CodeViewer,
+                )
+                .into()
+            }
             DebuggerApp::Terminated => todo!(),
         }
     }
@@ -110,7 +115,9 @@ impl Application for DebuggerApp {
     fn new(_flags: Self::Flags) -> (Self, Command<Self::Message>) {
         let this = Self::Paused {
             active_tab: TabId::Variables,
-            content: text_editor::Content::with_text(include_str!("main.rs")),
+            content: Rc::new(RefCell::new(text_editor::Content::with_text(include_str!(
+                "main.rs"
+            )))),
             breakpoints: HashSet::new(),
             scrollable_id: iced::widget::scrollable::Id::unique(),
         };

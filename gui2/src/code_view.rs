@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use iced::{
     mouse,
@@ -166,12 +166,11 @@ pub enum Event {
 
 #[derive(Debug, Clone)]
 pub enum CodeViewerAction {
-    BreakpointAdded(usize),
-    BreakpointRemoved(usize),
+    BreakpointChanged(usize),
 }
 
 pub struct CodeViewer<'a, Message> {
-    content: &'a Content,
+    content: Rc<RefCell<Content>>,
     breakpoints: &'a HashSet<usize>,
     scrollable_id: iced::widget::scrollable::Id,
     gutter_highlight: Option<&'a usize>,
@@ -180,7 +179,7 @@ pub struct CodeViewer<'a, Message> {
 
 impl<'a, Message> CodeViewer<'a, Message> {
     pub fn new(
-        content: &'a Content,
+        content: Rc<RefCell<Content>>,
         breakpoints: &'a HashSet<usize>,
         scrollable_id: iced::widget::scrollable::Id,
         gutter_highlight: Option<&'a usize>,
@@ -277,6 +276,8 @@ impl<'b, Message> Program<Message> for RenderBreakpoints<'b> {
 #[derive(Default)]
 pub struct State {
     mouse_position: Point,
+    scroll_position: f32,
+    gutter_highlight: Option<usize>,
 }
 
 impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
@@ -288,15 +289,59 @@ impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
         match event {
             Event::MouseMoved(point) => {
                 state.mouse_position = point;
+
+                if point.x < GUTTER_WIDTH {
+                    state.gutter_highlight =
+                        Some(((point.y + state.scroll_position) / LINE_HEIGHT).floor() as _);
+                } else {
+                    self.gutter_highlight = None;
+                }
+
                 None
             }
             Event::CanvasClicked(mouse::Button::Left) => {
-                // TODO
-                Some((self.on_change)(CodeViewerAction::BreakpointAdded(10)))
+                if state.mouse_position.x < GUTTER_WIDTH {
+                    let line_no = ((state.mouse_position.y + state.scroll_position) / LINE_HEIGHT)
+                        .floor() as usize;
+                    return Some((self.on_change)(CodeViewerAction::BreakpointChanged(
+                        line_no,
+                    )));
+                }
+                None
             }
             Event::CanvasClicked(_) => None,
-            Event::EditorActionPerformed(_) => None,
-            Event::OnScroll(_) => None,
+            Event::OnScroll(viewport) => {
+                let offset = viewport.absolute_offset();
+                state.scroll_position = offset.y;
+                None
+            }
+            Event::EditorActionPerformed(action) => match action {
+                Action::Edit(_) => {
+                    // override edit action to make nothing happen
+                    None
+                }
+                Action::Scroll { lines } => {
+                    // override scroll action to make sure we don't break things
+                    state.scroll_position += (lines as f32) * LINE_HEIGHT;
+                    // return iced::widget::scrollable::scroll_to(
+                    //     self.scrollable_id.clone(),
+                    //     scrollable::AbsoluteOffset {
+                    //         x: 0.0,
+                    //         y: self.scroll_position,
+                    //     },
+                    // );
+                    None
+                }
+                action => {
+                    let mut content = self.content.borrow_mut();
+                    content.perform(action);
+                    None
+                } // text_editor::Action::Select(_) => todo!(),
+                  // text_editor::Action::SelectWord => todo!(),
+                  // text_editor::Action::SelectLine => todo!(),
+                  // text_editor::Action::Drag(_) => todo!(),
+                  // text_editor::Action::Scroll { lines } => todo!(),
+            },
         }
     }
 
@@ -309,7 +354,7 @@ impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
             .height(Length::Fill)
             .width(Length::Fixed(GUTTER_WIDTH));
 
-        let editor = iced::widget::text_editor(self.content)
+        let editor = iced::widget::text_editor(&*self.content.borrow())
             .padding(16)
             .height(Length::Fill)
             .on_action(Self::Event::EditorActionPerformed);
@@ -331,9 +376,18 @@ impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
 mod tests {
     use super::*;
 
+    fn move_and_click<Message>(
+        code_view: &mut CodeViewer<'_, Message>,
+        state: &mut State,
+        position: Point,
+    ) -> Option<Message> {
+        code_view.update(state, Event::MouseMoved(position));
+        code_view.update(state, Event::CanvasClicked(mouse::Button::Left))
+    }
+
     #[test]
     fn add_breakpoints() {
-        let content = Content::new();
+        let mut content = Content::new();
         let breakpoints = HashSet::new();
         let scrollable_id = iced::widget::scrollable::Id::unique();
 
@@ -342,7 +396,7 @@ mod tests {
         }
 
         let mut code_view = CodeViewer::new(
-            &content,
+            &mut content,
             &breakpoints,
             scrollable_id,
             None,
@@ -352,13 +406,11 @@ mod tests {
         // move the mouse to the gutter
 
         let mut state = State::default();
-        code_view.update(&mut state, Event::MouseMoved(Point { x: 5.0, y: 100.0 }));
-        let TestMessage::Event(CodeViewerAction::BreakpointAdded(bp)) = code_view
-            .update(&mut state, Event::CanvasClicked(mouse::Button::Left))
-            .unwrap()
-        else {
-            unreachable!();
-        };
-        assert_eq!(bp, 10);
+
+        let TestMessage::Event(CodeViewerAction::BreakpointChanged(bp)) =
+            move_and_click(&mut code_view, &mut state, Point { x: 5.0, y: 93.6 }).unwrap();
+        assert_eq!(bp, 4);
+
+        assert!(move_and_click(&mut code_view, &mut state, Point { x: 100.0, y: 10.0 }).is_none());
     }
 }

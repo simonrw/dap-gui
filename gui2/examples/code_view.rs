@@ -1,7 +1,6 @@
-/*
 use std::collections::HashSet;
 
-use gui2::code_view::{code_viewer, GUTTER_WIDTH, LINE_HEIGHT, OFFSET};
+use gui2::code_view::{CodeViewer, GUTTER_WIDTH, LINE_HEIGHT, OFFSET};
 use iced::{
     mouse::Button,
     widget::{
@@ -130,5 +129,3 @@ impl Application for App {
 fn main() -> iced::Result {
     App::run(Settings::default())
 }
-*/
-fn main() {}
