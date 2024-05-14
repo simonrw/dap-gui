@@ -10,6 +10,3 @@ futures = "0.3.30"
 iced = { version = "0.12.1", features = ["highlighter", "tokio", "debug", "advanced", "lazy"]}
 dark-light = "1.0.0"
 iced_aw = "0.8"
-
-[lints.rust]
-warnings = "deny"
