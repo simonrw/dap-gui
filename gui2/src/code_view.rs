@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashSet, rc::Rc};
+use std::collections::HashSet;
 
 use iced::{
     mouse,
@@ -9,7 +9,7 @@ use iced::{
         text_editor::{Action, Content},
         Component,
     },
-    Color, Element, Length, Point,
+    Color, Element, Length, Point, Size,
 };
 
 pub const LINE_HEIGHT: f32 = 20.8;
@@ -167,10 +167,11 @@ pub enum Event {
 #[derive(Debug, Clone)]
 pub enum CodeViewerAction {
     BreakpointChanged(usize),
+    EditorAction(Action),
 }
 
 pub struct CodeViewer<'a, Message> {
-    content: Rc<RefCell<Content>>,
+    content: &'a Content,
     breakpoints: &'a HashSet<usize>,
     scrollable_id: iced::widget::scrollable::Id,
     gutter_highlight: Option<&'a usize>,
@@ -179,7 +180,7 @@ pub struct CodeViewer<'a, Message> {
 
 impl<'a, Message> CodeViewer<'a, Message> {
     pub fn new(
-        content: Rc<RefCell<Content>>,
+        content: &'a Content,
         breakpoints: &'a HashSet<usize>,
         scrollable_id: iced::widget::scrollable::Id,
         gutter_highlight: Option<&'a usize>,
@@ -333,9 +334,7 @@ impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
                     None
                 }
                 action => {
-                    let mut content = self.content.borrow_mut();
-                    content.perform(action);
-                    None
+                    return Some((self.on_change)(CodeViewerAction::EditorAction(action)));
                 } // text_editor::Action::Select(_) => todo!(),
                   // text_editor::Action::SelectWord => todo!(),
                   // text_editor::Action::SelectLine => todo!(),
@@ -354,13 +353,14 @@ impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
             .height(Length::Fill)
             .width(Length::Fixed(GUTTER_WIDTH));
 
-        let editor = iced::widget::text_editor(&*self.content.borrow())
+        let editor = iced::widget::text_editor(self.content)
             .padding(16)
             .height(Length::Fill)
             .on_action(Self::Event::EditorActionPerformed);
 
+        use iced::widget::text;
         scrollable(
-            row![gutter, editor]
+            row![text("scrollable"), gutter, editor]
                 .width(Length::Fill)
                 .height(Length::Fill),
         )
@@ -369,6 +369,13 @@ impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
         .on_scroll(Event::OnScroll)
         .id(self.scrollable_id.clone())
         .into()
+    }
+
+    fn size_hint(&self) -> iced::Size<Length> {
+        Size {
+            width: Length::Fill,
+            height: Length::Fill,
+        }
     }
 }
 
@@ -387,7 +394,7 @@ mod tests {
 
     #[test]
     fn add_breakpoints() {
-        let mut content = Content::new();
+        let content = Content::new();
         let breakpoints = HashSet::new();
         let scrollable_id = iced::widget::scrollable::Id::unique();
 
@@ -396,7 +403,7 @@ mod tests {
         }
 
         let mut code_view = CodeViewer::new(
-            &mut content,
+            &content,
             &breakpoints,
             scrollable_id,
             None,
@@ -408,7 +415,10 @@ mod tests {
         let mut state = State::default();
 
         let TestMessage::Event(CodeViewerAction::BreakpointChanged(bp)) =
-            move_and_click(&mut code_view, &mut state, Point { x: 5.0, y: 93.6 }).unwrap();
+            move_and_click(&mut code_view, &mut state, Point { x: 5.0, y: 93.6 }).unwrap()
+        else {
+            unreachable!()
+        };
         assert_eq!(bp, 4);
 
         assert!(move_and_click(&mut code_view, &mut state, Point { x: 100.0, y: 10.0 }).is_none());
