@@ -35,7 +35,6 @@ pub struct CodeViewer<'a, Message> {
     content: &'a Content,
     breakpoints: &'a HashSet<usize>,
     scrollable_id: iced::widget::scrollable::Id,
-    gutter_highlight: Option<&'a usize>,
     on_change: Box<dyn Fn(CodeViewerAction) -> Message + 'static>,
 }
 
@@ -44,14 +43,12 @@ impl<'a, Message> CodeViewer<'a, Message> {
         content: &'a Content,
         breakpoints: &'a HashSet<usize>,
         scrollable_id: iced::widget::scrollable::Id,
-        gutter_highlight: Option<&'a usize>,
         on_change: impl Fn(CodeViewerAction) -> Message + 'static,
     ) -> Self {
         Self {
             content,
             breakpoints,
             scrollable_id,
-            gutter_highlight,
             on_change: Box::new(on_change),
         }
     }
@@ -68,7 +65,7 @@ where
 
 struct RenderBreakpoints<'b> {
     breakpoints: &'b HashSet<usize>,
-    gutter_highlight: Option<&'b usize>,
+    gutter_highlight: Option<usize>,
 }
 
 impl<'b> Program<Event> for RenderBreakpoints<'b> {
@@ -90,7 +87,7 @@ impl<'b> Program<Event> for RenderBreakpoints<'b> {
             let mut frame = Frame::new(renderer, bounds.size());
             let center = Point::new(
                 bounds.size().width / 2.0,
-                (*highlight as f32) * LINE_HEIGHT + (OFFSET as f32),
+                (highlight as f32) * LINE_HEIGHT + (OFFSET as f32),
             );
             let circle = Path::circle(center, 4.0);
             frame.fill(&circle, Color::from_rgb8(207, 120, 0));
@@ -156,7 +153,7 @@ impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
                     state.gutter_highlight =
                         Some(((point.y + state.scroll_position) / LINE_HEIGHT).floor() as _);
                 } else {
-                    self.gutter_highlight = None;
+                    state.gutter_highlight = None;
                 }
 
                 None
@@ -210,10 +207,10 @@ impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
         }
     }
 
-    fn view(&self, _state: &Self::State) -> iced::Element<'_, Event> {
+    fn view(&self, state: &Self::State) -> iced::Element<'_, Event> {
         let render_breakpoints = RenderBreakpoints {
             breakpoints: self.breakpoints,
-            gutter_highlight: self.gutter_highlight,
+            gutter_highlight: state.gutter_highlight,
         };
         let gutter = iced::widget::canvas(render_breakpoints)
             .height(Length::Fill)
@@ -267,13 +264,8 @@ mod tests {
             Event(CodeViewerAction),
         }
 
-        let mut code_view = CodeViewer::new(
-            &content,
-            &breakpoints,
-            scrollable_id,
-            None,
-            TestMessage::Event,
-        );
+        let mut code_view =
+            CodeViewer::new(&content, &breakpoints, scrollable_id, TestMessage::Event);
 
         // move the mouse to the gutter
 

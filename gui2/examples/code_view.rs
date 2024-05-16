@@ -15,7 +15,6 @@ struct App {
     content: Content,
     breakpoints: HashSet<usize>,
     scrollable_id: iced::widget::scrollable::Id,
-    gutter_highlight: Option<usize>,
 }
 
 impl Application for App {
@@ -30,7 +29,6 @@ impl Application for App {
                 content: Content::with_text(include_str!("code_view.rs")),
                 breakpoints: Default::default(),
                 scrollable_id: iced::widget::scrollable::Id::unique(),
-                gutter_highlight: None,
             },
             Command::none(),
         )
@@ -66,7 +64,6 @@ impl Application for App {
             &self.content,
             &self.breakpoints,
             self.scrollable_id.clone(),
-            self.gutter_highlight.as_ref(),
             Message::CodeViewer,
         )]
         .into()

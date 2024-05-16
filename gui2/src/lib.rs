@@ -63,7 +63,6 @@ impl DebuggerApp {
                 content,
                 breakpoints,
                 scrollable_id.clone(),
-                None,
                 Message::CodeViewer,
             )
             .into(),
