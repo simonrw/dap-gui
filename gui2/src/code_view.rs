@@ -28,6 +28,7 @@ pub enum Event {
 pub enum CodeViewerAction {
     BreakpointChanged(usize),
     EditorAction(Action),
+    ScrollCommand { offset: scrollable::AbsoluteOffset },
 }
 
 pub struct CodeViewer<'a, Message> {
@@ -174,6 +175,13 @@ impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
             Event::OnScroll(viewport) => {
                 let offset = viewport.absolute_offset();
                 state.scroll_position = offset.y;
+                // (self.on_change)(CodeViewerAction::ScrollCommand {
+                //     scrollable_id: self.scrollable_id.clone(),
+                //     offset: scrollable::AbsoluteOffset {
+                //         x: 0.0,
+                //         y: state.scroll_position,
+                //     },
+                // });
                 None
             }
             Event::EditorActionPerformed(action) => match action {
@@ -184,22 +192,20 @@ impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
                 Action::Scroll { lines } => {
                     // override scroll action to make sure we don't break things
                     state.scroll_position += (lines as f32) * LINE_HEIGHT;
-                    // return iced::widget::scrollable::scroll_to(
-                    //     self.scrollable_id.clone(),
-                    //     scrollable::AbsoluteOffset {
-                    //         x: 0.0,
-                    //         y: self.scroll_position,
-                    //     },
-                    // );
-                    None
+                    state.scroll_position = state.scroll_position.max(0.0);
+                    return Some((self.on_change)(CodeViewerAction::ScrollCommand {
+                        offset: scrollable::AbsoluteOffset {
+                            x: 0.0,
+                            y: state.scroll_position,
+                        },
+                    }));
+                    // forward the event
+                    // Some((self.on_change)(CodeViewerAction::EditorAction(action)))
                 }
-                action => {
-                    return Some((self.on_change)(CodeViewerAction::EditorAction(action)));
-                } // text_editor::Action::Select(_) => todo!(),
-                  // text_editor::Action::SelectWord => todo!(),
-                  // text_editor::Action::SelectLine => todo!(),
-                  // text_editor::Action::Drag(_) => todo!(),
-                  // text_editor::Action::Scroll { lines } => todo!(),
+                action => Some((self.on_change)(CodeViewerAction::EditorAction(action))), // text_editor::Action::Select(_) => todo!(),
+                                                                                          // text_editor::Action::SelectWord => todo!(),
+                                                                                          // text_editor::Action::SelectLine => todo!(),
+                                                                                          // text_editor::Action::Drag(_) => todo!(),
             },
         }
     }

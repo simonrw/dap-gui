@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use gui2::code_view::{CodeViewer, CodeViewerAction};
 use iced::{
-    widget::{column, text, text_editor::Content},
+    widget::{column, text_editor::Content},
     Application, Command, Settings,
 };
 
@@ -42,7 +42,6 @@ impl Application for App {
 
     #[tracing::instrument(skip(self))]
     fn update(&mut self, message: Self::Message) -> Command<Message> {
-        tracing::debug!("app event");
         match message {
             Message::CodeViewer(CodeViewerAction::BreakpointChanged(bp)) => {
                 if self.breakpoints.contains(&bp) {
@@ -52,7 +51,11 @@ impl Application for App {
                 }
             }
             Message::CodeViewer(CodeViewerAction::EditorAction(action)) => {
+                tracing::debug!(?action, "got editor action");
                 self.content.perform(action)
+            }
+            Message::CodeViewer(CodeViewerAction::ScrollCommand { offset, .. }) => {
+                return iced::widget::scrollable::scroll_to(self.scrollable_id.clone(), offset);
             }
         }
         Command::none()
