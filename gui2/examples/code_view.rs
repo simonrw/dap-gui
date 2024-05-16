@@ -40,10 +40,16 @@ impl Application for App {
         "Code Viewer example".to_string()
     }
 
+    #[tracing::instrument(skip(self))]
     fn update(&mut self, message: Self::Message) -> Command<Message> {
+        tracing::debug!("app event");
         match message {
             Message::CodeViewer(CodeViewerAction::BreakpointChanged(bp)) => {
-                tracing::debug!(?bp, "updating breakpoint");
+                if self.breakpoints.contains(&bp) {
+                    self.breakpoints.remove(&bp);
+                } else {
+                    self.breakpoints.insert(bp);
+                }
             }
             Message::CodeViewer(CodeViewerAction::EditorAction(action)) => {
                 self.content.perform(action)
@@ -53,16 +59,13 @@ impl Application for App {
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message> {
-        column![
-            text("Hello world"),
-            CodeViewer::new(
-                &self.content,
-                &self.breakpoints,
-                self.scrollable_id.clone(),
-                self.gutter_highlight.as_ref(),
-                Message::CodeViewer,
-            )
-        ]
+        column![CodeViewer::new(
+            &self.content,
+            &self.breakpoints,
+            self.scrollable_id.clone(),
+            self.gutter_highlight.as_ref(),
+            Message::CodeViewer,
+        )]
         .into()
     }
 
