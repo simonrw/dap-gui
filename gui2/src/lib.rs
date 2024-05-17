@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use code_view::{CodeViewer, CodeViewerAction};
 use dark_light::Mode;
 use iced::widget::{column, container, row, text, text_editor, Container};
-use iced::{executor, Application, Color, Command, Element, Length};
+use iced::{executor, Application, Command, Length};
 use iced_aw::Tabs;
 
 pub mod code_view;
@@ -157,12 +157,8 @@ impl Application for DebuggerApp {
             .height(Length::Fill)
             .width(Length::Fill);
 
-        let main_content = column![
-            self.view_main_content()
-                .explain(Color::from_rgb(0.0, 1.0, 0.0)),
-            self.view_bottom_panel(),
-        ]
-        .height(Length::Fill);
+        let main_content =
+            column![self.view_main_content(), self.view_bottom_panel(),].height(Length::Fill);
 
         row![
             sidebar.width(Length::Fixed(300.0)),

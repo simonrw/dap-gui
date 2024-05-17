@@ -25,10 +25,7 @@ impl Sandbox for App {
     fn update(&mut self, _message: Self::Message) {}
 
     fn view(&self) -> iced::Element<'_, Self::Message> {
-        let container: iced::Element<_> =
-            row![canvas(120.0f32).width(Length::Fill).height(Length::Fill),].into();
-
-        container.explain(Color::from_rgb(0.7, 0.7, 0.7))
+        row![canvas(120.0f32).width(Length::Fill).height(Length::Fill),].into()
     }
 }
 
