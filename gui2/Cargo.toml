@@ -11,6 +11,7 @@ iced = { version = "0.12.1", features = ["highlighter", "tokio", "debug", "advan
 dark-light = "1.0.0"
 iced_aw = "0.8"
 tracing.workspace = true
+clap.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true

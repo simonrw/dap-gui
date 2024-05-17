@@ -1,13 +1,21 @@
 use std::collections::HashSet;
 
+use clap::Parser;
 use code_view::{CodeViewer, CodeViewerAction};
 use dark_light::Mode;
 use iced::widget::{column, container, row, text, text_editor, Container};
-use iced::{executor, Application, Command, Length};
+use iced::{executor, Application, Color, Command, Element, Length};
 use iced_aw::Tabs;
 
 pub mod code_view;
 mod highlight;
+
+#[derive(Debug, Parser)]
+pub struct Args {
+    /// debug rendering
+    #[clap(short, long)]
+    debug: bool,
+}
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -32,6 +40,7 @@ pub enum DebuggerApp {
     #[allow(dead_code)]
     Running { breakpoints: HashSet<usize> },
     Paused {
+        args: Args,
         active_tab: TabId,
         content: text_editor::Content,
         breakpoints: HashSet<usize>,
@@ -108,7 +117,10 @@ impl Application for DebuggerApp {
     type Message = Message;
 
     fn new(_flags: Self::Flags) -> (Self, Command<Self::Message>) {
+        let args = Args::parse();
+
         let this = Self::Paused {
+            args,
             active_tab: TabId::Variables,
             content: text_editor::Content::with_text(include_str!("main.rs")),
             breakpoints: HashSet::new(),
@@ -153,44 +165,27 @@ impl Application for DebuggerApp {
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message> {
-        let sidebar = column![self.view_call_stack(), self.view_breakpoints(),]
-            .height(Length::Fill)
-            .width(Length::Fill);
+        match self {
+            DebuggerApp::Paused { args, .. } => {
+                let sidebar = column![self.view_call_stack(), self.view_breakpoints(),]
+                    .height(Length::Fill)
+                    .width(Length::Fill);
 
-        let main_content =
-            column![self.view_main_content(), self.view_bottom_panel(),].height(Length::Fill);
+                let main_content = column![self.view_main_content(), self.view_bottom_panel(),]
+                    .height(Length::Fill);
 
-        row![
-            sidebar.width(Length::Fixed(300.0)),
-            main_content.width(Length::Fill),
-        ]
-        .into()
+                let mut result = Element::from(row![
+                    sidebar.width(Length::Fixed(300.0)),
+                    main_content.width(Length::Fill),
+                ]);
 
-        // let c: iced::Element<_> = container(
-        //     column![
-        //         button("increment").on_press(Message::Increment),
-        //         text(self.value).size(50),
-        //         button("decrement").on_press(Message::Decrement),
-        //     ]
-        //     .padding(20)
-        //     .align_items(Alignment::Center),
-        // )
-        // .width(Length::Fill)
-        // .height(Length::Fill)
-        // .align_x(Horizontal::Center)
-        // .align_y(Vertical::Center)
-        // .center_x()
-        // .center_y()
-        // .style(container::Appearance {
-        //     border: Border {
-        //         width: 2.0,
-        //         color: Color::BLACK,
-        //         ..Default::default()
-        //     },
-        //     ..Default::default()
-        // })
-        // .into();
-        // c.explain(Color::BLACK)
+                if args.debug {
+                    result = result.explain(Color::from_rgb(1.0, 0.0, 0.0));
+                }
+                result
+            }
+            _ => todo!(),
+        }
     }
 
     fn theme(&self) -> Self::Theme {

@@ -2292,6 +2292,7 @@ dependencies = [
 name = "gui2"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "dark-light",
  "futures",
  "iced",
