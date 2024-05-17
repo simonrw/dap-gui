@@ -120,9 +120,28 @@ impl Application for DebuggerApp {
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         #[allow(clippy::single_match)]
         match self {
-            Self::Paused { active_tab, .. } => match message {
+            Self::Paused {
+                active_tab,
+                breakpoints,
+                content,
+                scrollable_id,
+                ..
+            } => match message {
                 Message::TabSelected(selected) => *active_tab = selected,
-                Message::CodeViewer(_) => todo!(),
+                Message::CodeViewer(CodeViewerAction::BreakpointChanged(bp)) => {
+                    if breakpoints.contains(&bp) {
+                        breakpoints.remove(&bp);
+                    } else {
+                        breakpoints.insert(bp);
+                    }
+                }
+                Message::CodeViewer(CodeViewerAction::EditorAction(action)) => {
+                    tracing::debug!(?action, "got editor action");
+                    content.perform(action)
+                }
+                Message::CodeViewer(CodeViewerAction::ScrollCommand { offset, .. }) => {
+                    return iced::widget::scrollable::scroll_to(scrollable_id.clone(), offset);
+                }
             },
             _ => {}
         }
