@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use code_view::{CodeViewer, CodeViewerAction};
+use dark_light::Mode;
 use iced::widget::{column, container, row, text, text_editor, Container};
 use iced::{executor, Application, Color, Command, Element, Length};
 use iced_aw::Tabs;
@@ -175,10 +176,9 @@ impl Application for DebuggerApp {
     }
 
     fn theme(&self) -> Self::Theme {
-        iced::Theme::Dark
-        // match dark_light::detect() {
-        //     Mode::Dark | Mode::Default => iced::Theme::Dark,
-        //     Mode::Light => iced::Theme::Light,
-        // }
+        match dark_light::detect() {
+            Mode::Dark | Mode::Default => iced::Theme::Dark,
+            Mode::Light => iced::Theme::Light,
+        }
     }
 }

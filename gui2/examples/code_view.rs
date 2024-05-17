@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use dark_light::Mode;
 use gui2::code_view::{CodeViewer, CodeViewerAction};
 use iced::{
     widget::{column, text_editor::Content},
@@ -70,7 +71,10 @@ impl Application for App {
     }
 
     fn theme(&self) -> iced::Theme {
-        iced::Theme::Dark
+        match dark_light::detect() {
+            Mode::Dark | Mode::Default => iced::Theme::Dark,
+            Mode::Light => iced::Theme::Light,
+        }
     }
 }
 
