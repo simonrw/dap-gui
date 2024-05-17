@@ -212,9 +212,12 @@ impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
             breakpoints: self.breakpoints,
             gutter_highlight: state.gutter_highlight,
         };
-        let gutter = iced::widget::canvas(render_breakpoints)
-            .height(Length::Fill)
-            .width(Length::Fixed(GUTTER_WIDTH));
+        let gutter = Element::from(
+            iced::widget::canvas(render_breakpoints)
+                .height(Length::Fill)
+                .width(Length::Fixed(GUTTER_WIDTH)),
+        )
+        .explain(Color::from_rgb(1.0, 0.0, 0.0));
 
         let editor = iced::widget::text_editor(self.content)
             .padding(16)

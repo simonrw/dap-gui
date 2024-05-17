@@ -157,15 +157,18 @@ impl Application for DebuggerApp {
             .height(Length::Fill)
             .width(Length::Fill);
 
-        let main_content =
-            column![self.view_main_content(), self.view_bottom_panel(),].height(Length::Fill);
+        let main_content = column![
+            self.view_main_content()
+                .explain(Color::from_rgb(0.0, 1.0, 0.0)),
+            self.view_bottom_panel(),
+        ]
+        .height(Length::Fill);
 
-        let container: Element<_> = row![
+        row![
             sidebar.width(Length::Fixed(300.0)),
             main_content.width(Length::Fill),
         ]
-        .into();
-        container.explain(Color::from_rgb(0.7, 0.7, 0.7))
+        .into()
 
         // let c: iced::Element<_> = container(
         //     column![
