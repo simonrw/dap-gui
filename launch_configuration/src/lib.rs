@@ -8,6 +8,12 @@ use serde::Deserialize;
 // re-export
 pub use transport::requests::PathMapping;
 
+pub enum ChosenLaunchConfiguration {
+    Specific(LaunchConfiguration),
+    NotFound,
+    ToBeChosen(Vec<String>),
+}
+
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum ConfigFormat {
@@ -26,9 +32,9 @@ pub enum LaunchConfiguration {
 }
 
 pub fn load(
-    name: impl AsRef<str>,
+    name: Option<&String>,
     mut r: impl std::io::Read,
-) -> eyre::Result<Option<LaunchConfiguration>> {
+) -> eyre::Result<ChosenLaunchConfiguration> {
     let mut contents = String::new();
     r.read_to_string(&mut contents)
         .wrap_err("reading configuration contents")?;
@@ -36,26 +42,36 @@ pub fn load(
     Ok(configuration)
 }
 
-fn from_str(name: impl AsRef<str>, contents: &str) -> eyre::Result<Option<LaunchConfiguration>> {
+fn from_str(name: Option<&String>, contents: &str) -> eyre::Result<ChosenLaunchConfiguration> {
     // let config: ConfigFormat = serde_json::from_reader(r).context("reading and deserialising")?;
     let config = jsonc_to_serde(contents).wrap_err("parsing jsonc configuration")?;
-    let name = name.as_ref();
+
     match config {
         ConfigFormat::VsCode { configurations, .. } => {
-            for configuration in configurations {
-                match &configuration {
-                    LaunchConfiguration::Debugpy(Debugpy {
-                        name: config_name, ..
-                    }) => {
-                        if config_name == name {
-                            return Ok(Some(configuration));
+            if let Some(name) = name {
+                for configuration in configurations {
+                    match &configuration {
+                        LaunchConfiguration::Debugpy(Debugpy {
+                            name: config_name, ..
+                        }) => {
+                            if config_name == name {
+                                return Ok(ChosenLaunchConfiguration::Specific(configuration));
+                            }
                         }
                     }
                 }
+            } else {
+                let configuration_names: Vec<_> = configurations
+                    .iter()
+                    .map(|c| match &c {
+                        LaunchConfiguration::Debugpy(Debugpy { name, .. }) => name.clone(),
+                    })
+                    .collect();
+                return Ok(ChosenLaunchConfiguration::ToBeChosen(configuration_names));
             }
         }
     }
-    Ok(None)
+    Ok(ChosenLaunchConfiguration::NotFound)
 }
 
 fn jsonc_to_serde(input: &str) -> eyre::Result<ConfigFormat> {
@@ -70,9 +86,9 @@ fn jsonc_to_serde(input: &str) -> eyre::Result<ConfigFormat> {
 }
 
 pub fn load_from_path(
-    name: impl AsRef<str>,
+    name: Option<&String>,
     path: impl AsRef<Path>,
-) -> eyre::Result<Option<LaunchConfiguration>> {
+) -> eyre::Result<ChosenLaunchConfiguration> {
     let f = std::fs::File::open(path).wrap_err("opening input path")?;
     let config = crate::load(name, f).context("loading file from given path")?;
     Ok(config)

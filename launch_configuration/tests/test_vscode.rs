@@ -1,12 +1,14 @@
-use launch_configuration::LaunchConfiguration;
+use launch_configuration::{ChosenLaunchConfiguration, LaunchConfiguration};
 
 #[test]
 fn test_read_example() {
     let path = "./testdata/vscode/localstack-ext.json";
-    let LaunchConfiguration::Debugpy(config) =
-        launch_configuration::load_from_path("Python: Remote Attach", path)
+    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
+        launch_configuration::load_from_path(Some(&"Python: Remote Attach".to_string()), path)
             .unwrap()
-            .unwrap();
+    else {
+        panic!("specified launch configuration not found");
+    };
 
     assert_eq!(config.name, "Python: Remote Attach");
     assert_eq!(config.request, "attach");

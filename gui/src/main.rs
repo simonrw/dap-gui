@@ -9,8 +9,8 @@ use std::{
 use clap::Parser;
 use debugger::{AttachArguments, Debugger, PausedFrame};
 use eframe::egui::{self, Visuals};
-use eyre::{OptionExt, WrapErr};
-use launch_configuration::{Debugpy, LaunchConfiguration};
+use eyre::WrapErr;
+use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
 use state::StateManager;
 use transport::types::{StackFrame, StackFrameId};
 
@@ -23,7 +23,7 @@ struct Args {
     config_path: PathBuf,
 
     #[clap(short, long)]
-    name: String,
+    name: Option<String>,
 }
 
 #[cfg(feature = "sentry")]
@@ -156,9 +156,24 @@ impl DebuggerApp {
         let persisted_state = state_manager.current();
         tracing::trace!(state = ?persisted_state, "loaded state");
 
-        let config = launch_configuration::load_from_path(&args.name, args.config_path)
-            .wrap_err("loading configuration file")?
-            .ok_or_eyre("finding named configuration")?;
+        let config =
+            match launch_configuration::load_from_path(args.name.as_ref(), args.config_path)
+                .wrap_err("loading launch configuration")?
+            {
+                ChosenLaunchConfiguration::Specific(config) => config,
+                ChosenLaunchConfiguration::NotFound => {
+                    eyre::bail!("no matching configuration found")
+                }
+                ChosenLaunchConfiguration::ToBeChosen(configurations) => {
+                    eprintln!("Configuration name not specified");
+                    eprintln!("Available options:");
+                    for config in &configurations {
+                        eprintln!("- {config}");
+                    }
+                    // TODO: best option?
+                    std::process::exit(1);
+                }
+            };
 
         let mut debug_root_dir = std::env::current_dir().unwrap();
 
