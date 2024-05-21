@@ -19,7 +19,7 @@ strip = "debuginfo"
 
 
 [workspace.dependencies]
-anyhow = "1.0.85"
+anyhow = "1.0.86"
 eyre = "0.6.12"
 color-eyre = "0.6.3"
 ctor = "0.2.8"
