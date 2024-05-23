@@ -5,9 +5,9 @@ use clap::Parser;
 use code_view::{CodeViewer, CodeViewerAction};
 use color_eyre::eyre::{self, Context};
 use dark_light::Mode;
-use debugger::{AttachArguments, Debugger};
+use debugger::{AttachArguments, Debugger, Event};
 use iced::widget::{column, container, row, text, text_editor, Container};
-use iced::{executor, Application, Color, Command, Element, Length};
+use iced::{executor, subscription, Application, Color, Command, Element, Length, Subscription};
 use iced_aw::Tabs;
 use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
 use state::StateManager;
@@ -33,6 +33,7 @@ pub struct Args {
 pub enum Message {
     TabSelected(TabId),
     CodeViewer(CodeViewerAction),
+    DebuggerMessage(Event),
 }
 
 fn title<'a, Message>(input: impl ToString) -> Container<'a, Message> {
@@ -62,9 +63,9 @@ pub enum AppState {
     Terminated,
 }
 
-#[derive(Debug)]
 pub struct DebuggerApp {
     state: AppState,
+    debugger: Debugger,
 }
 
 impl DebuggerApp {
@@ -139,8 +140,6 @@ impl DebuggerApp {
             }
         };
 
-        let _events = debugger.events();
-
         debugger.wait_for_event(|e| matches!(e, debugger::Event::Initialised));
 
         if let Some(project_state) = state_manager
@@ -183,6 +182,7 @@ impl DebuggerApp {
                 breakpoints: HashSet::new(),
                 scrollable_id: iced::widget::scrollable::Id::unique(),
             },
+            debugger,
         })
     }
 
@@ -240,7 +240,10 @@ impl DebuggerApp {
                 .set_active_tab(active_tab)
                 .into()
         } else {
-            panic!("programming error: state {self:?} should not have a bottom panel");
+            panic!(
+                "programming error: state {:?} should not have a bottom panel",
+                self.state
+            );
         }
     }
 }
@@ -283,6 +286,9 @@ impl Application for DebuggerApp {
                 Message::CodeViewer(CodeViewerAction::ScrollCommand { offset, .. }) => {
                     return iced::widget::scrollable::scroll_to(scrollable_id.clone(), offset);
                 }
+                Message::DebuggerMessage(event) => {
+                    tracing::debug!(?event, "received event from debugger");
+                }
             },
             _ => {}
         }
@@ -315,6 +321,15 @@ impl Application for DebuggerApp {
             }
             _ => todo!(),
         }
+    }
+
+    fn subscription(&self) -> Subscription<Self::Message> {
+        let events = self.debugger.events();
+        let debugger_sub = subscription::unfold("id", events, move |rx| async move {
+            let msg = rx.recv().unwrap();
+            (Message::DebuggerMessage(msg), rx)
+        });
+        subscription::Subscription::batch([debugger_sub])
     }
 
     fn theme(&self) -> Self::Theme {
