@@ -11,7 +11,13 @@ iced = { version = "0.12.1", features = ["highlighter", "tokio", "debug", "advan
 dark-light = "1.0.0"
 iced_aw = "0.9"
 tracing.workspace = true
+tracing-subscriber.workspace = true
 clap.workspace = true
+color-eyre.workspace = true
+dirs.workspace = true
+state = { path = "../state" }
+launch_configuration = { path = "../launch_configuration" }
+debugger = { path = "../debugger" }
 
 [dev-dependencies]
 tracing-subscriber.workspace = true

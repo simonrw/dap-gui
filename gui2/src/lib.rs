@@ -1,11 +1,16 @@
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use clap::Parser;
 use code_view::{CodeViewer, CodeViewerAction};
+use color_eyre::eyre::{self, Context};
 use dark_light::Mode;
+use debugger::{AttachArguments, Debugger};
 use iced::widget::{column, container, row, text, text_editor, Container};
 use iced::{executor, Application, Color, Command, Element, Length};
 use iced_aw::Tabs;
+use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
+use state::StateManager;
 
 pub mod code_view;
 mod highlight;
@@ -15,6 +20,13 @@ pub struct Args {
     /// debug rendering
     #[clap(short, long)]
     debug: bool,
+
+    /// Path to the config file
+    config_path: PathBuf,
+
+    /// Name of the launch configuration to choose
+    #[clap(short, long)]
+    name: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -51,6 +63,123 @@ pub enum DebuggerApp {
 }
 
 impl DebuggerApp {
+    // custom constructor method that is fallable, because the iced Application::new is not
+    fn init() -> eyre::Result<Self> {
+        let args = Args::parse();
+
+        let state_path = dirs::data_local_dir()
+            .unwrap_or_else(|| PathBuf::from("/tmp"))
+            .join("dapgui")
+            .join("state.json");
+        tracing::debug!(state_path = %state_path.display(), "loading state");
+        if !state_path.parent().unwrap().is_dir() {
+            std::fs::create_dir_all(state_path.parent().unwrap())
+                .context("creating state directory")?;
+        }
+        let state_manager = StateManager::new(state_path)
+            .wrap_err("loading state")?
+            .save()
+            .wrap_err("saving state")?;
+        let persisted_state = state_manager.current();
+        tracing::trace!(state = ?persisted_state, "loaded state");
+
+        let config =
+            match launch_configuration::load_from_path(args.name.as_ref(), &args.config_path)
+                .wrap_err("loading launch configuration")?
+            {
+                ChosenLaunchConfiguration::Specific(config) => config,
+                ChosenLaunchConfiguration::NotFound => {
+                    eyre::bail!("no matching configuration found")
+                }
+                ChosenLaunchConfiguration::ToBeChosen(configurations) => {
+                    eprintln!("Configuration name not specified");
+                    eprintln!("Available options:");
+                    for config in &configurations {
+                        eprintln!("- {config}");
+                    }
+                    // TODO: best option?
+                    std::process::exit(1);
+                }
+            };
+
+        let mut debug_root_dir = std::env::current_dir().unwrap();
+
+        let debugger = match config {
+            LaunchConfiguration::Debugpy(Debugpy {
+                request,
+                cwd,
+                connect,
+                path_mappings,
+                ..
+            }) => {
+                if let Some(dir) = cwd {
+                    debug_root_dir = debugger::utils::normalise_path(&dir).into_owned();
+                }
+                let debugger = match request.as_str() {
+                    "attach" => {
+                        let launch_arguments = AttachArguments {
+                            working_directory: debug_root_dir.to_owned().to_path_buf(),
+                            port: Some(connect.port),
+                            language: debugger::Language::DebugPy,
+                            path_mappings,
+                        };
+
+                        tracing::debug!(?launch_arguments, "generated launch configuration");
+
+                        Debugger::new(launch_arguments).context("creating internal debugger")?
+                    }
+                    _ => todo!(),
+                };
+                debugger
+            }
+        };
+
+        let _events = debugger.events();
+
+        debugger.wait_for_event(|e| matches!(e, debugger::Event::Initialised));
+
+        if let Some(project_state) = state_manager
+            .current()
+            .projects
+            .iter()
+            .find(|p| debugger::utils::normalise_path(&p.path) == debug_root_dir)
+        {
+            tracing::debug!("got project state");
+            for breakpoint in &project_state.breakpoints {
+                {
+                    let breakpoint_path = debugger::utils::normalise_path(&breakpoint.path);
+                    if !breakpoint_path.starts_with(&debug_root_dir) {
+                        continue;
+                    }
+                    tracing::debug!(?breakpoint, "adding breakpoint from state file");
+
+                    let mut breakpoint = breakpoint.clone();
+                    breakpoint.path = debugger::utils::normalise_path(&breakpoint.path)
+                        .into_owned()
+                        .to_path_buf();
+
+                    debugger
+                        .add_breakpoint(&breakpoint)
+                        .context("adding breakpoint")?;
+                }
+            }
+        } else {
+            tracing::warn!("missing project state");
+        }
+
+        tracing::debug!("launching debugee");
+        debugger.launch().context("launching debugee")?;
+
+        let this = Self::Paused {
+            args,
+            active_tab: TabId::Variables,
+            content: text_editor::Content::with_text(include_str!("main.rs")),
+            breakpoints: HashSet::new(),
+            scrollable_id: iced::widget::scrollable::Id::unique(),
+        };
+        Ok(this)
+    }
+
     // view helper methods
     fn view_call_stack(&self) -> iced::Element<'_, Message> {
         title("Call Stack").width(Length::Fill).into()
@@ -117,16 +246,10 @@ impl Application for DebuggerApp {
     type Message = Message;
 
     fn new(_flags: Self::Flags) -> (Self, Command<Self::Message>) {
-        let args = Args::parse();
-
-        let this = Self::Paused {
-            args,
-            active_tab: TabId::Variables,
-            content: text_editor::Content::with_text(include_str!("main.rs")),
-            breakpoints: HashSet::new(),
-            scrollable_id: iced::widget::scrollable::Id::unique(),
-        };
-        (this, Command::none())
+        match Self::init() {
+            Ok(this) => (this, Command::none()),
+            Err(e) => panic!("failed to initialise application: {e}"),
+        }
     }
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {

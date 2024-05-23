@@ -2293,10 +2293,15 @@ name = "gui2"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "color-eyre",
  "dark-light",
+ "debugger",
+ "dirs 5.0.1",
  "futures",
  "iced",
  "iced_aw",
+ "launch_configuration",
+ "state",
  "tracing",
  "tracing-subscriber",
 ]
