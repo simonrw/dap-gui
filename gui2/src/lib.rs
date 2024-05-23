@@ -46,7 +46,7 @@ pub enum TabId {
 }
 
 #[derive(Debug)]
-pub enum DebuggerApp {
+pub enum AppState {
     #[allow(dead_code)]
     Initialising,
     #[allow(dead_code)]
@@ -60,6 +60,11 @@ pub enum DebuggerApp {
     },
     #[allow(dead_code)]
     Terminated,
+}
+
+#[derive(Debug)]
+pub struct DebuggerApp {
+    state: AppState,
 }
 
 impl DebuggerApp {
@@ -170,14 +175,15 @@ impl DebuggerApp {
         tracing::debug!("launching debugee");
         debugger.launch().context("launching debugee")?;
 
-        let this = Self::Paused {
-            args,
-            active_tab: TabId::Variables,
-            content: text_editor::Content::with_text(include_str!("main.rs")),
-            breakpoints: HashSet::new(),
-            scrollable_id: iced::widget::scrollable::Id::unique(),
-        };
-        Ok(this)
+        Ok(Self {
+            state: AppState::Paused {
+                args,
+                active_tab: TabId::Variables,
+                content: text_editor::Content::with_text(include_str!("main.rs")),
+                breakpoints: HashSet::new(),
+                scrollable_id: iced::widget::scrollable::Id::unique(),
+            },
+        })
     }
 
     // view helper methods
@@ -190,10 +196,10 @@ impl DebuggerApp {
     }
 
     fn view_main_content(&self) -> iced::Element<'_, Message> {
-        match self {
-            DebuggerApp::Initialising => todo!(),
-            DebuggerApp::Running { .. } => todo!(),
-            DebuggerApp::Paused {
+        match &self.state {
+            AppState::Initialising => todo!(),
+            AppState::Running { .. } => todo!(),
+            AppState::Paused {
                 ref content,
                 breakpoints,
                 scrollable_id,
@@ -205,7 +211,7 @@ impl DebuggerApp {
                 Message::CodeViewer,
             )
             .into(),
-            DebuggerApp::Terminated => todo!(),
+            AppState::Terminated => todo!(),
         }
     }
 
@@ -218,7 +224,7 @@ impl DebuggerApp {
     }
 
     fn view_bottom_panel(&self) -> iced::Element<'_, Message> {
-        if let Self::Paused { active_tab, .. } = self {
+        if let AppState::Paused { active_tab, .. } = &self.state {
             Tabs::new(Message::TabSelected)
                 .tab_icon_position(iced_aw::tabs::Position::Top)
                 .push(
@@ -254,8 +260,8 @@ impl Application for DebuggerApp {
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         #[allow(clippy::single_match)]
-        match self {
-            Self::Paused {
+        match &mut self.state {
+            AppState::Paused {
                 active_tab,
                 breakpoints,
                 content,
@@ -288,8 +294,8 @@ impl Application for DebuggerApp {
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message> {
-        match self {
-            DebuggerApp::Paused { args, .. } => {
+        match &self.state {
+            AppState::Paused { args, .. } => {
                 let sidebar = column![self.view_call_stack(), self.view_breakpoints(),]
                     .height(Length::Fill)
                     .width(Length::Fill);
