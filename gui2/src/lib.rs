@@ -6,8 +6,12 @@ use code_view::{CodeViewer, CodeViewerAction};
 use color_eyre::eyre::{self, Context};
 use dark_light::Mode;
 use debugger::{AttachArguments, Debugger, Event};
+use iced::keyboard::{Key, Modifiers};
 use iced::widget::{column, container, row, text, text_editor, Container};
-use iced::{executor, subscription, Application, Color, Command, Element, Length, Subscription};
+use iced::{
+    executor, subscription, Application, Color, Command, Element, Event as WindowEvent, Length,
+    Subscription,
+};
 use iced_aw::Tabs;
 use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
 use state::StateManager;
@@ -34,6 +38,8 @@ pub enum Message {
     TabSelected(TabId),
     CodeViewer(CodeViewerAction),
     DebuggerMessage(Event),
+    Window(WindowEvent),
+    Quit,
 }
 
 fn title<'a, Message>(input: impl ToString) -> Container<'a, Message> {
@@ -257,8 +263,8 @@ impl Application for DebuggerApp {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
-        #[allow(clippy::single_match)]
         match &mut self.state {
             AppState::Running { .. } => match message {
                 Message::DebuggerMessage(event) => match event {
@@ -277,7 +283,9 @@ impl Application for DebuggerApp {
                     Event::Running => {}
                     Event::Ended => todo!(),
                 },
-                _ => {}
+                other => {
+                    tracing::debug!(message = ?other, "unhandled message");
+                }
             },
             AppState::Paused {
                 active_tab,
@@ -295,7 +303,6 @@ impl Application for DebuggerApp {
                     }
                 }
                 Message::CodeViewer(CodeViewerAction::EditorAction(action)) => {
-                    tracing::debug!(?action, "got editor action");
                     content.perform(action)
                 }
                 Message::CodeViewer(CodeViewerAction::ScrollCommand { offset, .. }) => {
@@ -304,8 +311,18 @@ impl Application for DebuggerApp {
                 Message::DebuggerMessage(event) => {
                     tracing::debug!(?event, "received event from debugger");
                 }
+                Message::Quit => {
+                    tracing::info!("got quit event");
+                    return iced::window::close(iced::window::Id::MAIN);
+                }
+                Message::Window(WindowEvent::Window(id, iced::window::Event::Closed)) => {
+                    tracing::debug!(?id, "got window event");
+                }
+                other => tracing::warn!(event = ?other, "unhandled event in paused state"),
             },
-            _ => {}
+            other => {
+                tracing::debug!(event = ?other, "unhandled event");
+            }
         }
         Command::none()
     }
@@ -345,7 +362,13 @@ impl Application for DebuggerApp {
             let msg = rx.recv().unwrap();
             (Message::DebuggerMessage(msg), rx)
         });
-        subscription::Subscription::batch([debugger_sub])
+        let events_sub = iced::keyboard::on_key_press(|key, mods| match (key, mods) {
+            (Key::Character(c), Modifiers::CTRL) if c == "q" => Some(Message::Quit),
+            _ => None,
+        });
+        let window_sub = iced::event::listen().map(Message::Window);
+
+        subscription::Subscription::batch([debugger_sub, events_sub, window_sub])
     }
 
     fn theme(&self) -> Self::Theme {
