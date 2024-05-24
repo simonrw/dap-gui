@@ -15,7 +15,7 @@ use state::StateManager;
 pub mod code_view;
 mod highlight;
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Default)]
 pub struct Args {
     /// debug rendering
     #[clap(short, long)]
@@ -175,12 +175,8 @@ impl DebuggerApp {
         debugger.launch().context("launching debugee")?;
 
         Ok(Self {
-            state: AppState::Paused {
-                args,
-                active_tab: TabId::Variables,
-                content: text_editor::Content::with_text(include_str!("main.rs")),
+            state: AppState::Running {
                 breakpoints: HashSet::new(),
-                scrollable_id: iced::widget::scrollable::Id::unique(),
             },
             debugger,
         })
@@ -264,6 +260,25 @@ impl Application for DebuggerApp {
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         #[allow(clippy::single_match)]
         match &mut self.state {
+            AppState::Running { .. } => match message {
+                Message::DebuggerMessage(event) => match event {
+                    Event::Uninitialised => todo!(),
+                    Event::Initialised => todo!(),
+                    Event::Paused { breakpoints, .. } => {
+                        self.state = AppState::Paused {
+                            args: Args::default(),
+                            active_tab: TabId::Variables,
+                            content: text_editor::Content::with_text(include_str!("main.rs")),
+                            breakpoints: breakpoints.iter().map(|bp| bp.line).collect(),
+                            scrollable_id: iced::widget::scrollable::Id::unique(),
+                        }
+                    }
+                    Event::ScopeChange { .. } => todo!(),
+                    Event::Running => {}
+                    Event::Ended => todo!(),
+                },
+                _ => {}
+            },
             AppState::Paused {
                 active_tab,
                 breakpoints,
@@ -319,6 +334,7 @@ impl Application for DebuggerApp {
                 }
                 result
             }
+            AppState::Running { .. } => text("Running").into(),
             _ => todo!(),
         }
     }
