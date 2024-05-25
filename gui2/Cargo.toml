@@ -18,6 +18,7 @@ dirs.workspace = true
 state = { path = "../state" }
 launch_configuration = { path = "../launch_configuration" }
 debugger = { path = "../debugger" }
+transport = { path = "../transport" }
 crossbeam-channel.workspace = true
 
 [dev-dependencies]

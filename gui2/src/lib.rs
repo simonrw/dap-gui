@@ -7,7 +7,7 @@ use color_eyre::eyre::{self, Context};
 use dark_light::Mode;
 use debugger::{AttachArguments, Debugger, Event};
 use iced::keyboard::{Key, Modifiers};
-use iced::widget::{column, container, row, text, text_editor, Container};
+use iced::widget::{button, column, container, row, text, text_editor, Container};
 use iced::{
     executor, subscription, Application, Color, Command, Element, Event as WindowEvent, Length,
     Subscription,
@@ -15,6 +15,7 @@ use iced::{
 use iced_aw::Tabs;
 use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
 use state::StateManager;
+use transport::types::{StackFrame, StackFrameId};
 
 pub mod code_view;
 mod highlight;
@@ -39,6 +40,7 @@ pub enum Message {
     CodeViewer(CodeViewerAction),
     DebuggerMessage(Event),
     Window(WindowEvent),
+    StackFrameChanged(StackFrameId),
     Quit,
 }
 
@@ -64,6 +66,7 @@ pub enum AppState {
         content: text_editor::Content,
         breakpoints: HashSet<usize>,
         scrollable_id: iced::widget::scrollable::Id,
+        stack: Vec<StackFrame>,
     },
     #[allow(dead_code)]
     Terminated,
@@ -189,8 +192,16 @@ impl DebuggerApp {
     }
 
     // view helper methods
-    fn view_call_stack(&self) -> iced::Element<'_, Message> {
-        title("Call Stack").width(Length::Fill).into()
+    fn view_call_stack(&self, stack: &[StackFrame]) -> iced::Element<'_, Message> {
+        let mut column = column![title("Call Stack")].width(Length::Fill);
+
+        for frame in stack {
+            let elem =
+                button(text(frame.name.clone())).on_press(Message::StackFrameChanged(frame.id));
+            column = column.push(elem);
+        }
+
+        column.into()
     }
 
     fn view_breakpoints(&self) -> iced::Element<'_, Message> {
@@ -270,13 +281,16 @@ impl Application for DebuggerApp {
                 Message::DebuggerMessage(event) => match event {
                     Event::Uninitialised => todo!(),
                     Event::Initialised => todo!(),
-                    Event::Paused { breakpoints, .. } => {
+                    Event::Paused {
+                        breakpoints, stack, ..
+                    } => {
                         self.state = AppState::Paused {
                             args: Args::default(),
                             active_tab: TabId::Variables,
                             content: text_editor::Content::with_text(include_str!("main.rs")),
                             breakpoints: breakpoints.iter().map(|bp| bp.line).collect(),
                             scrollable_id: iced::widget::scrollable::Id::unique(),
+                            stack,
                         }
                     }
                     Event::ScopeChange { .. } => todo!(),
@@ -318,7 +332,10 @@ impl Application for DebuggerApp {
                 Message::Window(WindowEvent::Window(id, iced::window::Event::Closed)) => {
                     tracing::debug!(?id, "got window event");
                 }
-                other => tracing::warn!(event = ?other, "unhandled event in paused state"),
+                Message::StackFrameChanged(stack_frame_id) => {
+                    tracing::debug!(?stack_frame_id, "being asked to change stack frame context");
+                }
+                other => tracing::trace!(event = ?other, "unhandled event in paused state"),
             },
             other => {
                 tracing::debug!(event = ?other, "unhandled event");
@@ -333,8 +350,8 @@ impl Application for DebuggerApp {
 
     fn view(&self) -> iced::Element<'_, Self::Message> {
         match &self.state {
-            AppState::Paused { args, .. } => {
-                let sidebar = column![self.view_call_stack(), self.view_breakpoints(),]
+            AppState::Paused { args, stack, .. } => {
+                let sidebar = column![self.view_call_stack(stack), self.view_breakpoints(),]
                     .height(Length::Fill)
                     .width(Length::Fill);
 
