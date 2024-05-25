@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use anyhow::Context;
 use clap::Parser;
+use eyre::WrapErr;
 use pcaplog::extract_messages;
 use serde::Serialize;
 use tracing_subscriber::EnvFilter;
@@ -17,7 +17,7 @@ struct Args {
 #[derive(Serialize)]
 struct Messages(Vec<transport::Message>);
 
-fn main() -> anyhow::Result<()> {
+fn main() -> eyre::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .with_writer(std::io::stderr)
