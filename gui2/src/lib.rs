@@ -334,6 +334,9 @@ impl Application for DebuggerApp {
                 }
                 Message::StackFrameChanged(stack_frame_id) => {
                     tracing::debug!(?stack_frame_id, "being asked to change stack frame context");
+                    if let Err(e) = self.debugger.change_scope(stack_frame_id) {
+                        tracing::warn!(error = %e, %stack_frame_id, "failed to change scope to new stack frame");
+                    }
                 }
                 other => tracing::trace!(event = ?other, "unhandled event in paused state"),
             },
