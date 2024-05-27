@@ -46,13 +46,24 @@ impl<'a, Message> CodeViewer<'a, Message> {
         content: &'a Content,
         breakpoints: &'a HashSet<usize>,
         scrollable_id: iced::widget::scrollable::Id,
+        start_line: usize,
         on_change: impl Fn(CodeViewerAction) -> Message + 'static,
     ) -> Self {
+        let on_change = Box::new(on_change);
+
+        // emit scroll to event to scroll the current line into view
+        (on_change)(CodeViewerAction::ScrollCommand {
+            offset: scrollable::AbsoluteOffset {
+                x: 0.0,
+                y: (start_line as f32) / LINE_HEIGHT,
+            },
+        });
+
         Self {
             content,
             breakpoints,
             scrollable_id,
-            on_change: Box::new(on_change),
+            on_change,
         }
     }
 }
@@ -201,7 +212,7 @@ mod tests {
         }
 
         let mut code_view =
-            CodeViewer::new(&content, &breakpoints, scrollable_id, TestMessage::Event);
+            CodeViewer::new(&content, &breakpoints, scrollable_id, 0, TestMessage::Event);
 
         // move the mouse to the gutter
 

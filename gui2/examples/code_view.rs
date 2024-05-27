@@ -65,6 +65,7 @@ impl Application for App {
             &self.content,
             &self.breakpoints,
             self.scrollable_id.clone(),
+            0,
             Message::CodeViewer,
         )]
         .into()

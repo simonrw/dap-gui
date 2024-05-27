@@ -221,6 +221,7 @@ impl DebuggerApp {
                 content,
                 breakpoints,
                 scrollable_id.clone(),
+                0,
                 Message::CodeViewer,
             )
             .into(),
