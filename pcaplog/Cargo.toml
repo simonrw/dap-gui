@@ -19,5 +19,5 @@ transport = { path = "../transport" }
 [dev-dependencies]
 ctor.workspace = true
 glob = "0.3.1"
-rstest = "0.20.0"
+rstest = "0.21.0"
 color-eyre.workspace = true
