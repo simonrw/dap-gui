@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 eyre.workspace = true
 clap.workspace = true
-etherparse = "0.15.0"
+etherparse = "0.16.0"
 pcap-file = "2.0.0"
 serde_json.workspace = true
 serde.workspace = true
