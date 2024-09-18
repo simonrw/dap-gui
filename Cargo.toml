@@ -11,6 +11,7 @@ members = [
     "launch_configuration",
     "dap-codec",
     "gui2",
+    "app/src-tauri",
 ]
 
 [profile.dev]

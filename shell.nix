@@ -4,6 +4,7 @@ with pkgs; let
     OpenGL
     CoreServices
     AppKit
+    WebKit
   ];
   apple-libs = [ libiconv ];
 
