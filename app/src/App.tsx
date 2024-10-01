@@ -311,13 +311,13 @@ function App() {
         direction="horizontal"
         className="rounded-lg border md:min-w-[450px]"
       >
-        <ResizablePanel defaultSize={25} maxSize={40}>
+        <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
           <ResizablePanelGroup direction="vertical">
-            <ResizablePanel defaultSize={50}>
+            <ResizablePanel defaultSize={50} minSize={10} maxSize={90}>
               <Breakpoints />
             </ResizablePanel>
             <ResizableHandle />
-            <ResizablePanel defaultSize={50}>
+            <ResizablePanel defaultSize={50} minSize={10} maxSize={90}>
               <StackList />
             </ResizablePanel>
             <ResizableHandle />
@@ -331,7 +331,7 @@ function App() {
               <Controls />
             </ResizablePanel>
             <ResizableHandle />
-            <ResizablePanel defaultSize={25}>
+            <ResizablePanel defaultSize={25} minSize={15} maxSize={80}>
               <BottomPane />
             </ResizablePanel>
           </ResizablePanelGroup>
