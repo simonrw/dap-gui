@@ -1,344 +1,194 @@
-import { ArrowDownToDot, Circle, RedoDot, StepForward } from "lucide-react";
-import { Button } from "./components/ui/button";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./components/ui/resizable"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { Textarea } from "./components/ui/textarea";
-import Terminal from "react-console-emulator";
-import { ReactNode, useCallback, useMemo, useState } from "react";
-import ReactCodeMirror, { EditorView, gutter, GutterMarker, lineNumbers, RangeSet, StateEffect, StateField } from "@uiw/react-codemirror";
-import { javascript } from "@codemirror/lang-javascript";
-import { githubDark } from "@uiw/codemirror-theme-github";
+// Generated via https://v0.dev/chat/QJ66R2ulISS?b=b_G9oPm4yTYz9&p=0
 
-function Controls() {
-  return (
-    <div className="flex justify-center">
-      <Button size="icon">
-        <StepForward />
-      </Button>
-      <Button size="icon">
-        <RedoDot />
-      </Button>
-      <Button size="icon">
-        <ArrowDownToDot />
-      </Button>
-    </div>
-  );
+import React, { useState } from 'react'
+import { ChevronRight, ChevronDown, Play, Pause, Terminal } from 'lucide-react'
+
+// Mock data
+const mockCode = `function fibonacci(n) {
+  if (n <= 1) return n;
+  return fibonacci(n - 1) + fibonacci(n - 2);
 }
 
-type Breakpoint = {
-  file: string;
-  lineNumber: string;
-  functionName: string | null;
-  enabled: boolean;
-};
-
-type BreakpointStatusProps = {
-  value: boolean;
-};
-
-function BreakpointStatus(props: BreakpointStatusProps) {
-  const cls = props.value ? "text-red-500" : "text-gray-500";
-  return (
-    <span className={cls}>
-      <Circle />
-    </span>
-  );
+function main() {
+  const result = fibonacci(10);
+  console.log(result);
 }
 
-function Breakpoints() {
-  const breakpoints: Breakpoint[] = [
-    {
-      file: "test.py",
-      lineNumber: "167",
-      functionName: null,
-      enabled: true,
-    }
-  ];
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Breakpoints</TableHead>
-          <TableHead></TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {breakpoints.map((breakpoint) => (
-          <TableRow key={`${breakpoint.file}:${breakpoint.lineNumber}`}>
-            <TableCell className="font-medium">{`${breakpoint.file}:${breakpoint.lineNumber}`}</TableCell>
-            <TableCell className="font-medium">{
-              <BreakpointStatus value={breakpoint.enabled} />
-            }</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table >
-  );
-}
+main();`
 
-type StackFrame = {
-  functionName: string;
-};
+const mockVariables = [
+  { name: 'n', type: 'number', value: '10' },
+  { name: 'result', type: 'number', value: '55' },
+]
 
-function StackFrame(props: { stackFrame: StackFrame }) {
-  const { stackFrame } = props;
+const mockBreakpoints = [
+  { id: 1, filename: 'fibonacci.js', line: 2, enabled: true },
+  { id: 2, filename: 'fibonacci.js', line: 7, enabled: false },
+]
 
-  return (
-    <TableRow key={stackFrame.functionName}>
-      <TableCell className="font-medium">{stackFrame.functionName}</TableCell>
-    </TableRow>
-  );
-}
+const mockStackFrames = [
+  { id: 1, functionName: 'fibonacci', filename: 'fibonacci.js', line: 2 },
+  { id: 2, functionName: 'main', filename: 'fibonacci.js', line: 7 },
+]
 
-function StackList() {
-  const stackFrames: StackFrame[] = ["my_function", "another_function"].map((name) => {
-    return { functionName: name };
-  });
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Stack</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {stackFrames.map((stackFrame) => <StackFrame key={stackFrame.functionName} stackFrame={stackFrame} />)}
-      </TableBody>
-    </Table >
-  );
-}
+export default function DebuggerUI() {
+  const [consoleInput, setConsoleInput] = useState('')
+  const [consoleOutput, setConsoleOutput] = useState<string[]>([])
 
-
-type Variable = {
-  name: string;
-  value: string;
-  type: string;
-};
-function Variables() {
-  const variables: Variable[] = [
-    { name: "a", value: "10", type: "int" },
-    { name: "b", value: "100", type: "int" },
-    { name: "c", value: "foobar", type: "string" },
-  ];
-
-  return (
-    <div className="flex items-center justify-center">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[100px]">Name</TableHead>
-            <TableHead className="w-[100px]">Type</TableHead>
-            <TableHead className="">Value</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {variables.map((variable) => (
-            <TableRow key={variable.name}>
-              <TableCell className="font-medium">{variable.name}</TableCell>
-              <TableCell className="">{variable.type}</TableCell>
-              <TableCell className="">{variable.value}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-const terminalCommands = {
-  echo: {
-    description: "Echo a string",
-    usage: "echo <string>",
-    fn: (...args: string[]) => args.join(" "),
-  },
-};
-
-type DebugTerminalProps = {
-}
-
-function DebugTerminal(props: DebugTerminalProps) {
-  return (
-    <div id="terminal">
-      <Terminal
-        commands={terminalCommands}
-        welcomeMessage="Welcome!"
-        promptLabel=">"
-      />
-    </div>
-  );
-}
-
-const breakpointEffect = StateEffect.define<{ pos: number, on: boolean }>({
-  map: (val, mapping) => ({ pos: mapping.mapPos(val.pos), on: val.on }),
-});
-
-const breakpointState = StateField.define<RangeSet<GutterMarker>>({
-  create() {
-    return RangeSet.empty;
-  },
-  update(set, transaction) {
-    set = set.map(transaction.changes);
-    for (let e of transaction.effects) {
-      if (e.is(breakpointEffect)) {
-        if (e.value.on) {
-          set = set.update({ add: [breakpointMarker.range(e.value.pos)] });
-        } else {
-          set = set.update({ filter: from => from !== e.value.pos });
-        }
-      }
-    }
-    return set;
-  },
-})
-
-function toggleBreakpoint(view: EditorView, pos: number) {
-  let breakpoints = view.state.field(breakpointState);
-  let hasBreakpoint = false;
-  breakpoints.between(pos, pos, () => {
-    hasBreakpoint = true;
-  });
-  view.dispatch({
-    effects: breakpointEffect.of({
-      pos,
-      on: !hasBreakpoint,
-    })
-  });
-}
-
-const breakpointMarker = new class extends GutterMarker {
-  toDOM() {
-    return document.createTextNode("🔴");
+  const handleConsoleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setConsoleOutput([...consoleOutput, `> ${consoleInput}`])
+    setConsoleInput('')
   }
-};
 
-const breakpointGutter = [
-  breakpointState,
-  gutter({
-    class: "cm-breapoint-gutter w-12",
-    markers: v => v.state.field(breakpointState),
-    initialSpacer: () => breakpointMarker,
-    domEventHandlers: {
-      mouseDown(view, line) {
-        toggleBreakpoint(view, line.from);
-        return true;
-      },
-    },
-  }),
-  EditorView.baseTheme({
-    ".cm-breakpoint-gutter .cm-gutterElement": {
-      color: "red",
-      paddingLeft: "5px",
-      cursor: "default",
-    },
-  }),
-];
-
-function CodeView() {
-  const text = `
-import { StrictMode } from 'react'
-import { ThemeProvider } from "@/components/theme-provider"
-
-import { createRoot } from 'react-dom/client'
-import App from './App.tsx'
-import './index.css'
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ThemeProvider defaultTheme="system">
-      <App />
-    </ThemeProvider>
-  </StrictMode>,
-)
-    `;
-  const extensions = useMemo(() => {
-    return [
-      javascript({ jsx: true, typescript: true }),
-      lineNumbers(),
-      breakpointGutter,
-    ];
-  }, []);
   return (
-    <div className="flex h-full">
-      <ReactCodeMirror
-        className="w-full h-full"
-        value={text}
-        editable={false}
-        basicSetup={false}
-        extensions={extensions}
-        theme={githubDark}
-      />
-    </div>
-  );
-}
-
-type GutterProps = {
-  text: string;
-  children: ReactNode;
-};
-
-function Gutter(props: GutterProps) {
-  return (
-    <>
-      <div className="max-w-48">
-        <p>Hello world</p>
+    <div className="flex flex-col h-screen bg-gray-100 text-gray-800">
+      <header className="bg-gray-800 text-white p-4">
+        <h1 className="text-2xl font-bold">Debugger</h1>
+      </header>
+      <div className="flex-1 grid grid-cols-3 gap-4 p-4">
+        <div className="col-span-2 flex flex-col gap-4">
+          <CodeView code={mockCode} currentLine={2} breakpoints={[2, 7]} />
+          <Console
+            input={consoleInput}
+            output={consoleOutput}
+            onInputChange={setConsoleInput}
+            onSubmit={handleConsoleSubmit}
+          />
+        </div>
+        <div className="flex flex-col gap-4">
+          <VariablesView variables={mockVariables} />
+          <BreakpointsList breakpoints={mockBreakpoints} />
+          <StackFramesList stackFrames={mockStackFrames} />
+        </div>
       </div>
-      {props.children}
-    </>
-  );
-}
-
-function BottomPane() {
-
-  return (
-    <Tabs defaultValue="variables">
-      <TabsList>
-        <TabsTrigger value="variables">Variables</TabsTrigger>
-        <TabsTrigger value="terminal">Terminal</TabsTrigger>
-      </TabsList>
-      <TabsContent value="variables"><Variables /></TabsContent>
-      <TabsContent value="terminal"><DebugTerminal /></TabsContent>
-    </Tabs>
-  );
-}
-
-
-function App() {
-
-  return (
-    <div className="h-screen p-4">
-      <ResizablePanelGroup
-        direction="horizontal"
-        className="rounded-lg border md:min-w-[450px]"
-      >
-        <ResizablePanel defaultSize={25} maxSize={40}>
-          <ResizablePanelGroup direction="vertical">
-            <ResizablePanel defaultSize={50}>
-              <Breakpoints />
-            </ResizablePanel>
-            <ResizableHandle />
-            <ResizablePanel defaultSize={50}>
-              <StackList />
-            </ResizablePanel>
-            <ResizableHandle />
-          </ResizablePanelGroup>
-        </ResizablePanel>
-        <ResizableHandle />
-        <ResizablePanel defaultSize={75}>
-          <ResizablePanelGroup direction="vertical">
-            <ResizablePanel defaultSize={75} className="flex flex-col">
-              <CodeView />
-              <Controls />
-            </ResizablePanel>
-            <ResizableHandle />
-            <ResizablePanel defaultSize={25}>
-              <BottomPane />
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </ResizablePanel>
-      </ResizablePanelGroup>
     </div>
   )
 }
 
-export default App
+function CodeView({ code, currentLine, breakpoints }) {
+  const lines = code.split('\n')
+
+  return (
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="flex items-center justify-between bg-gray-200 px-4 py-2">
+        <h2 className="font-semibold">Code View</h2>
+        <div className="flex gap-2">
+          <button className="p-1 rounded hover:bg-gray-300">
+            <Play size={16} />
+          </button>
+          <button className="p-1 rounded hover:bg-gray-300">
+            <Pause size={16} />
+          </button>
+        </div>
+      </div>
+      <div className="p-4 font-mono text-sm">
+        {lines.map((line, index) => (
+          <div
+            key={index}
+            className={`flex ${currentLine === index + 1 ? 'bg-yellow-100' : ''}`}
+          >
+            <div className="w-8 text-right pr-2 text-gray-500 select-none">
+              {breakpoints.includes(index + 1) && (
+                <span className="text-red-500">●</span>
+              )}
+              {index + 1}
+            </div>
+            <pre className="flex-1">{line}</pre>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function VariablesView({ variables }) {
+  return (
+    <div className="bg-white rounded-lg shadow">
+      <div className="bg-gray-200 px-4 py-2">
+        <h2 className="font-semibold">Variables</h2>
+      </div>
+      <div className="p-4">
+        {variables.map((variable, index) => (
+          <div key={index} className="flex justify-between py-1">
+            <span>{variable.name}</span>
+            <span className="text-gray-500">
+              {variable.type}: {variable.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function BreakpointsList({ breakpoints }) {
+  return (
+    <div className="bg-white rounded-lg shadow">
+      <div className="bg-gray-200 px-4 py-2">
+        <h2 className="font-semibold">Breakpoints</h2>
+      </div>
+      <div className="p-4">
+        {breakpoints.map((breakpoint) => (
+          <div key={breakpoint.id} className="flex items-center justify-between py-1">
+            <span>
+              {breakpoint.filename}:{breakpoint.line}
+            </span>
+            <button
+              className={`px-2 py-1 rounded ${
+                breakpoint.enabled ? 'bg-green-500 text-white' : 'bg-gray-300'
+              }`}
+            >
+              {breakpoint.enabled ? 'Enabled' : 'Disabled'}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function StackFramesList({ stackFrames }) {
+  return (
+    <div className="bg-white rounded-lg shadow">
+      <div className="bg-gray-200 px-4 py-2">
+        <h2 className="font-semibold">Stack Frames</h2>
+      </div>
+      <div className="p-4">
+        {stackFrames.map((frame) => (
+          <div key={frame.id} className="py-1 cursor-pointer hover:bg-gray-100">
+            <div className="font-semibold">{frame.functionName}</div>
+            <div className="text-sm text-gray-500">
+              {frame.filename}:{frame.line}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function Console({ input, output, onInputChange, onSubmit }) {
+  return (
+    <div className="bg-white rounded-lg shadow">
+      <div className="flex items-center bg-gray-200 px-4 py-2">
+        <Terminal size={16} className="mr-2" />
+        <h2 className="font-semibold">Console</h2>
+      </div>
+      <div className="p-4 h-40 overflow-y-auto font-mono text-sm">
+        {output.map((line, index) => (
+          <div key={index}>{line}</div>
+        ))}
+      </div>
+      <form onSubmit={onSubmit} className="p-4 border-t">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => onInputChange(e.target.value)}
+          className="w-full px-2 py-1 border rounded"
+          placeholder="Enter command..."
+        />
+      </form>
+    </div>
+  )
+}
