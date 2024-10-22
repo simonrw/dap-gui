@@ -10,9 +10,9 @@ bytes = "1.8.0"
 dap = { version = "0.4.1-alpha1", features = ["client"] }
 serde_json = "1.0.132"
 thiserror = "1.0.65"
-tokio = { version = "1.40.0", features = ["net"] }
+tokio = { version = "1.41.0", features = ["net"] }
 tokio-util = { version = "0.7.12", features = ["codec"] }
 
 [dev-dependencies]
 futures = "0.3.31"
-tokio = { version = "1.40.0", features = ["full"] }
+tokio = { version = "1.41.0", features = ["full"] }
