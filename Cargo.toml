@@ -21,7 +21,7 @@ strip = "debuginfo"
 [workspace.dependencies]
 eyre = "0.6.12"
 color-eyre = "0.6.3"
-ctor = "0.2.8"
+ctor = "0.2.9"
 crossbeam-channel = "0.5.13"
 tracing = "0.1.40"
 serde = { version = "1.0.215", features = ["derive"] }
