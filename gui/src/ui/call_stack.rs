@@ -23,7 +23,7 @@ impl<'s> CallStack<'s> {
     }
 }
 
-impl<'s> Widget for CallStack<'s> {
+impl Widget for CallStack<'_> {
     fn ui(self, ui: &mut eframe::egui::Ui) -> Response {
         let final_response = ui.heading("Call Stack");
 

@@ -2,9 +2,9 @@ use crate::Message;
 
 use std::io::BufRead;
 
-#[cfg(not(nom))]
+#[cfg(not(feature = "nom"))]
 pub mod hand_written_reader;
-#[cfg(nom)]
+#[cfg(feature = "nom")]
 pub mod nom_reader;
 
 pub trait Reader<R> {
@@ -12,7 +12,7 @@ pub trait Reader<R> {
     fn poll_message(&mut self) -> eyre::Result<Option<Message>>;
 }
 
-#[cfg(nom)]
+#[cfg(feature = "nom")]
 pub fn get<R>(input: R) -> impl Reader<R>
 where
     R: BufRead,
@@ -21,7 +21,7 @@ where
     nom_reader::NomReader::new(input)
 }
 
-#[cfg(not(nom))]
+#[cfg(not(feature = "nom"))]
 pub fn get<R>(input: R) -> impl Reader<R>
 where
     R: BufRead,

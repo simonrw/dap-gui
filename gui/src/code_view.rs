@@ -46,7 +46,7 @@ impl<'a> CodeView<'a> {
     }
 }
 
-impl<'a> egui::Widget for CodeView<'a> {
+impl egui::Widget for CodeView<'_> {
     fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
         let breakpoint_positions = self.breakpoint_positions();
         // closure that defines the layout drop
@@ -133,7 +133,7 @@ impl<'a> egui::Widget for CodeView<'a> {
     }
 }
 
-impl<'a> CodeView<'a> {
+impl CodeView<'_> {
     fn update_breakpoints(&mut self, _response: &Response) {
         // TODO
 

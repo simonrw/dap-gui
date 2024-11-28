@@ -9,12 +9,13 @@ use std::sync::{Arc, Mutex, MutexGuard};
 // TODO: use internal error type
 use eyre::{Context, Result};
 
-#[cfg(nom)]
+#[cfg(feature = "nom")]
 use crate::reader::nom_reader::NomReader;
 use crate::request_store::{RequestStore, WaitingRequest};
 use crate::responses::Response;
 use crate::{events, reader, requests, responses, Reader};
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Reply {
     pub message: Message,
@@ -222,5 +223,5 @@ impl Drop for ClientInternals {
 #[derive(Clone, Debug)]
 pub enum Received {
     Event(events::Event),
-    Response(requests::RequestBody, responses::Response),
+    Response(requests::RequestBody, Box<responses::Response>),
 }

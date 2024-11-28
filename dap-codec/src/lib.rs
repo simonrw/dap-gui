@@ -8,12 +8,14 @@ enum CodecError {
     InvalidUtf8(#[from] std::str::Utf8Error),
     #[error("invalid integer")]
     InvalidInteger(#[from] std::num::ParseIntError),
+    #[allow(dead_code)]
     #[error("missing content-length header")]
     MissingContentLengthHeader,
     #[error("deserializing message content")]
     Deserializing(#[from] serde_json::Error),
 }
 
+#[allow(dead_code)]
 struct DapDecoder {}
 
 impl Decoder for DapDecoder {

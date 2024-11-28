@@ -13,7 +13,7 @@ pub(crate) struct RenderBreakpoints<'b> {
     pub(crate) gutter_highlight: Option<usize>,
 }
 
-impl<'b> Program<Event> for RenderBreakpoints<'b> {
+impl Program<Event> for RenderBreakpoints<'_> {
     type State = ();
 
     #[tracing::instrument(skip(self, renderer, _theme, bounds, _cursor))]

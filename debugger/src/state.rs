@@ -12,7 +12,7 @@ pub(crate) enum DebuggerState {
     Initialised,
     Paused {
         stack: Vec<types::StackFrame>,
-        paused_frame: PausedFrame,
+        paused_frame: Box<PausedFrame>,
         breakpoints: Vec<types::Breakpoint>,
     },
     Running,
@@ -48,7 +48,7 @@ impl<'a> From<&'a DebuggerState> for Event {
                 ..
             } => Event::Paused {
                 stack: stack.clone(),
-                paused_frame: paused_frame.clone(),
+                paused_frame: *paused_frame.clone(),
                 breakpoints: breakpoints.clone(),
             },
             DebuggerState::Running => Event::Running,

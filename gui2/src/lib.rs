@@ -38,7 +38,7 @@ pub struct Args {
 pub enum Message {
     TabSelected(TabId),
     CodeViewer(CodeViewerAction),
-    DebuggerMessage(Event),
+    DebuggerMessage(Box<Event>),
     Window(WindowEvent),
     StackFrameChanged(StackFrameId),
     Quit,
@@ -279,7 +279,7 @@ impl Application for DebuggerApp {
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match &mut self.state {
             AppState::Running { .. } => match message {
-                Message::DebuggerMessage(event) => match event {
+                Message::DebuggerMessage(event) => match *event {
                     Event::Uninitialised => todo!(),
                     Event::Initialised => todo!(),
                     Event::Paused {
@@ -381,7 +381,7 @@ impl Application for DebuggerApp {
         let events = self.debugger.events();
         let debugger_sub = subscription::unfold("id", events, move |rx| async move {
             let msg = rx.recv().unwrap();
-            (Message::DebuggerMessage(msg), rx)
+            (Message::DebuggerMessage(Box::new(msg)), rx)
         });
         let events_sub = iced::keyboard::on_key_press(|key, mods| match (key, mods) {
             (Key::Character(c), Modifiers::CTRL) if c == "q" => Some(Message::Quit),

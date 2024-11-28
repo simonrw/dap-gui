@@ -4,7 +4,7 @@
 pub mod bindings;
 mod client;
 pub mod events;
-#[cfg(nom)]
+#[cfg(feature = "nom")]
 mod parse;
 pub mod reader;
 mod request_store;

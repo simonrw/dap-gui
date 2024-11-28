@@ -84,7 +84,7 @@ pub struct State {
     gutter_highlight: Option<usize>,
 }
 
-impl<'a, Message> Component<Message> for CodeViewer<'a, Message> {
+impl<Message> Component<Message> for CodeViewer<'_, Message> {
     type State = State;
 
     type Event = Event;

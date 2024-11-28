@@ -51,7 +51,7 @@ enum State {
     Running,
     Paused {
         stack: Vec<StackFrame>,
-        paused_frame: PausedFrame,
+        paused_frame: Box<PausedFrame>,
         breakpoints: Vec<debugger::Breakpoint>,
     },
     Terminated,
@@ -67,7 +67,7 @@ impl From<debugger::Event> for State {
                 breakpoints,
             } => State::Paused {
                 stack,
-                paused_frame,
+                paused_frame: Box::new(paused_frame),
                 breakpoints,
             },
             debugger::Event::Running => State::Running,
@@ -80,7 +80,7 @@ impl From<debugger::Event> for State {
             } => State::Paused {
                 stack,
                 breakpoints,
-                paused_frame,
+                paused_frame: Box::new(paused_frame),
             },
         }
     }

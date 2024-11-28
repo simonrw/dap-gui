@@ -258,7 +258,7 @@ impl DebuggerInternals {
 
                 self.set_state(DebuggerState::Paused {
                     stack: stack_frames,
-                    paused_frame,
+                    paused_frame: Box::new(paused_frame),
                     breakpoints: self.breakpoints.values().cloned().collect(),
                 });
             }

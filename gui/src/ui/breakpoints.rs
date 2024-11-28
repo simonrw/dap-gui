@@ -14,7 +14,7 @@ impl<'s> Breakpoints<'s> {
     }
 }
 
-impl<'s> Widget for Breakpoints<'s> {
+impl Widget for Breakpoints<'_> {
     fn ui(self, ui: &mut eframe::egui::Ui) -> eframe::egui::Response {
         let mut final_response = ui.label("Breakpoints");
         if self.show_details {
