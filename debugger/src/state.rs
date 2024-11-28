@@ -57,6 +57,7 @@ impl<'a> From<&'a DebuggerState> for Event {
     }
 }
 
+/// Languages supported by the debugger crate
 #[derive(Debug, Clone, Copy)]
 pub enum Language {
     DebugPy,
@@ -75,11 +76,19 @@ impl FromStr for Language {
     }
 }
 
+/// Arguments for attaching to a running process
 #[derive(Debug)]
 pub struct AttachArguments {
+    /// Working directory for the debugging session
     pub working_directory: PathBuf,
+
+    /// Debugger port to connect to (defaults to 5678)
     pub port: Option<u16>,
+
+    /// Programming language of the debugee
     pub language: Language,
+
+    /// Custom mappings from the running code (e.g. in a Docker container) to local source checkout
     pub path_mappings: Option<Vec<requests::PathMapping>>,
 }
 
@@ -97,9 +106,15 @@ impl AttachArguments {
     }
 }
 
+/// Arguments for launching a new process
 pub struct LaunchArguments {
+    /// Program to run
     pub program: PathBuf,
+
+    /// Current working directory for the launched process
     pub working_directory: Option<PathBuf>,
+
+    /// Language used to create the process
     pub language: Language,
 }
 

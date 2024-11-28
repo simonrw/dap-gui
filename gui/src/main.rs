@@ -241,7 +241,7 @@ impl DebuggerApp {
         }
 
         tracing::debug!("launching debugee");
-        debugger.launch().context("launching debugee")?;
+        debugger.start().context("launching debugee")?;
 
         let temp_state = DebuggerAppState {
             state: State::Initialising,

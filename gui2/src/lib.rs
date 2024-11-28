@@ -181,7 +181,7 @@ impl DebuggerApp {
         }
 
         tracing::debug!("launching debugee");
-        debugger.launch().context("launching debugee")?;
+        debugger.start().context("launching debugee")?;
 
         Ok(Self {
             state: AppState::Running {

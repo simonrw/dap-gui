@@ -79,7 +79,7 @@ fn test_remote_attach() -> eyre::Result<()> {
             ..Default::default()
         })
         .context("adding breakpoint")?;
-    debugger.launch().context("launching debugee")?;
+    debugger.start().context("launching debugee")?;
 
     wait_for_event("running event", &drx, |e| {
         matches!(e, debugger::Event::Running { .. })
@@ -151,7 +151,7 @@ fn test_debugger() -> eyre::Result<()> {
             ..Default::default()
         })
         .context("adding breakpoint")?;
-    debugger.launch().context("launching debugee")?;
+    debugger.start().context("launching debugee")?;
 
     wait_for_event("running event", &drx, |e| {
         matches!(e, debugger::Event::Running { .. })
