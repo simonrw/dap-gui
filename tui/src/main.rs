@@ -1,6 +1,8 @@
 use color_eyre::eyre::{self, Context};
-use crossterm::event::{self, Event};
-use ratatui::{prelude::Backend, Frame, Terminal};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::style::Stylize;
+use ratatui::{prelude::Backend, widgets::Paragraph, Frame, Terminal};
 
 fn main() -> eyre::Result<()> {
     let mut terminal = ratatui::init();
@@ -16,14 +18,27 @@ where
 {
     loop {
         terminal.draw(draw).wrap_err("failed to draw frame")?;
-        if matches!(
-            event::read().wrap_err("failed to read event")?,
-            Event::Key(_)
-        ) {
-            break;
+
+        // event handling
+        if let Event::Key(key) = event::read()? {
+            if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
+                return Ok(());
+            }
         }
     }
     Ok(())
 }
 
-fn draw(_frame: &mut Frame) {}
+fn draw(frame: &mut Frame) {
+    let layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(frame.area());
+
+    let greeting = Paragraph::new("Hello Ratatui! (press 'q' to quit)")
+        .white()
+        .on_black();
+    let bottom = Paragraph::new("Bottom paragraph").white();
+    frame.render_widget(greeting, layout[0]);
+    frame.render_widget(bottom, layout[1]);
+}
