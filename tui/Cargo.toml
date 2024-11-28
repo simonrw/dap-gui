@@ -6,3 +6,20 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+debugger = { path = "../debugger" }
+# TODO: should not need this
+transport = { path = "../transport" }
+server = { path = "../server" }
+state = { path = "../state" }
+launch_configuration = { path = "../launch_configuration" }
+sentry = { version = "0.34.0", optional = true, default-features = false, features = [
+    "reqwest",
+    "rustls",
+    "backtrace",
+    "contexts",
+    "panic",
+    "debug-images",
+] }
+
+[features]
+sentry = ["dep:sentry"]
