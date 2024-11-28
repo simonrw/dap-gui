@@ -3,9 +3,8 @@ import { Button } from "./components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./components/ui/resizable"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { Textarea } from "./components/ui/textarea";
 import Terminal from "react-console-emulator";
-import { ReactNode, useCallback, useMemo, useState } from "react";
+import { useMemo } from "react";
 import ReactCodeMirror, { EditorView, gutter, GutterMarker, lineNumbers, RangeSet, StateEffect, StateField } from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
 import { githubDark } from "@uiw/codemirror-theme-github";
@@ -154,10 +153,7 @@ const terminalCommands = {
   },
 };
 
-type DebugTerminalProps = {
-}
-
-function DebugTerminal(props: DebugTerminalProps) {
+function DebugTerminal() {
   return (
     <div id="terminal">
       <Terminal
@@ -272,21 +268,6 @@ createRoot(document.getElementById('root')!).render(
   );
 }
 
-type GutterProps = {
-  text: string;
-  children: ReactNode;
-};
-
-function Gutter(props: GutterProps) {
-  return (
-    <>
-      <div className="max-w-48">
-        <p>Hello world</p>
-      </div>
-      {props.children}
-    </>
-  );
-}
 
 function BottomPane() {
 
