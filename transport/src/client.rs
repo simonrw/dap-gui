@@ -9,8 +9,6 @@ use std::sync::{Arc, Mutex, MutexGuard};
 // TODO: use internal error type
 use eyre::{Context, Result};
 
-#[cfg(feature = "nom")]
-use crate::reader::nom_reader::NomReader;
 use crate::request_store::{RequestStore, WaitingRequest};
 use crate::responses::Response;
 use crate::{events, reader, requests, responses, Reader};

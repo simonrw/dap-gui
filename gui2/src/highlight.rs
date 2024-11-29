@@ -9,10 +9,10 @@ pub(crate) struct Highlighter {
 impl advanced::text::Highlighter for Highlighter {
     type Settings = iced::highlighter::Settings;
     type Highlight = iced::highlighter::Highlight;
-    type Iterator<'a> = Box<dyn Iterator<Item = (Range<usize>, iced::highlighter::Highlight)> + 'a>
+    type Iterator<'a>
+        = Box<dyn Iterator<Item = (Range<usize>, iced::highlighter::Highlight)> + 'a>
     where
-        Self: 'a,
-        ;
+        Self: 'a;
 
     fn new(settings: &Self::Settings) -> Self {
         let inner = IcedHighlighter::new(settings);
