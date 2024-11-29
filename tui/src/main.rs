@@ -30,10 +30,14 @@ where
 }
 
 fn draw(frame: &mut Frame) {
+    let outer_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(vec![Constraint::Percentage(40), Constraint::Percentage(60)])
+        .split(frame.area());
     let layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(frame.area());
+        .split(outer_layout[0]);
 
     let greeting = Paragraph::new("Hello Ratatui! (press 'q' to quit)")
         .white()
