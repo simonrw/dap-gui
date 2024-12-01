@@ -2,19 +2,32 @@ use color_eyre::eyre::{self, Context};
 use crossbeam_channel::{select, Receiver};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::style::Stylize;
-use ratatui::{prelude::Backend, widgets::Paragraph, Frame, Terminal};
+use ratatui::{prelude::*, widgets::Paragraph, Frame, Terminal};
+use std::time::Duration;
+
+struct App {
+    value: i32,
+}
 
 fn main() -> eyre::Result<()> {
     let mut terminal = ratatui::init();
     terminal.clear().wrap_err("clearing the terminal")?;
-    let (_tx, rx) = crossbeam_channel::unbounded::<()>();
-    let app_result = run(terminal, rx);
+    let (tx, rx) = crossbeam_channel::unbounded::<()>();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(1));
+        let _ = tx.send(());
+    });
+    let mut app = App { value: 0 };
+    let app_result = run(&mut app, terminal, rx);
     ratatui::restore();
     app_result
 }
 
-fn run<T>(mut terminal: Terminal<T>, debugger_events: Receiver<()>) -> eyre::Result<()>
+fn run<T>(
+    app: &mut App,
+    mut terminal: Terminal<T>,
+    debugger_events: Receiver<()>,
+) -> eyre::Result<()>
 where
     T: Backend,
 {
@@ -32,8 +45,6 @@ where
     });
 
     loop {
-        terminal.draw(draw).wrap_err("failed to draw frame")?;
-
         // event handling
         select! {
             // terminal events
@@ -43,15 +54,18 @@ where
             }
         },
         recv(debugger_events) -> msg => {
-            if let Ok(msg) = msg {
-                dbg!(msg);
+            if let Ok(_) = msg {
+                app.value += 1;
             }
         },
         }
+        terminal
+            .draw(|frame| draw(app, frame))
+            .wrap_err("failed to draw frame")?;
     }
 }
 
-fn draw(frame: &mut Frame) {
+fn draw(app: &mut App, frame: &mut Frame) {
     let outer_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(vec![Constraint::Percentage(40), Constraint::Percentage(60)])
@@ -65,7 +79,9 @@ fn draw(frame: &mut Frame) {
         .white()
         .on_black();
     let bottom = Paragraph::new("Bottom paragraph").white();
-    let p = Paragraph::new("Foo").white().bold();
+    let p = Paragraph::new(format!("App value: {}", app.value))
+        .white()
+        .bold();
 
     frame.render_widget(greeting, layout[0]);
     frame.render_widget(bottom, layout[1]);
