@@ -5482,6 +5482,7 @@ name = "tui"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
+ "crossbeam-channel",
  "crossterm",
  "debugger",
  "launch_configuration",

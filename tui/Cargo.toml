@@ -23,6 +23,7 @@ sentry = { version = "0.34.0", optional = true, default-features = false, featur
 ] }
 ratatui = "0.29.0"
 crossterm = "0.28.1"
+crossbeam-channel.workspace = true
 
 [features]
 sentry = ["dep:sentry"]
