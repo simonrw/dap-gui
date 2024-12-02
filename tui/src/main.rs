@@ -4,6 +4,9 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::{prelude::*, widgets::Paragraph, Frame, Terminal};
 use std::time::Duration;
+use widgets::breakpoints::BreakpointsView;
+
+mod widgets;
 
 struct App {
     should_quit: bool,
@@ -87,17 +90,17 @@ fn draw(app: &App, frame: &mut Frame) {
         .constraints(vec![Constraint::Percentage(60), Constraint::Percentage(40)])
         .split(outer_layout[1]);
     let code_view = right_panel[0];
-    let breakpoints_view = right_panel[1];
+    let breakpoints_area = right_panel[1];
 
     let greeting = Paragraph::new("Hello Ratatui! (press 'q' to quit)")
         .white()
         .on_black();
     let bottom = Paragraph::new("Bottom paragraph").white();
     let p = Paragraph::new(format!("App value")).white().bold();
-    let breakpoints = Paragraph::new(format!("breakpoints")).white().bold();
 
     frame.render_widget(greeting, variables_frame);
     frame.render_widget(bottom, stack_frame);
     frame.render_widget(p, code_view);
-    frame.render_widget(breakpoints, breakpoints_view);
+
+    frame.render_widget(BreakpointsView::default(), breakpoints_area);
 }
