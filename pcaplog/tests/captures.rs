@@ -1,6 +1,6 @@
 use std::{io::IsTerminal, path::PathBuf};
 
-use anyhow::Context;
+use eyre::WrapErr;
 use pcaplog::extract_messages;
 use rstest::rstest;
 use tracing_subscriber::EnvFilter;
@@ -33,7 +33,7 @@ fn capture(
     #[case] path: &str,
     #[case] port: u16,
     #[case] expected_count: usize,
-) -> anyhow::Result<()> {
+) -> eyre::Result<()> {
     let messages = extract_messages(path, port).context("extracting messages")?;
 
     assert_eq!(messages.len(), expected_count);

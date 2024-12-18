@@ -55,6 +55,7 @@ fn test_remote_attach() -> eyre::Result<()> {
         working_directory: cwd.clone(),
         port: Some(port),
         language: debugger::Language::DebugPy,
+        path_mappings: None,
     };
 
     let debugger = Debugger::on_port(port, launch_args).context("creating debugger")?;
@@ -78,7 +79,7 @@ fn test_remote_attach() -> eyre::Result<()> {
             ..Default::default()
         })
         .context("adding breakpoint")?;
-    debugger.launch().context("launching debugee")?;
+    debugger.start().context("launching debugee")?;
 
     wait_for_event("running event", &drx, |e| {
         matches!(e, debugger::Event::Running { .. })
@@ -150,7 +151,7 @@ fn test_debugger() -> eyre::Result<()> {
             ..Default::default()
         })
         .context("adding breakpoint")?;
-    debugger.launch().context("launching debugee")?;
+    debugger.start().context("launching debugee")?;
 
     wait_for_event("running event", &drx, |e| {
         matches!(e, debugger::Event::Running { .. })

@@ -10,20 +10,24 @@ members = [
     "gui",
     "state",
     "launch_configuration",
+    "dap-codec",
+    "gui2",
 ]
 
-[profile.release]
-debug = 1
+[profile.dev]
+debug = 0
+strip = "debuginfo"
+
 
 [workspace.dependencies]
-anyhow = "1.0.79"
-eyre = "0.6.11"
-color-eyre = "0.6.2"
-ctor = "0.2.6"
-crossbeam-channel = "0.5.11"
-tracing = "0.1.40"
-serde = { version = "1.0.196", features = ["derive"] }
-serde_json = "1.0.113"
-clap = { version = "4.4.11", features = ["derive"] }
-tracing-subscriber = { version = "0.3.17", features = ["json", "env-filter"] }
+eyre = "0.6.12"
+color-eyre = "0.6.3"
+ctor = "0.2.9"
+crossbeam-channel = "0.5.14"
+tracing = "0.1.41"
+serde = { version = "1.0.216", features = ["derive"] }
+serde_json = "1.0.133"
+clap = { version = "4.5.23", features = ["derive"] }
+tracing-subscriber = { version = "0.3.19", features = ["json", "env-filter"] }
 dirs = "5.0.1"
+dark-light = "1.1.1"

@@ -12,7 +12,7 @@ impl<'s> ControlPanel<'s> {
     }
 }
 
-impl<'s> Widget for ControlPanel<'s> {
+impl Widget for ControlPanel<'_> {
     fn ui(self, _ui: &mut eframe::egui::Ui) -> Response {
         egui::Window::new("Controls")
             .anchor(egui::Align2::RIGHT_TOP, (10., 10.))

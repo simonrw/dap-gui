@@ -17,14 +17,18 @@ use transport::{
 };
 
 use crate::{
-    internals::{DebuggerInternals, FileSource},
+    internals::DebuggerInternals,
     state::{self, DebuggerState},
     types::{self, EvaluateResult},
     Event,
 };
 
+/// How to launch a debugging session
 pub enum InitialiseArguments {
+    /// Launch a new process with a debugger and connect to the session immediately
     Launch(state::LaunchArguments),
+
+    /// Attach to a running process
     Attach(state::AttachArguments),
 }
 
@@ -63,12 +67,16 @@ where
     })
 }
 
+/// Represents a debugging session
 pub struct Debugger {
     internals: Arc<Mutex<DebuggerInternals>>,
     rx: crossbeam_channel::Receiver<Event>,
 }
 
 impl Debugger {
+    /// Connect to an existing DAP session on the given port.
+    ///
+    /// Takes [`InitialiseArguments`] for configuration of the debugging session
     #[tracing::instrument(skip(initialise_arguments))]
     pub fn on_port(
         port: u16,
@@ -132,15 +140,21 @@ impl Debugger {
             rx: internals_rx,
         })
     }
+
+    /// Create a new debugging session on the default DAP port (5678)
+    ///
+    /// Note: the debugging session does not start until [`Debugger::start`] is called
     #[tracing::instrument(skip(initialise_arguments))]
     pub fn new(initialise_arguments: impl Into<InitialiseArguments>) -> eyre::Result<Self> {
         Self::on_port(DEFAULT_DAP_PORT, initialise_arguments)
     }
 
+    /// Return a [`crossbeam_channel::Receiver<Event>`] to subscribe to debugging events
     pub fn events(&self) -> crossbeam_channel::Receiver<Event> {
         self.rx.clone()
     }
 
+    /// Add a breakpoint for the current debugging session
     pub fn add_breakpoint(
         &self,
         breakpoint: &types::Breakpoint,
@@ -149,7 +163,8 @@ impl Debugger {
         internals.add_breakpoint(breakpoint)
     }
 
-    pub fn launch(&self) -> eyre::Result<()> {
+    /// Launch a debugging session
+    pub fn start(&self) -> eyre::Result<()> {
         let mut internals = self.internals.lock().unwrap();
         let _ = internals
             .client
@@ -159,7 +174,12 @@ impl Debugger {
         Ok(())
     }
 
-    pub fn evaluate(&self, input: &str, frame_id: StackFrameId) -> eyre::Result<EvaluateResult> {
+    /// Perform a code/variable evaluation within a debugging session
+    pub fn evaluate(
+        &self,
+        input: &str,
+        frame_id: StackFrameId,
+    ) -> eyre::Result<Option<EvaluateResult>> {
         let internals = self.internals.lock().unwrap();
         let req = requests::RequestBody::Evaluate(requests::Evaluate {
             expression: input.to_string(),
@@ -178,19 +198,22 @@ impl Debugger {
                     })),
                 success: true,
                 ..
-            } => Ok(EvaluateResult {
+            } => Ok(Some(EvaluateResult {
                 output: result,
                 error: false,
-            }),
+            })),
             responses::Response {
                 message: Some(msg),
                 success: false,
                 ..
-            } => Ok(EvaluateResult {
+            } => Ok(Some(EvaluateResult {
                 output: msg,
                 error: true,
-            }),
-            _ => unreachable!(),
+            })),
+            other => {
+                tracing::warn!(response = ?other, "unhandled response");
+                Ok(None)
+            }
         }
     }
 
@@ -261,18 +284,11 @@ impl Debugger {
         Ok(())
     }
 
-    pub fn with_current_source<F>(&self, f: F)
-    where
-        F: Fn(Option<&FileSource>),
-    {
-        let internals = self.internals.lock().unwrap();
-        f(internals.current_source.as_ref())
-    }
-
     fn execute(&self, body: requests::RequestBody) -> eyre::Result<()> {
         self.internals.lock().unwrap().client.execute(body)
     }
 
+    /// Pause the debugging session waiting for a specific event, where the predicate returns true
     pub fn wait_for_event<F>(&self, pred: F) -> Event
     where
         F: Fn(&Event) -> bool,
@@ -292,6 +308,16 @@ impl Debugger {
             }
             n += 1;
         }
+    }
+
+    /// Change the current scope to a new stack frame
+    pub fn change_scope(&self, stack_frame_id: StackFrameId) -> eyre::Result<()> {
+        self.internals
+            .lock()
+            .unwrap()
+            .change_scope(stack_frame_id)
+            .wrap_err("changing scope")?;
+        Ok(())
     }
 }
 

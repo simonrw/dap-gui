@@ -37,8 +37,6 @@ impl<'s> Renderer<'s> {
                         &breakpoints,
                         false,
                     );
-                } else {
-                    tracing::warn!("no previous state found");
                 }
             }
             State::Paused {
@@ -99,7 +97,7 @@ impl<'s> Renderer<'s> {
         show_details: bool,
     ) {
         ui.vertical(|ui| {
-            ui.add(CallStack::new(stack, show_details));
+            ui.add(CallStack::new(stack, show_details, self.state));
             ui.separator();
             ui.add(Breakpoints::new(original_breakpoints, show_details));
         });
@@ -138,13 +136,14 @@ impl<'s> Renderer<'s> {
                 && ui.input(|i| i.key_pressed(Key::Enter))
             {
                 // TODO: handle the error case
-                let EvaluateResult {
+                if let Ok(Some(EvaluateResult {
                     output,
                     error: _error,
-                } = self.state.debugger.evaluate(repl_input, frame_id).unwrap();
-
-                *repl_output += &("\n".to_string() + repl_input + "\n=> " + &output + "\n");
-                repl_input.clear();
+                })) = self.state.debugger.evaluate(repl_input, frame_id)
+                {
+                    *repl_output += &("\n".to_string() + repl_input + "\n=> " + &output + "\n");
+                    repl_input.clear();
+                }
             }
         }
     }
@@ -198,6 +197,7 @@ impl<'s> Renderer<'s> {
         paused_frame: &PausedFrame,
         original_breakpoints: &[debugger::Breakpoint],
     ) {
+        // let DebuggerAppState { ref mut jump, .. } = self.state;
         let frame = &paused_frame.frame;
         let file_path = frame
             .source
@@ -213,6 +213,12 @@ impl<'s> Renderer<'s> {
                 .cloned(),
         );
 
-        ui.add(CodeView::new(&contents, frame.line, true, &mut breakpoints));
+        ui.add(CodeView::new(
+            &contents,
+            frame.line,
+            true,
+            &mut breakpoints,
+            &self.state.jump,
+        ));
     }
 }

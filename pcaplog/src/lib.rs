@@ -1,10 +1,10 @@
-use anyhow::Context;
 use etherparse::{SlicedPacket, TransportSlice};
+use eyre::WrapErr;
 use pcap_file::pcapng::{blocks::enhanced_packet::EnhancedPacketBlock, PcapNgParser};
 use std::{io::BufReader, path::Path};
 use transport::{Message, Reader};
 
-pub fn extract_messages(path: impl AsRef<Path>, port: u16) -> anyhow::Result<Vec<Message>> {
+pub fn extract_messages(path: impl AsRef<Path>, port: u16) -> eyre::Result<Vec<Message>> {
     let path = path.as_ref();
 
     // TODO: not great for memory usage or DOS...
@@ -42,7 +42,7 @@ pub fn extract_messages(path: impl AsRef<Path>, port: u16) -> anyhow::Result<Vec
                                         if let Some(TransportSlice::Tcp(tcph)) = value.transport {
                                             tracing::trace!("got tcp layer");
 
-                                            let payload = value.payload;
+                                            let payload = tcph.payload();
                                             if payload.is_empty() {
                                                 tracing::trace!("no payload");
                                                 src = rem;
@@ -91,7 +91,7 @@ pub fn extract_messages(path: impl AsRef<Path>, port: u16) -> anyhow::Result<Vec
                 }
             }
         }
-        Some(_) | None => anyhow::bail!("invalid extension, expected .pcap or .pcapng"),
+        Some(_) | None => eyre::bail!("invalid extension, expected .pcap or .pcapng"),
     };
 
     Ok(result)

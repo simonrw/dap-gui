@@ -120,7 +120,7 @@ impl DockerClient {
             .context("waiting for docker create command to finish")?;
 
         if !output.status.success() {
-            anyhow::bail!("bad exit code from docker command");
+            eyre::bail!("bad exit code from docker command");
         }
 
         let output = String::from_utf8(output.stdout).context("invalid utf8 output")?;
@@ -135,7 +135,7 @@ impl DockerClient {
             .wait()
             .context("waiting for docker start command")?;
         if !exit_code.success() {
-            anyhow::bail!("bad exit code from docker command");
+            eyre::bail!("bad exit code from docker command");
         }
 
         Ok(())
@@ -149,7 +149,7 @@ impl DockerClient {
             .wait()
             .context("waiting for docker start command")?;
         if !exit_code.success() {
-            anyhow::bail!("bad exit code from docker command");
+            eyre::bail!("bad exit code from docker command");
         }
         Ok(())
     }
@@ -161,7 +161,7 @@ impl DockerClient {
             .context("waiting for docker create command to finish")?;
 
         if !output.status.success() {
-            anyhow::bail!("bad exit code from docker command");
+            eyre::bail!("bad exit code from docker command");
         }
 
         let output = String::from_utf8(output.stdout).context("invalid utf8 output")?;
@@ -221,7 +221,7 @@ where
     loop {
         let msg = rx.recv().unwrap();
         if n >= 100 {
-            anyhow::bail!("did not receive message");
+            eyre::bail!("did not receive message");
         }
         if let Received::Response(_, response) = msg {
             assert!(response.success);

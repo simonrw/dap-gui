@@ -7,7 +7,7 @@ use crate::{requests, responses::Response, types};
 
 /// Wraps the incoming request with a channel to reply back on
 pub(crate) struct WaitingRequest(
-    pub(crate) requests::RequestBody,
+    #[allow(dead_code)] pub(crate) requests::RequestBody,
     pub(crate) oneshot::Sender<Response>,
 );
 

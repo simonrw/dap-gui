@@ -9,8 +9,8 @@ use std::{
 use clap::Parser;
 use debugger::{AttachArguments, Debugger, PausedFrame};
 use eframe::egui::{self, Visuals};
-use eyre::{OptionExt, WrapErr};
-use launch_configuration::{Debugpy, LaunchConfiguration};
+use eyre::WrapErr;
+use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
 use state::StateManager;
 use transport::types::{StackFrame, StackFrameId};
 
@@ -23,7 +23,7 @@ struct Args {
     config_path: PathBuf,
 
     #[clap(short, long)]
-    name: String,
+    name: Option<String>,
 }
 
 #[cfg(feature = "sentry")]
@@ -51,7 +51,7 @@ enum State {
     Running,
     Paused {
         stack: Vec<StackFrame>,
-        paused_frame: PausedFrame,
+        paused_frame: Box<PausedFrame>,
         breakpoints: Vec<debugger::Breakpoint>,
     },
     Terminated,
@@ -67,12 +67,21 @@ impl From<debugger::Event> for State {
                 breakpoints,
             } => State::Paused {
                 stack,
-                paused_frame,
+                paused_frame: Box::new(paused_frame),
                 breakpoints,
             },
             debugger::Event::Running => State::Running,
             debugger::Event::Ended => State::Terminated,
             debugger::Event::Uninitialised => State::Initialising,
+            debugger::Event::ScopeChange {
+                stack,
+                breakpoints,
+                paused_frame,
+            } => State::Paused {
+                stack,
+                breakpoints,
+                paused_frame: Box::new(paused_frame),
+            },
         }
     }
 }
@@ -93,10 +102,17 @@ struct DebuggerAppState {
     tab: RefCell<TabState>,
     repl_input: RefCell<String>,
     repl_output: RefCell<String>,
+    jump: bool,
 }
 
 impl DebuggerAppState {
-    #[tracing::instrument(skip(self))]
+    pub(crate) fn change_scope(&self, stack_frame_id: StackFrameId) -> eyre::Result<()> {
+        self.debugger
+            .change_scope(stack_frame_id)
+            .wrap_err("changing scope")
+    }
+
+    #[tracing::instrument(skip(self), level = "trace")]
     fn handle_event(&mut self, event: &debugger::Event) -> eyre::Result<()> {
         tracing::debug!("handling event");
         self.previous_state = Some(self.state.clone());
@@ -106,6 +122,14 @@ impl DebuggerAppState {
         } else if let State::Running = &self.state {
             self.current_frame_id = None;
         }
+
+        // if we have just been paused then jump the editor to the nearest point
+        if let (State::Paused { .. }, Some(State::Running)) =
+            (&mut self.state, &self.previous_state)
+        {
+            self.jump = true;
+        }
+
         Ok(())
     }
 }
@@ -132,9 +156,24 @@ impl DebuggerApp {
         let persisted_state = state_manager.current();
         tracing::trace!(state = ?persisted_state, "loaded state");
 
-        let config = launch_configuration::load_from_path(&args.name, args.config_path)
-            .wrap_err("loading configuration file")?
-            .ok_or_eyre("finding named configuration")?;
+        let config =
+            match launch_configuration::load_from_path(args.name.as_ref(), args.config_path)
+                .wrap_err("loading launch configuration")?
+            {
+                ChosenLaunchConfiguration::Specific(config) => config,
+                ChosenLaunchConfiguration::NotFound => {
+                    eyre::bail!("no matching configuration found")
+                }
+                ChosenLaunchConfiguration::ToBeChosen(configurations) => {
+                    eprintln!("Configuration name not specified");
+                    eprintln!("Available options:");
+                    for config in &configurations {
+                        eprintln!("- {config}");
+                    }
+                    // TODO: best option?
+                    std::process::exit(1);
+                }
+            };
 
         let mut debug_root_dir = std::env::current_dir().unwrap();
 
@@ -143,6 +182,7 @@ impl DebuggerApp {
                 request,
                 cwd,
                 connect,
+                path_mappings,
                 ..
             }) => {
                 if let Some(dir) = cwd {
@@ -154,6 +194,7 @@ impl DebuggerApp {
                             working_directory: debug_root_dir.to_owned().to_path_buf(),
                             port: Some(connect.port),
                             language: debugger::Language::DebugPy,
+                            path_mappings,
                         };
 
                         tracing::debug!(?launch_arguments, "generated launch configuration");
@@ -200,13 +241,14 @@ impl DebuggerApp {
         }
 
         tracing::debug!("launching debugee");
-        debugger.launch().context("launching debugee")?;
+        debugger.start().context("launching debugee")?;
 
         let temp_state = DebuggerAppState {
             state: State::Initialising,
             previous_state: None,
             debugger,
             current_frame_id: None,
+            jump: false,
             tab: RefCell::new(TabState::Variables),
             repl_input: RefCell::new(String::new()),
             repl_output: RefCell::new(String::new()),
@@ -235,9 +277,12 @@ impl DebuggerApp {
 impl eframe::App for DebuggerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |_ui| {
-            let inner = self.inner.lock().unwrap();
+            let mut inner = self.inner.lock().unwrap();
             let mut user_interface = crate::renderer::Renderer::new(&inner);
             user_interface.render_ui(ctx);
+            if inner.jump {
+                inner.jump = false;
+            }
         });
     }
 }
@@ -251,7 +296,7 @@ fn main() -> eyre::Result<()> {
 
     let native_options = eframe::NativeOptions::default();
     eframe::run_native(
-        "My egui App",
+        "DAP Debugger",
         native_options,
         Box::new(|cc| {
             let style = egui::Style {

@@ -33,6 +33,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
+      - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
       - name: cargo generate-lockfile
         if: hashFiles('Cargo.lock') == ''
@@ -69,6 +70,7 @@ jobs:
           go install github.com/go-delve/delve/cmd/dlv@latest
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
+      - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
       - name: Install nightly for -Zminimal-versions
         uses: dtolnay/rust-toolchain@nightly

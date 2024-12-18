@@ -12,7 +12,7 @@ pub(crate) enum DebuggerState {
     Initialised,
     Paused {
         stack: Vec<types::StackFrame>,
-        paused_frame: PausedFrame,
+        paused_frame: Box<PausedFrame>,
         breakpoints: Vec<types::Breakpoint>,
     },
     Running,
@@ -24,6 +24,11 @@ pub enum Event {
     Uninitialised,
     Initialised,
     Paused {
+        stack: Vec<types::StackFrame>,
+        breakpoints: Vec<types::Breakpoint>,
+        paused_frame: types::PausedFrame,
+    },
+    ScopeChange {
         stack: Vec<types::StackFrame>,
         breakpoints: Vec<types::Breakpoint>,
         paused_frame: types::PausedFrame,
@@ -43,7 +48,7 @@ impl<'a> From<&'a DebuggerState> for Event {
                 ..
             } => Event::Paused {
                 stack: stack.clone(),
-                paused_frame: paused_frame.clone(),
+                paused_frame: *paused_frame.clone(),
                 breakpoints: breakpoints.clone(),
             },
             DebuggerState::Running => Event::Running,
@@ -52,6 +57,7 @@ impl<'a> From<&'a DebuggerState> for Event {
     }
 }
 
+/// Languages supported by the debugger crate
 #[derive(Debug, Clone, Copy)]
 pub enum Language {
     DebugPy,
@@ -70,11 +76,20 @@ impl FromStr for Language {
     }
 }
 
+/// Arguments for attaching to a running process
 #[derive(Debug)]
 pub struct AttachArguments {
+    /// Working directory for the debugging session
     pub working_directory: PathBuf,
+
+    /// Debugger port to connect to (defaults to 5678)
     pub port: Option<u16>,
+
+    /// Programming language of the debugee
     pub language: Language,
+
+    /// Custom mappings from the running code (e.g. in a Docker container) to local source checkout
+    pub path_mappings: Option<Vec<requests::PathMapping>>,
 }
 
 impl AttachArguments {
@@ -84,16 +99,22 @@ impl AttachArguments {
                 host: "localhost".to_string(),
                 port: self.port.unwrap_or(DEFAULT_DAP_PORT),
             },
-            path_mappings: Vec::new(),
+            path_mappings: self.path_mappings.unwrap_or_default(),
             just_my_code: false,
             workspace_folder: self.working_directory,
         })
     }
 }
 
+/// Arguments for launching a new process
 pub struct LaunchArguments {
+    /// Program to run
     pub program: PathBuf,
+
+    /// Current working directory for the launched process
     pub working_directory: Option<PathBuf>,
+
+    /// Language used to create the process
     pub language: Language,
 }
 
