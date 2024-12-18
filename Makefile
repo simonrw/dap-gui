@@ -9,15 +9,11 @@ help:           ## Show this help.
 
 run-server:     ## Run the DAP server
 	@echo "!!! Running DAP server on port ${PORT}"
-	@while true; \
-		do python -m debugpy.adapter --host 127.0.0.1 --port ${PORT} --log-stderr; \
-	done
+	python -m debugpy.adapter --host 127.0.0.1 --port ${PORT} --log-stderr
 
 run-attach:
 	@echo "!!! Running attachable script on port ${PORT}"
-	@while true; \
-		do python attach.py; \
-	done
+	python attach.py
 
 run: 			## Run the debugger
 	cargo run --bin dap-gui-ui -- $(RUN_ARGS)
