@@ -6,14 +6,36 @@ use std::path::PathBuf;
 use transport::types::StackFrame;
 
 #[pyclass]
+pub struct Breakpoint {
+    pub line: usize,
+    pub file: String,
+}
+
+#[pymethods]
+impl Breakpoint {
+    fn __repr__(&self) -> String {
+        format!("'{}:{}'", self.file, self.line)
+    }
+}
+
+impl From<debugger::Breakpoint> for Breakpoint {
+    fn from(value: debugger::Breakpoint) -> Self {
+        Self {
+            line: value.line,
+            file: format!("{}", value.path.display()),
+        }
+    }
+}
+
+#[pyclass]
 struct ProgramState {
     _stack: Vec<StackFrame>,
 }
 
 #[pymethods]
 impl ProgramState {
-    fn __getattr__(&self, py: Python, name: PyObject) -> PyResult<impl IntoPy<PyObject>> {
-        let name: String = name.extract(py)?;
+    fn __getattr__(&self, name: &Bound<'_, PyAny>) -> PyResult<String> {
+        let name: String = name.extract()?;
         Ok(name)
     }
 }
@@ -58,17 +80,19 @@ impl Debugger {
         match self._internal.wait_for_event(|evt| {
             matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
         }) {
-            Event::Paused {
-                stack,
-                paused_frame,
-                ..
-            } => Ok(Some(ProgramState { _stack: stack })),
+            Event::Paused { stack, .. } => Ok(Some(ProgramState { _stack: stack })),
             Event::Ended => {
                 eprintln!("Debugee ended");
-                return Ok(None);
+                Ok(None)
             }
             _ => unreachable!(),
         }
+    }
+
+    // /// List the breakpoints the debugger knows about
+    pub fn breakpoints(&mut self) -> Vec<Breakpoint> {
+        let debugger_breakpoints = self._internal.breakpoints();
+        debugger_breakpoints.into_iter().map(From::from).collect()
     }
 }
 
@@ -111,7 +135,11 @@ impl Debugger {
 }
 
 #[pymodule]
-fn pythondap(_py: Python, m: &PyModule) -> PyResult<()> {
+fn pythondap(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    tracing_subscriber::fmt::init();
+
+    tracing::info!("info");
+
     m.add_class::<Debugger>()?;
     m.add_class::<ProgramState>()?;
     Ok(())

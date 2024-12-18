@@ -20,7 +20,7 @@ run: 			## Run the debugger
 
 .PHONY: repl
 repl: python-develop ## Open ipython repl with debugger loaded
-	ipython -c "import pythondap; d = pythondap.Debugger([4], file='./test.py')" -i
+	ipython -c "import pythondap" -i
 
 .PHOHY: python-develop
 python-develop: ## Compile and install a development version of the debugger
