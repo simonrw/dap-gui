@@ -46,7 +46,7 @@ impl Debugger {
         if !self._launched {
             self._launched = true;
             self._internal
-                .launch()
+                .start()
                 .map_err(|e| PyRuntimeError::new_err(format!("launching debugger: {e}")))?;
         } else {
             self._internal
@@ -84,6 +84,7 @@ impl Debugger {
             working_directory: current_dir().unwrap(),
             port: Some(port),
             language: debugger::Language::DebugPy,
+            path_mappings: None,
         };
         let debugger = debugger::Debugger::new(args)
             .map_err(|e| PyRuntimeError::new_err(format!("creating debugger: {e}")))?;

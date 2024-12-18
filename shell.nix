@@ -29,7 +29,7 @@ in
         cargo-hack
         act
         maturin
-        python3Packages.venvShellHook
+        uv
       ]
       ++ lib.optionals stdenv.isDarwin apple-deps
       ++ lib.optionals stdenv.isLinux [
@@ -38,13 +38,10 @@ in
         cargo-llvm-cov
       ];
 
-    venvDir = ".venv";
-
     env = {
       RUST_BACKTRACE = "1";
       RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug";
       RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
-      VIRTUAL_ENV = venvDir;
     };
 
     shellHook = ''
