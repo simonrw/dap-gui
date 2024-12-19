@@ -1,0 +1,17 @@
+[package]
+name = "pythondap"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "pythondap"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23.3" }
+debugger = { path = "../debugger" }
+transport = { path = "../transport" }
+crossbeam-channel.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true

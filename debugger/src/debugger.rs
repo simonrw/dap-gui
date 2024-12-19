@@ -163,6 +163,18 @@ impl Debugger {
         internals.add_breakpoint(breakpoint)
     }
 
+    /// Return the list of breakpoints configured
+    pub fn breakpoints(&self) -> Vec<types::Breakpoint> {
+        self.internals
+            .lock()
+            .unwrap()
+            .breakpoints
+            .clone()
+            .values()
+            .cloned()
+            .collect()
+    }
+
     /// Launch a debugging session
     pub fn start(&self) -> eyre::Result<()> {
         let mut internals = self.internals.lock().unwrap();
