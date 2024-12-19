@@ -16,14 +16,11 @@ with pkgs; let
       scapy
       structlog
     ]);
-
-  toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 in
   mkShell rec {
     buildInputs =
       [
-        toolchain
-        rust-analyzer-unwrapped
+        rustup
         cargo-flamegraph
         custom-python
         cargo-hack
@@ -41,7 +38,6 @@ in
     env = {
       RUST_BACKTRACE = "1";
       RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug,pythondap=debug";
-      RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
     };
 
     shellHook = ''
