@@ -20,7 +20,6 @@ in
   mkShell rec {
     buildInputs =
       [
-        rustup
         cargo-flamegraph
         custom-python
         cargo-hack

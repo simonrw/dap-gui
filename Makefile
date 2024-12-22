@@ -20,7 +20,7 @@ run: 			## Run the debugger
 
 .PHONY: repl
 repl: python-develop ## Open ipython repl with debugger loaded
-	python ./pythondap/test.py -b 0 1 16 17 -f ./attach.py
+	python ./pythondap/test.py -b 0 1 12 9 33 16 17 -f ./attach.py
 
 .PHOHY: python-develop
 python-develop: ## Compile and install a development version of the debugger

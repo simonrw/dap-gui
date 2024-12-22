@@ -45,7 +45,6 @@ impl ProgramState {
 struct Debugger {
     internal_debugger: debugger::Debugger,
     launched: bool,
-    events: Receiver<Event>,
 }
 
 #[pymethods]
@@ -78,9 +77,9 @@ impl Debugger {
                 .map_err(|e| PyRuntimeError::new_err(format!("continuing execution: {e}")))?;
         }
 
-
-        tracing;:
-        self.internal_debugger.wait_for_event(|evt| matches!(evt, Event::Running { .. }));
+        tracing::debug!("waiting for debugee to run");
+        self.internal_debugger
+            .wait_for_event(|evt| matches!(evt, Event::Running { .. }));
 
         // wait for stopped or terminated event
         match self.internal_debugger.wait_for_event(|evt| {
@@ -89,7 +88,7 @@ impl Debugger {
             Event::Paused { stack, .. } => {
                 tracing::debug!("paused");
                 Ok(Some(ProgramState { _stack: stack }))
-            },
+            }
             Event::Ended => {
                 eprintln!("Debugee ended");
                 Ok(None)
@@ -121,11 +120,13 @@ impl Debugger {
         };
         let debugger = debugger::Debugger::on_port(port, args)
             .map_err(|e| PyRuntimeError::new_err(format!("creating debugger: {e}")))?;
-        let drx = debugger.events();
 
         debugger.wait_for_event(|e| matches!(e, debugger::Event::Initialised));
 
         if let Some(file_path) = file {
+            let file_path = file_path
+                .canonicalize()
+                .map_err(|_| PyRuntimeError::new_err("invalid file path given"))?;
             // breakpoints
             for &line in &breakpoints {
                 let breakpoint = debugger::Breakpoint {
@@ -142,7 +143,6 @@ impl Debugger {
         Ok(Self {
             internal_debugger: debugger,
             launched: false,
-            events: drx,
         })
     }
 }
