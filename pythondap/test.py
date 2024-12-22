@@ -3,7 +3,7 @@
 import os
 from IPython.terminal.embed import InteractiveShellEmbed
 import argparse
-os.environ["RUST_LOG"] = "error"
+# os.environ["RUST_LOG"] = "error"
 
 from pythondap import Debugger
 
