@@ -1,4 +1,3 @@
-use crossbeam_channel::Receiver;
 use debugger::{AttachArguments, Event};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -29,8 +28,8 @@ impl From<debugger::Breakpoint> for Breakpoint {
 }
 
 #[pyclass]
-struct ProgramState {
-    _stack: Vec<StackFrame>,
+pub struct ProgramState {
+    pub stack: Vec<StackFrame>,
 }
 
 #[pymethods]
@@ -87,7 +86,7 @@ impl Debugger {
         }) {
             Event::Paused { stack, .. } => {
                 tracing::debug!("paused");
-                Ok(Some(ProgramState { _stack: stack }))
+                Ok(Some(ProgramState { stack }))
             }
             Event::Ended => {
                 eprintln!("Debugee ended");
