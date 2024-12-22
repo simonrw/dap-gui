@@ -1,4 +1,4 @@
-SHELL := bash
+eHELL := bash
 PORT ?= 5678
 
 # arguments for steps
@@ -20,7 +20,7 @@ run: 			## Run the debugger
 
 .PHONY: repl
 repl: python-develop ## Open ipython repl with debugger loaded
-	ipython -c "import pythondap" -i
+	python ./pythondap/test.py -b 0 1 16 17 -f ./attach.py
 
 .PHOHY: python-develop
 python-develop: ## Compile and install a development version of the debugger

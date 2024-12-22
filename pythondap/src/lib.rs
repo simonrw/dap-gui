@@ -1,3 +1,4 @@
+use crossbeam_channel::Receiver;
 use debugger::{AttachArguments, Event};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -42,8 +43,9 @@ impl ProgramState {
 
 #[pyclass]
 struct Debugger {
-    _internal: debugger::Debugger,
-    _launched: bool,
+    internal_debugger: debugger::Debugger,
+    launched: bool,
+    events: Receiver<Event>,
 }
 
 #[pymethods]
@@ -65,22 +67,29 @@ impl Debugger {
     }
 
     pub fn resume(&mut self) -> PyResult<Option<ProgramState>> {
-        if !self._launched {
-            self._launched = true;
-            self._internal
+        if !self.launched {
+            self.launched = true;
+            self.internal_debugger
                 .start()
                 .map_err(|e| PyRuntimeError::new_err(format!("launching debugger: {e}")))?;
         } else {
-            self._internal
+            self.internal_debugger
                 .r#continue()
                 .map_err(|e| PyRuntimeError::new_err(format!("continuing execution: {e}")))?;
         }
 
+
+        tracing;:
+        self.internal_debugger.wait_for_event(|evt| matches!(evt, Event::Running { .. }));
+
         // wait for stopped or terminated event
-        match self._internal.wait_for_event(|evt| {
+        match self.internal_debugger.wait_for_event(|evt| {
             matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
         }) {
-            Event::Paused { stack, .. } => Ok(Some(ProgramState { _stack: stack })),
+            Event::Paused { stack, .. } => {
+                tracing::debug!("paused");
+                Ok(Some(ProgramState { _stack: stack }))
+            },
             Event::Ended => {
                 eprintln!("Debugee ended");
                 Ok(None)
@@ -91,7 +100,7 @@ impl Debugger {
 
     // /// List the breakpoints the debugger knows about
     pub fn breakpoints(&mut self) -> Vec<Breakpoint> {
-        let debugger_breakpoints = self._internal.breakpoints();
+        let debugger_breakpoints = self.internal_debugger.breakpoints();
         debugger_breakpoints.into_iter().map(From::from).collect()
     }
 }
@@ -110,8 +119,11 @@ impl Debugger {
             language: debugger::Language::DebugPy,
             path_mappings: None,
         };
-        let debugger = debugger::Debugger::new(args)
+        let debugger = debugger::Debugger::on_port(port, args)
             .map_err(|e| PyRuntimeError::new_err(format!("creating debugger: {e}")))?;
+        let drx = debugger.events();
+
+        debugger.wait_for_event(|e| matches!(e, debugger::Event::Initialised));
 
         if let Some(file_path) = file {
             // breakpoints
@@ -128,8 +140,9 @@ impl Debugger {
         }
 
         Ok(Self {
-            _internal: debugger,
-            _launched: false,
+            internal_debugger: debugger,
+            launched: false,
+            events: drx,
         })
     }
 }

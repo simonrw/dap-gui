@@ -25,6 +25,7 @@ in
         custom-python
         cargo-hack
         act
+        bacon
         maturin
         uv
         pyright
