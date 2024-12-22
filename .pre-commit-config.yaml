@@ -7,18 +7,18 @@ repos:
         entry: cargo fmt
         pass_filenames: false
         stages:
-          - commit
+          - pre-commit
       - id: check
         language: system
         name: cargo check
         entry: cargo check
         pass_filenames: false
         stages:
-          - commit
+          - pre-commit
       - id: test
         language: system
         name: cargo test
         entry: bash -c "source ./.venv/bin/activate && cargo nextest run"
         pass_filenames: false
         stages:
-          - push
+          - pre-push
