@@ -22,6 +22,7 @@ in
       [
         cargo-flamegraph
         custom-python
+        cargo-nextest
         cargo-hack
         act
         bacon
