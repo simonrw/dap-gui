@@ -27,6 +27,7 @@ in
         act
         maturin
         uv
+        pyright
       ]
       ++ lib.optionals stdenv.isDarwin apple-deps
       ++ lib.optionals stdenv.isLinux [

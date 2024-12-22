@@ -102,7 +102,7 @@ impl Debugger {
         breakpoints: Vec<usize>,
         file: Option<PathBuf>,
     ) -> PyResult<Self> {
-        let port = dbg!(port.unwrap_or(5678));
+        let port = port.unwrap_or(5678);
 
         let args = AttachArguments {
             working_directory: current_dir().unwrap(),
