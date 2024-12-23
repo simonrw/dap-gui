@@ -1,4 +1,4 @@
-use debugger::{AttachArguments, Event, PausedFrame};
+use debugger::{AttachArguments, Event};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::env::current_dir;

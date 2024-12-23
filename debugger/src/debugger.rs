@@ -1,6 +1,7 @@
 use std::{
     io,
     net::{TcpStream, ToSocketAddrs},
+    path::PathBuf,
     sync::{Arc, Mutex},
     thread,
     time::Duration,
@@ -12,7 +13,7 @@ use server::Implementation;
 use transport::{
     requests::{self, Disconnect},
     responses,
-    types::StackFrameId,
+    types::{BreakpointLocation, StackFrameId},
     DEFAULT_DAP_PORT,
 };
 
@@ -161,6 +162,19 @@ impl Debugger {
     ) -> eyre::Result<types::BreakpointId> {
         let mut internals = self.internals.lock().unwrap();
         internals.add_breakpoint(breakpoint)
+    }
+
+    pub fn get_breakpoint_locations(
+        &self,
+        path: impl Into<PathBuf>,
+    ) -> eyre::Result<Vec<BreakpointLocation>> {
+        let locations = self
+            .internals
+            .lock()
+            .unwrap()
+            .get_breakpoint_locations(path)
+            .context("getting breakpoint locations")?;
+        Ok(locations)
     }
 
     /// Return the list of breakpoints configured
