@@ -1,4 +1,4 @@
-use debugger::{AttachArguments, Event};
+use debugger::{AttachArguments, Event, PausedFrame};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::env::current_dir;
@@ -30,6 +30,7 @@ impl From<debugger::Breakpoint> for Breakpoint {
 #[pyclass]
 pub struct ProgramState {
     pub stack: Vec<StackFrame>,
+    pub paused_frame: PausedFrame,
 }
 
 #[pymethods]
@@ -84,9 +85,16 @@ impl Debugger {
         match self.internal_debugger.wait_for_event(|evt| {
             matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
         }) {
-            Event::Paused { stack, .. } => {
+            Event::Paused {
+                stack,
+                paused_frame,
+                ..
+            } => {
                 tracing::debug!("paused");
-                Ok(Some(ProgramState { stack }))
+                Ok(Some(ProgramState {
+                    stack,
+                    paused_frame,
+                }))
             }
             Event::Ended => {
                 eprintln!("Debugee ended");
