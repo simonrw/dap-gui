@@ -28,9 +28,38 @@ impl From<debugger::Breakpoint> for Breakpoint {
 }
 
 #[pyclass]
+#[derive(Clone)]
+pub struct PyStackFrame(StackFrame);
+
+impl From<StackFrame> for PyStackFrame {
+    fn from(value: StackFrame) -> Self {
+        Self(value)
+    }
+}
+
+#[pymethods]
+impl PyStackFrame {
+    #[getter]
+    fn name(&self) -> String {
+        self.0.name.clone()
+    }
+
+    #[getter]
+    fn line(&self) -> usize {
+        self.0.line
+    }
+
+    fn __repr__(&self) -> String {
+        format!("{}:{}", self.name(), self.line())
+    }
+}
+
+#[pyclass]
 pub struct ProgramState {
-    pub stack: Vec<StackFrame>,
-    pub paused_frame: PausedFrame,
+    #[pyo3(get)]
+    pub stack: Vec<PyStackFrame>,
+    //#[pyo3(get)]
+    //pub paused_frame: PausedFrame,
 }
 
 #[pymethods]
@@ -87,13 +116,13 @@ impl Debugger {
         }) {
             Event::Paused {
                 stack,
-                paused_frame,
+                //paused_frame,
                 ..
             } => {
                 tracing::debug!("paused");
                 Ok(Some(ProgramState {
-                    stack,
-                    paused_frame,
+                    stack: stack.into_iter().map(From::from).collect(),
+                    //paused_frame,
                 }))
             }
             Event::Ended => {
