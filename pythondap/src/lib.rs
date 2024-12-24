@@ -1,4 +1,4 @@
-use debugger::{AttachArguments, Event};
+use debugger::{AttachArguments, Event, PausedFrame};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::env::current_dir;
@@ -63,12 +63,23 @@ impl PyStackFrame {
     }
 }
 
+#[pyclass(name = "PausedFrame")]
+#[derive(Clone)]
+pub struct PyPausedFrame(PausedFrame);
+
+impl From<PausedFrame> for PyPausedFrame {
+    fn from(value: PausedFrame) -> Self {
+        Self(value)
+    }
+}
+
+
 #[pyclass]
 pub struct ProgramState {
     #[pyo3(get)]
     pub stack: Vec<PyStackFrame>,
-    //#[pyo3(get)]
-    //pub paused_frame: PausedFrame,
+    #[pyo3(get)]
+    pub paused_frame: PyPausedFrame,
 }
 
 #[pymethods]
@@ -125,13 +136,13 @@ impl Debugger {
         }) {
             Event::Paused {
                 stack,
-                //paused_frame,
+                paused_frame,
                 ..
             } => {
                 tracing::debug!("paused");
                 Ok(Some(ProgramState {
                     stack: stack.into_iter().map(From::from).collect(),
-                    //paused_frame,
+                    paused_frame: paused_frame.into(),
                 }))
             }
             Event::Ended => {
@@ -200,5 +211,6 @@ fn pythondap(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<Debugger>()?;
     m.add_class::<ProgramState>()?;
+    m.add_class::<PyPausedFrame>()?;
     Ok(())
 }

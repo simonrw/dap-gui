@@ -5,7 +5,7 @@ from IPython.terminal.embed import InteractiveShellEmbed
 import argparse
 # os.environ["RUST_LOG"] = "error"
 
-from pythondap import Debugger
+from pythondap import Debugger, PausedFrame
 
 
 parser = argparse.ArgumentParser()
@@ -15,20 +15,29 @@ args = parser.parse_args()
 
 
 
-d = Debugger(breakpoints=args.breakpoint, file=args.file)
-
-# global state
-stack: list = []
-
-
-# setup global functions
-def resume():
-    global stack
-    state = d.resume()
-    stack[:] = state.stack
+class PythonDebugger:
+    def __init__(self):
+        self.d = Debugger(breakpoints=args.breakpoint, file=args.file)
+        self.stack: list = []
+        self.frame: PausedFrame | None = None
 
 
-breakpoints = d.breakpoints
+    def resume(self):
+        state = self.d.resume()
+        self.stack = state.stack
+        self.frame = state.paused_frame
+
+
+# breakpoints = d.breakpoints
+
+d = PythonDebugger()
+
+resume = d.resume
+def stack():
+    return d.stack
+
+def frame():
+    return d.frame
 
 
 ipshell = InteractiveShellEmbed(banner1 = '', exit_msg = '')
