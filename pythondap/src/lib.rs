@@ -49,6 +49,15 @@ impl PyStackFrame {
         self.0.line
     }
 
+    #[getter]
+    fn source(&self) -> PyResult<PathBuf> {
+        if let Some(path) = self.0.source.as_ref().and_then(|s| s.path.clone()) {
+            return Ok(path);
+        }
+
+        todo!()
+    }
+
     fn __repr__(&self) -> String {
         format!("{}:{}", self.name(), self.line())
     }
