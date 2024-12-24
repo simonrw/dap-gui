@@ -77,13 +77,27 @@ impl From<PausedFrame> for PyPausedFrame {
 impl PyPausedFrame {
     #[getter]
     fn variables(&self) -> Vec<PyVariable> {
-        vec![]
+        self.0.variables.iter().cloned().map(From::from).collect()
     }
 }
 
 #[pyclass(name = "Variable")]
 #[derive(Clone)]
 pub struct PyVariable(transport::types::Variable);
+
+#[pymethods]
+impl PyVariable {
+    #[getter]
+    fn name(&self) -> String {
+        self.0.name.clone()
+    }
+}
+
+impl From<transport::types::Variable> for PyVariable {
+    fn from(value: transport::types::Variable) -> Self {
+        Self(value)
+    }
+}
 
 #[pyclass]
 pub struct ProgramState {
