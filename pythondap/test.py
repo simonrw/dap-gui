@@ -13,12 +13,21 @@ parser.add_argument("-b", "--breakpoint", type=int, nargs="*", default=[])
 parser.add_argument("-f", "--file", required=False)
 args = parser.parse_args()
 
-print(args)
+
 
 d = Debugger(breakpoints=args.breakpoint, file=args.file)
 
+# global state
+stack: list = []
+
+
 # setup global functions
-resume = d.resume
+def resume():
+    global stack
+    state = d.resume()
+    stack[:] = state.stack
+
+
 breakpoints = d.breakpoints
 
 
