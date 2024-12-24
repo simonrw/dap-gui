@@ -15,6 +15,7 @@ class DebugSession:
         self.frame: PausedFrame | None = None
 
         self.resume = self.fn_resume
+        self.step_over = self.fn_step_over
 
     def fn_resume(self):
         state = self.d.resume()
@@ -24,6 +25,16 @@ class DebugSession:
         self.stack = state.stack
         self.frame = state.paused_frame
         return state
+
+    def fn_step_over(self):
+        state = self.d.step_over()
+        print(f"received state: {state=}")
+        if not state:
+            return
+        self.stack = state.stack
+        self.frame = state.paused_frame
+        return state
+
 
 
 try:

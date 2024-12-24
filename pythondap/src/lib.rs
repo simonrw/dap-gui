@@ -200,6 +200,31 @@ impl Debugger {
         }
     }
 
+    pub fn step_over(&mut self) -> PyResult<Option<ProgramState>> {
+        self.internal_debugger.step_over().map_err(|e| PyRuntimeError::new_err(format!("stepping debugee: {e}")))?;
+        match self.internal_debugger.wait_for_event(|evt| {
+            matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
+        }) {
+            Event::Paused {
+                stack,
+                paused_frame,
+                ..
+            } => {
+                tracing::debug!("paused");
+                Ok(Some(ProgramState {
+                    stack: stack.into_iter().map(From::from).collect(),
+                    paused_frame: paused_frame.into(),
+                }))
+            }
+            Event::Ended => {
+                eprintln!("Debugee ended");
+                Ok(None)
+            }
+            _ => unreachable!(),
+        }
+
+    }
+
     // /// List the breakpoints the debugger knows about
     pub fn breakpoints(&mut self) -> Vec<Breakpoint> {
         let debugger_breakpoints = self.internal_debugger.breakpoints();
