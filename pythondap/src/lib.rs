@@ -91,6 +91,27 @@ impl PyVariable {
     fn name(&self) -> String {
         self.0.name.clone()
     }
+
+    #[getter]
+    fn value(&self) -> String {
+        self.0.value.clone()
+    }
+
+    #[getter]
+    fn r#type(&self) -> Option<String> {
+        self.0.r#type.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        match &self.0.r#type {
+            Some(ty) => {
+                format!("<Variable {}={} ({})", self.0.name, self.0.value, ty)
+            },
+            None => {
+                format!("<Variable {}={} (???)", self.0.name, self.0.value)
+            },
+        }
+    }
 }
 
 impl From<transport::types::Variable> for PyVariable {
