@@ -1,6 +1,7 @@
 use debugger::{AttachArguments, Event, PausedFrame};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use std::collections::HashMap;
 use std::env::current_dir;
 use std::path::PathBuf;
 use transport::types::StackFrame;
@@ -76,8 +77,8 @@ impl From<PausedFrame> for PyPausedFrame {
 #[pymethods]
 impl PyPausedFrame {
     #[getter]
-    fn variables(&self) -> Vec<PyVariable> {
-        self.0.variables.iter().cloned().map(From::from).collect()
+    fn variables(&self) -> HashMap<String, PyVariable> {
+        self.0.variables.iter().cloned().map(|v| (v.name.clone(), v.into())).collect()
     }
 }
 
