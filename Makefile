@@ -1,4 +1,4 @@
-SHELL := bash
+eHELL := bash
 PORT ?= 5678
 
 # arguments for steps
@@ -9,15 +9,19 @@ help:           ## Show this help.
 
 run-server:     ## Run the DAP server
 	@echo "!!! Running DAP server on port ${PORT}"
-	@while true; \
-		do python -m debugpy.adapter --host 127.0.0.1 --port ${PORT} --log-stderr; \
-	done
+	python -m debugpy.adapter --host 127.0.0.1 --port ${PORT} --log-stderr
 
 run-attach:
 	@echo "!!! Running attachable script on port ${PORT}"
-	@while true; \
-		do python attach.py; \
-	done
+	python attach.py
 
 run: 			## Run the debugger
 	cargo run --bin dap-gui-ui -- $(RUN_ARGS)
+
+.PHONY: repl
+repl: python-develop ## Open ipython repl with debugger loaded
+	python ./pythondap/test.py -b 9 -f ./attach.py
+
+.PHOHY: python-develop
+python-develop: ## Compile and install a development version of the debugger
+	maturin develop --manifest-path pythondap/Cargo.toml

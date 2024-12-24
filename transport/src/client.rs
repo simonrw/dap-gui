@@ -106,7 +106,7 @@ impl Client {
                         tracing::debug!("ok none");
                         return;
                     }
-                    Err(e) => eprintln!("reader error: {e}"),
+                    Err(e) => tracing::warn!("reader error: {e}"),
                 }
             }
         });

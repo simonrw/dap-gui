@@ -86,6 +86,14 @@ pub struct Breakpoint {
     pub offset: Option<i64>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BreakpointLocation {
+    pub line: i64,
+    pub column: Option<i64>,
+    pub end_line: Option<i64>,
+    pub end_column: Option<i64>,
+}
+
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceBreakpoint {
