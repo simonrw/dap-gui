@@ -73,6 +73,17 @@ impl From<PausedFrame> for PyPausedFrame {
     }
 }
 
+#[pymethods]
+impl PyPausedFrame {
+    #[getter]
+    fn variables(&self) -> Vec<PyVariable> {
+        vec![]
+    }
+}
+
+#[pyclass(name = "Variable")]
+#[derive(Clone)]
+pub struct PyVariable(transport::types::Variable);
 
 #[pyclass]
 pub struct ProgramState {

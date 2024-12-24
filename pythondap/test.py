@@ -1,11 +1,32 @@
 #!/usr/bin/env python
 
 import os
+from IPython import start_ipython
+import subprocess as sp
 from IPython.terminal.embed import InteractiveShellEmbed
 import argparse
 # os.environ["RUST_LOG"] = "error"
 
 from pythondap import Debugger, PausedFrame
+
+class InteractiveShellEmbedEnhanced(InteractiveShellEmbed):
+    def __init__(self, breakpoints, file, *args, **kwargs):
+        banner1 = kwargs.pop("banner1", "")
+        exit_msg = kwargs.pop("exit_msg", "")
+
+        super().__init__(banner1=banner1, exit_msg=exit_msg, *args, **kwargs)
+
+        self.d = Debugger(breakpoints=breakpoints, file=file)
+        self.stack: list = []
+        self.frame: PausedFrame | None = None
+
+    def resume(self):
+        state = self.d.resume()
+        self.stack = state.stack
+        self.frame = state.paused_frame
+        return state
+
+
 
 
 parser = argparse.ArgumentParser()
@@ -14,32 +35,21 @@ parser.add_argument("-f", "--file", required=False)
 args = parser.parse_args()
 
 
-
-class PythonDebugger:
-    def __init__(self):
-        self.d = Debugger(breakpoints=args.breakpoint, file=args.file)
-        self.stack: list = []
-        self.frame: PausedFrame | None = None
+# start debuee in background process
+p = sp.Popen(["make", "run-attach"])
 
 
-    def resume(self):
-        state = self.d.resume()
-        self.stack = state.stack
-        self.frame = state.paused_frame
+ipshell = InteractiveShellEmbedEnhanced(breakpoints=args.breakpoint, file=args.file)
 
+def resume():
+    return ipshell.resume()
 
-# breakpoints = d.breakpoints
-
-d = PythonDebugger()
-
-resume = d.resume
 def stack():
-    return d.stack
+    return ipshell.stack
 
 def frame():
-    return d.frame
+    return ipshell.frame
 
-
-ipshell = InteractiveShellEmbed(banner1 = '', exit_msg = '')
 ipshell.run_line_magic("autocall", "2")
+setattr(ipshell.__class__, 'user_global_ns', property(lambda self: self.user_ns))
 ipshell()
