@@ -1,49 +1,50 @@
-{ pkgs, ... }:
+{pkgs, ...}:
 with pkgs; let
   apple-frameworks = with darwin.apple_sdk.frameworks; [
     OpenGL
     CoreServices
     AppKit
   ];
-  apple-libs = [ libiconv ];
+  apple-libs = [libiconv];
 
   apple-deps = apple-frameworks ++ apple-libs;
 
-  custom-python =
-    python3.withPackages (ps: with ps; [ debugpy black scapy structlog ]);
+  custom-python = python3.withPackages (ps:
+    with ps; [
+      debugpy
+      black
+      scapy
+      structlog
+    ]);
 
   toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 in
   mkShell rec {
-    packages =
+    buildInputs =
       [
-        toolchain
-        rust-analyzer-unwrapped
-        cargo-flamegraph
-        custom-python
-        cargo-hack
         act
-        go
-        delve
-        clang
-        hyperfine
         bacon
+        cargo-flamegraph
+        cargo-hack
+        cargo-nextest
+        custom-python
+        maturin
+        pyright
+        toolchain
+        uv
       ]
       ++ lib.optionals stdenv.isDarwin apple-deps
       ++ lib.optionals stdenv.isLinux [
-        cargo-llvm-cov
         gdb
-        libglvnd
-        libxkbcommon
-        mold
         simplescreenrecorder
-        vulkan-loader # TODO: needed?
-        wayland
-        xorg.libX11
-        xorg.libXcursor
-        xorg.libXi
-        xorg.libXrandr
+        cargo-llvm-cov
       ];
+
+    env = {
+      RUST_BACKTRACE = "1";
+      RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug,pythondap=debug";
+      RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
+    };
 
     shellHook = ''
       export RUST_BUILD_BASE="$HOME/.cache/rust-builds"
@@ -53,17 +54,24 @@ in
       export CARGO_TARGET_DIR="$RUST_BUILD_BASE/$PACKAGE_BASENAME"
     '';
 
-    env = {
-      RUST_BACKTRACE = "1";
-      RUST_LOG = "gui=debug,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug";
-      RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
+    postVenvCreation = ''
+      python -m pip install \
+        debugpy \
+        pytest \
+        ipython
+    '';
 
-      # TMP: don't run iced gui under wayland
-      WAYLAND_DISPLAY = "";
-
-      LD_LIBRARY_PATH =
-        if stdenv.isLinux
-        then lib.makeLibraryPath packages
-        else "";
-    };
+    LD_LIBRARY_PATH =
+      if stdenv.isLinux
+      then
+        lib.makeLibraryPath [
+          libxkbcommon
+          xorg.libX11
+          xorg.libXcursor
+          xorg.libXrandr
+          xorg.libXi
+          libglvnd
+          vulkan-loader # TODO: needed?
+        ]
+      else "";
   }

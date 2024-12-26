@@ -3,8 +3,8 @@ use server::Server;
 use std::{collections::HashMap, path::PathBuf};
 use transport::{
     requests::{self, Initialize, PathFormat},
-    responses,
-    types::{Source, SourceBreakpoint, StackFrame, StackFrameId, ThreadId},
+    responses::{self, ResponseBody},
+    types::{BreakpointLocation, Source, SourceBreakpoint, StackFrame, StackFrameId, ThreadId},
     Client,
 };
 
@@ -341,6 +341,30 @@ impl DebuggerInternals {
             file_breakpoints.push(breakpoint.clone());
         }
         out
+    }
+
+    pub(crate) fn get_breakpoint_locations(
+        &self,
+        file: impl Into<PathBuf>,
+    ) -> eyre::Result<Vec<BreakpointLocation>> {
+        let req = requests::RequestBody::BreakpointLocations(requests::BreakpointLocations {
+            source: Source {
+                path: Some(file.into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let res = self
+            .client
+            .send(req)
+            .context("sending BreakpointLocations request")?;
+
+        let Some(ResponseBody::BreakpointLocations(locations)) = res.body else {
+            eyre::bail!("invalid response type: {:?}", res);
+        };
+
+        Ok(locations.breakpoints)
     }
 
     fn next_id(&mut self) -> BreakpointId {
