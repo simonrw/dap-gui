@@ -78,7 +78,12 @@ impl From<PausedFrame> for PyPausedFrame {
 impl PyPausedFrame {
     #[getter]
     fn variables(&self) -> HashMap<String, PyVariable> {
-        self.0.variables.iter().cloned().map(|v| (v.name.clone(), v.into())).collect()
+        self.0
+            .variables
+            .iter()
+            .cloned()
+            .map(|v| (v.name.clone(), v.into()))
+            .collect()
     }
 }
 
@@ -107,10 +112,10 @@ impl PyVariable {
         match &self.0.r#type {
             Some(ty) => {
                 format!("<Variable {}={} ({})", self.0.name, self.0.value, ty)
-            },
+            }
             None => {
                 format!("<Variable {}={} (???)", self.0.name, self.0.value)
-            },
+            }
         }
     }
 }
@@ -201,7 +206,9 @@ impl Debugger {
     }
 
     pub fn step_over(&mut self) -> PyResult<Option<ProgramState>> {
-        self.internal_debugger.step_over().map_err(|e| PyRuntimeError::new_err(format!("stepping debugee: {e}")))?;
+        self.internal_debugger
+            .step_over()
+            .map_err(|e| PyRuntimeError::new_err(format!("stepping debugee: {e}")))?;
         match self.internal_debugger.wait_for_event(|evt| {
             matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
         }) {
@@ -222,7 +229,6 @@ impl Debugger {
             }
             _ => unreachable!(),
         }
-
     }
 
     // /// List the breakpoints the debugger knows about
