@@ -1,4 +1,4 @@
-eHELL := bash
+SHELL := bash
 PORT ?= 5678
 
 # arguments for steps
