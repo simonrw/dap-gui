@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 bytes = "1.9.0"
 dap = { version = "0.4.1-alpha1", features = ["client"] }
-serde_json = "1.0.133"
-thiserror = "2.0.8"
+serde_json = "1.0.134"
+thiserror = "2.0.9"
 tokio = { version = "1.42.0", features = ["net"] }
 tokio-util = { version = "0.7.13", features = ["codec"] }
 
