@@ -1,6 +1,7 @@
 use debugger::{AttachArguments, Event, PausedFrame};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use tree_sitter::Point;
 use std::collections::HashMap;
 use std::env::current_dir;
 use std::path::PathBuf;
@@ -85,6 +86,11 @@ impl PyPausedFrame {
             .map(|v| (v.name.clone(), v.into()))
             .collect()
     }
+
+    #[getter]
+    fn stack(&self) -> PyStackFrame {
+        self.0.frame.clone().into()
+    }
 }
 
 #[pyclass(name = "Variable")]
@@ -139,6 +145,20 @@ impl ProgramState {
     fn __getattr__(&self, name: &Bound<'_, PyAny>) -> PyResult<String> {
         let name: String = name.extract()?;
         Ok(name)
+    }
+
+    /// Show the source code around the current execution position
+    fn show(&self) -> PyResult<()> {
+        let source = self.paused_frame.stack().source()?;
+        let line = self.paused_frame.stack().line();
+
+        let contents = std::fs::read_to_string(&source).map_err(|e| PyRuntimeError::new_err(format!("error reading from file {}", e)))?;
+        let line_text = contents.split('\n').skip(line - 1).next().unwrap();
+        let start = Point { row: line - 1, column: 0 };
+        let end = Point { row: line - 1, column: line_text.len() };
+        // TODO
+
+        Ok(())
     }
 }
 
