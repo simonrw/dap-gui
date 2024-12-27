@@ -14,11 +14,6 @@ members = [
     "gui2",
 ]
 
-[profile.dev]
-debug = 0
-strip = "debuginfo"
-
-
 [workspace.dependencies]
 eyre = "0.6.12"
 color-eyre = "0.6.3"
