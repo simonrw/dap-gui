@@ -93,7 +93,32 @@ fn from_str(name: Option<&String>, contents: &str) -> eyre::Result<ChosenLaunchC
                 return Ok(ChosenLaunchConfiguration::ToBeChosen(configuration_names));
             }
         }
-        ConfigFormat::VsCodeWorkspace { .. } => todo!(),
+        ConfigFormat::VsCodeWorkspace {
+            launch: VsCodeLaunchConfiguration { configurations, .. },
+            ..
+        } => {
+            if let Some(name) = name {
+                for configuration in configurations {
+                    match &configuration {
+                        LaunchConfiguration::Debugpy(Debugpy {
+                            name: config_name, ..
+                        }) => {
+                            if config_name == name {
+                                return Ok(ChosenLaunchConfiguration::Specific(configuration));
+                            }
+                        }
+                    }
+                }
+            } else {
+                let configuration_names: Vec<_> = configurations
+                    .iter()
+                    .map(|c| match &c {
+                        LaunchConfiguration::Debugpy(Debugpy { name, .. }) => name.clone(),
+                    })
+                    .collect();
+                return Ok(ChosenLaunchConfiguration::ToBeChosen(configuration_names));
+            }
+        }
     }
     Ok(ChosenLaunchConfiguration::NotFound)
 }

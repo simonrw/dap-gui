@@ -141,7 +141,7 @@ pub struct ConnectInfo {
     pub port: u16,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PathMapping {
     pub local_root: String,

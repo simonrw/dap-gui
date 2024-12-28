@@ -1,4 +1,4 @@
-use launch_configuration::{ChosenLaunchConfiguration, LaunchConfiguration};
+use launch_configuration::{ChosenLaunchConfiguration, LaunchConfiguration, PathMapping};
 
 #[ctor::ctor]
 fn init() {
@@ -44,9 +44,25 @@ fn test_read_code_workspace() {
         panic!("specified launch configuration not found");
     };
 
-    assert_eq!(config.name, "Python: Remote Attach");
+    assert_eq!(config.name, "Remote Attach (ext)");
     assert_eq!(config.request, "attach");
     // TODO: config.connect
-    // assert_eq!(config.path_mappings, vec![]);
-    //assert!(!config.just_my_code.unwrap());
+    assert_eq!(
+        config.path_mappings,
+        Some(vec![
+            PathMapping {
+                local_root: "${workspaceFolder:localstack-ext}/localstack-pro-core/localstack/pro"
+                    .to_string(),
+                remote_root:
+                    "/opt/code/localstack/.venv/lib/python3.11/site-packages/localstack/pro"
+                        .to_string(),
+            },
+            PathMapping {
+                local_root: "${workspaceFolder:localstack}/localstack-core/localstack".to_string(),
+                remote_root: "/opt/code/localstack/.venv/lib/python3.11/site-packages/localstack"
+                    .to_string()
+            }
+        ])
+    );
+    assert!(!config.just_my_code.unwrap());
 }
