@@ -351,8 +351,6 @@ impl Debugger {
 fn pythondap(m: &Bound<'_, PyModule>) -> PyResult<()> {
     tracing_subscriber::fmt::init();
 
-    tracing::info!("info");
-
     m.add_class::<Debugger>()?;
     m.add_class::<ProgramState>()?;
     m.add_class::<PyPausedFrame>()?;
