@@ -1,9 +1,9 @@
 use debugger::{AttachArguments, Event, PausedFrame};
+use launch_configuration::{ChosenLaunchConfiguration, LaunchConfiguration};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use std::collections::HashMap;
-use std::env::current_dir;
 use std::path::PathBuf;
+use std::{collections::HashMap, path::Path};
 use transport::types::StackFrame;
 use tree_sitter::{Parser, Point};
 
@@ -154,7 +154,7 @@ impl ProgramState {
 
         let contents = std::fs::read_to_string(&source)
             .map_err(|e| PyRuntimeError::new_err(format!("error reading from file {}", e)))?;
-        let line_text = contents.split('\n').skip(line - 1).next().unwrap();
+        let line_text = contents.split('\n').nth(line - 1).unwrap();
         let start = Point {
             row: line - 1,
             column: 0,
@@ -217,19 +217,26 @@ pub(crate) struct Debugger {
 #[pymethods]
 impl Debugger {
     #[new]
-    #[pyo3(signature = (/, breakpoints, file=None))]
-    pub fn new(breakpoints: Vec<usize>, file: Option<PathBuf>) -> PyResult<Self> {
-        Self::internal_new(None, breakpoints, file)
+    #[pyo3(signature = (/, breakpoints, config_path, config_name=None, file=None))]
+    pub fn new(
+        breakpoints: Vec<usize>,
+        config_path: PathBuf,
+        config_name: Option<String>,
+        file: Option<PathBuf>,
+    ) -> PyResult<Self> {
+        Self::internal_new(None, breakpoints, config_path, config_name, file)
     }
 
     #[staticmethod]
-    #[pyo3(signature = (/, port, breakpoints, file=None))]
+    #[pyo3(signature = (/, port, breakpoints, config_path, config_name=None, file=None))]
     pub fn new_on_port(
         port: u16,
         breakpoints: Vec<usize>,
+        config_path: PathBuf,
+        config_name: Option<String>,
         file: Option<PathBuf>,
     ) -> PyResult<Self> {
-        Self::internal_new(Some(port), breakpoints, file)
+        Self::internal_new(Some(port), breakpoints, config_path, config_name, file)
     }
 
     pub fn resume(&mut self) -> PyResult<Option<ProgramState>> {
@@ -308,18 +315,64 @@ impl Debugger {
     fn internal_new(
         port: Option<u16>,
         breakpoints: Vec<usize>,
+        config_path: impl AsRef<Path>,
+        config_name: Option<String>,
         file: Option<PathBuf>,
     ) -> PyResult<Self> {
         let port = port.unwrap_or(5678);
 
-        let args = AttachArguments {
-            working_directory: current_dir().unwrap(),
-            port: Some(port),
-            language: debugger::Language::DebugPy,
-            path_mappings: None,
+        let config = match launch_configuration::load_from_path(config_name.as_ref(), config_path)
+            .map_err(|e| {
+            PyRuntimeError::new_err(format!("loading launch configuration: {e}"))
+        })? {
+            ChosenLaunchConfiguration::Specific(config) => config,
+            ChosenLaunchConfiguration::NotFound => {
+                return Err(PyRuntimeError::new_err("no matching configuration found"));
+            }
+            ChosenLaunchConfiguration::ToBeChosen(configurations) => {
+                eprintln!("Configuration name not specified");
+                eprintln!("Available options:");
+                for config in &configurations {
+                    eprintln!("- {config}");
+                }
+                // TODO: best option?
+                std::process::exit(1);
+            }
         };
-        let debugger = debugger::Debugger::on_port(port, args)
-            .map_err(|e| PyRuntimeError::new_err(format!("creating debugger: {e}")))?;
+
+        let mut debug_root_dir = std::env::current_dir().unwrap();
+
+        let debugger = match config {
+            LaunchConfiguration::Debugpy(launch_configuration::Debugpy {
+                request,
+                cwd,
+                connect,
+                path_mappings,
+                ..
+            }) => {
+                if let Some(dir) = cwd {
+                    debug_root_dir = debugger::utils::normalise_path(&dir).into_owned();
+                }
+                let debugger = match request.as_str() {
+                    "attach" => {
+                        let launch_arguments = AttachArguments {
+                            working_directory: debug_root_dir.to_owned().to_path_buf(),
+                            port: connect.map(|c| c.port),
+                            language: debugger::Language::DebugPy,
+                            path_mappings,
+                        };
+
+                        tracing::debug!(?launch_arguments, "generated launch configuration");
+
+                        debugger::Debugger::on_port(port, launch_arguments).map_err(|e| {
+                            PyRuntimeError::new_err(format!("creating internal debugger: {e}"))
+                        })?
+                    }
+                    _ => todo!(),
+                };
+                debugger
+            }
+        };
 
         debugger.wait_for_event(|e| matches!(e, debugger::Event::Initialised));
 

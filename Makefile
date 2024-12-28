@@ -20,7 +20,7 @@ run: 			## Run the debugger
 
 .PHONY: repl
 repl: python-develop ## Open ipython repl with debugger loaded
-	python ./pythondap/test.py -b 9 -f ./attach.py
+	pythondap -b 9 -f ./attach.py launch_configuration/testdata/vscode/localstack.code-workspace -n "Remote Attach (ext)"
 
 .PHOHY: python-develop
 python-develop: ## Compile and install a development version of the debugger
