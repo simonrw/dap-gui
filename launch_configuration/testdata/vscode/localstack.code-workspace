@@ -1,0 +1,117 @@
+{
+  "folders": [
+    {
+      "path": "localstack-ext"
+    },
+    {
+      "path": "localstack"
+    }
+  ],
+  "settings": {
+    "python.testing.pytestArgs": ["tests"],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.typeCheckingMode": "basic"
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Remote Attach (host mode)",
+        "type": "debugpy",
+        "request": "attach",
+        "connect": {
+          "host": "localhost",
+          "port": 5678
+        },
+        "pathMappings": [
+          {
+            "localRoot": "${workspaceFolder:localstack-ext}",
+            "remoteRoot": "."
+          }
+        ],
+        "justMyCode": false
+      },
+      {
+        "name": "Remote Attach (ext)",
+        "type": "debugpy",
+        "request": "attach",
+        "connect": {
+          "host": "localhost",
+          "port": 5678
+        },
+        "pathMappings": [
+          {
+            "localRoot": "${workspaceFolder:localstack-ext}/localstack-pro-core/localstack/pro",
+            "remoteRoot": "/opt/code/localstack/.venv/lib/python3.11/site-packages/localstack/pro"
+          },
+          {
+            "localRoot": "${workspaceFolder:localstack}/localstack-core/localstack",
+            "remoteRoot": "/opt/code/localstack/.venv/lib/python3.11/site-packages/localstack"
+          }
+        ],
+        "justMyCode": false
+      },
+      {
+        "name": "Remote attach (localstack)",
+        "type": "debugpy",
+        "request": "attach",
+        "connect": {
+          "host": "localhost",
+          "port": 5678
+        },
+        "pathMappings": [
+          {
+            "localRoot": "${workspaceFolder:localstack}/localstack-core/localstack",
+            "remoteRoot": "/opt/code/localstack/localstack-core/localstack"
+          }
+        ],
+        "justMyCode": false
+      },
+      {
+        "name": "Run LocalStack (host mode)",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "localstack.cli.main",
+        "args": ["start", "--host"],
+        "cwd": "${workspaceFolder:localstack}",
+        "python": "${command:python.interpreterPath}",
+        "env": {
+          "CONFIG_PROFILE": "dev,test",
+          "PYTHONPATH": "${workspaceFolder:localstack}"
+        },
+        "justMyCode": false
+      },
+      {
+        "name": "Run LocalStack Pro (host mode)",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "localstack.cli.main",
+        "args": ["start", "--host"],
+        "cwd": "${workspaceFolder:localstack-ext}",
+        "python": "${command:python.interpreterPath}",
+        "env": {
+          "CONFIG_PROFILE": "dev,test",
+          "PYTHONPATH": "${workspaceFolder:localstack-ext}"
+        },
+        "justMyCode": false
+      },
+      {
+        "name": "Run community test",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "pytest",
+        "justMyCode": false,
+        "args": [
+          "tests/aws/services/cloudformation/resources/test_stack_sets.py"
+        ],
+        "cwd": "${workspaceFolder:localstack}",
+        "envFile": "${workspaceFolder:localstack}/.env",
+        "env": {
+          "CONFIG_PROFILE": "dev,test"
+        }
+      }
+    ]
+  }
+}

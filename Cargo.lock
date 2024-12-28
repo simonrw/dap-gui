@@ -4294,6 +4294,7 @@ version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
  "debugger",
+ "launch_configuration",
  "pyo3",
  "tracing",
  "tracing-subscriber",

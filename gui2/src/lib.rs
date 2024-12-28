@@ -134,7 +134,7 @@ impl DebuggerApp {
                     "attach" => {
                         let launch_arguments = AttachArguments {
                             working_directory: debug_root_dir.to_owned().to_path_buf(),
-                            port: Some(connect.port),
+                            port: connect.map(|c| c.port),
                             language: debugger::Language::DebugPy,
                             path_mappings,
                         };

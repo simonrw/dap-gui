@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 pyo3 = { version = "0.23.3" }
 debugger = { path = "../debugger" }
 transport = { path = "../transport" }
+launch_configuration = { path = "../launch_configuration" }
 crossbeam-channel.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true

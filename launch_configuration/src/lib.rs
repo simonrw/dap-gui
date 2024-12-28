@@ -1,6 +1,11 @@
-// TODO: VS code launch json files include comments
+//! Launch configuration management
+//!
+//! This crate handles parsing the launch configurations, primarily of VS Code.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use eyre::Context;
 use serde::Deserialize;
@@ -8,21 +13,39 @@ use serde::Deserialize;
 // re-export
 pub use transport::requests::PathMapping;
 
+/// Handle choosing a specific launch configuration, or if the user has not specified one, then
+/// present a list of launch configurations they can choose from
 pub enum ChosenLaunchConfiguration {
+    /// A specific launch configuration is available
     Specific(LaunchConfiguration),
+    /// The specified launch configuration was not found
     NotFound,
+    /// The user did not request a specific launch configuration, so present available options
     ToBeChosen(Vec<String>),
 }
 
 #[derive(Deserialize)]
+struct VsCodeLaunchConfiguration {
+    #[serde(rename = "version")]
+    _version: String,
+    configurations: Vec<LaunchConfiguration>,
+}
+
+/// Deserializable model for the launch configuration
+#[derive(Deserialize)]
 #[serde(untagged)]
 enum ConfigFormat {
-    VsCode {
-        // TODO: probably have to handle versions for these configuration files
-        #[serde(rename = "version")]
-        _version: String,
-        configurations: Vec<LaunchConfiguration>,
+    VsCode(VsCodeLaunchConfiguration),
+    VsCodeWorkspace {
+        folders: Vec<Folder>,
+        settings: HashMap<String, serde_json::Value>,
+        launch: VsCodeLaunchConfiguration,
     },
+}
+
+#[derive(Deserialize)]
+struct Folder {
+    path: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -47,7 +70,7 @@ fn from_str(name: Option<&String>, contents: &str) -> eyre::Result<ChosenLaunchC
     let config = jsonc_to_serde(contents).wrap_err("parsing jsonc configuration")?;
 
     match config {
-        ConfigFormat::VsCode { configurations, .. } => {
+        ConfigFormat::VsCode(VsCodeLaunchConfiguration { configurations, .. }) => {
             if let Some(name) = name {
                 for configuration in configurations {
                     match &configuration {
@@ -70,6 +93,7 @@ fn from_str(name: Option<&String>, contents: &str) -> eyre::Result<ChosenLaunchC
                 return Ok(ChosenLaunchConfiguration::ToBeChosen(configuration_names));
             }
         }
+        ConfigFormat::VsCodeWorkspace { .. } => todo!(),
     }
     Ok(ChosenLaunchConfiguration::NotFound)
 }
@@ -80,8 +104,9 @@ fn jsonc_to_serde(input: &str) -> eyre::Result<ConfigFormat> {
     let Some(config_format_value) = value else {
         eyre::bail!("no configuration found");
     };
-    let config_format = serde_json::from_value(config_format_value)
-        .wrap_err("deserializing serde_json::Value value")?;
+
+    let config_format =
+        serde_json::from_value(config_format_value).wrap_err("deserializing jsonc::Value value")?;
     Ok(config_format)
 }
 
@@ -100,7 +125,7 @@ pub struct Debugpy {
     pub name: String,
     pub r#type: String,
     pub request: String,
-    pub connect: ConnectionDetails,
+    pub connect: Option<ConnectionDetails>,
     pub path_mappings: Option<Vec<PathMapping>>,
     pub just_my_code: Option<bool>,
     pub cwd: Option<PathBuf>,
