@@ -1,5 +1,5 @@
 //! Requests you can send to a DAP server
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -148,6 +148,34 @@ pub struct PathMapping {
     pub remote_root: String,
 }
 
+impl PathMapping {
+    /// resolve VS Code workspace placeholders, e.g. ${workspaceFolder}
+    pub fn resolve(self, root: impl AsRef<Path>) -> Self {
+        let root = root.as_ref();
+        let mut result = self.clone();
+        if result.local_root.contains("workspaceFolder:") {
+            // TODO: assume only one location
+            let Some((_, after)) = result.local_root.split_once("${workspaceFolder:") else {
+                todo!()
+            };
+
+            let Some((subpath, _)) = after.split_once("}") else {
+                todo!()
+            };
+
+            result.local_root = result.local_root.replace(
+                &format!("${{workspaceFolder:{}}}", subpath),
+                &format!("{}/{}", root.display(), subpath),
+            );
+        } else {
+            result.local_root = result
+                .local_root
+                .replace("${workspaceFolder}", &format!("{}", root.display()));
+        }
+        result
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Attach {
@@ -253,5 +281,29 @@ mod tests {
             .unwrap();
 
         assert!(just_my_code);
+    }
+
+    #[test]
+    fn path_mapping_resolving() {
+        let root = std::env::current_dir().unwrap();
+        let tests = [
+            (
+                "${workspaceFolder}/foo".to_string(),
+                format!("{}/foo", root.display()),
+            ),
+            (
+                "${workspaceFolder:a}/b".to_string(),
+                format!("{}/a/b", root.display()),
+            ),
+        ];
+
+        for (local_root, expected) in tests {
+            let mapping = PathMapping {
+                local_root,
+                remote_root: "/".to_string(),
+            };
+            let resolved = mapping.resolve(&root);
+            assert_eq!(resolved.local_root, expected);
+        }
     }
 }
