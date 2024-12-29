@@ -321,7 +321,8 @@ impl Debugger {
     ) -> PyResult<Self> {
         let port = port.unwrap_or(5678);
 
-        let config = match launch_configuration::load_from_path(config_name.as_ref(), config_path)
+        let config_path = config_path.as_ref();
+        let mut config = match launch_configuration::load_from_path(config_name.as_ref(), config_path)
             .map_err(|e| {
             PyRuntimeError::new_err(format!("loading launch configuration: {e}"))
         })? {
@@ -339,6 +340,8 @@ impl Debugger {
                 std::process::exit(1);
             }
         };
+        let root = config_path.parent().expect("getting parent for config path");
+        config.resolve(root);
 
         let mut debug_root_dir = std::env::current_dir().unwrap();
 

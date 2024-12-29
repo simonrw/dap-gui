@@ -150,12 +150,11 @@ pub struct PathMapping {
 
 impl PathMapping {
     /// resolve VS Code workspace placeholders, e.g. ${workspaceFolder}
-    pub fn resolve(self, root: impl AsRef<Path>) -> Self {
+    pub fn resolve(&mut self, root: impl AsRef<Path>) {
         let root = root.as_ref();
-        let mut result = self.clone();
-        if result.local_root.contains("workspaceFolder:") {
+        if self.local_root.contains("workspaceFolder:") {
             // TODO: assume only one location
-            let Some((_, after)) = result.local_root.split_once("${workspaceFolder:") else {
+            let Some((_, after)) = self.local_root.split_once("${workspaceFolder:") else {
                 todo!()
             };
 
@@ -163,16 +162,15 @@ impl PathMapping {
                 todo!()
             };
 
-            result.local_root = result.local_root.replace(
+            self.local_root = self.local_root.replace(
                 &format!("${{workspaceFolder:{}}}", subpath),
                 &format!("{}/{}", root.display(), subpath),
             );
         } else {
-            result.local_root = result
+            self.local_root = self
                 .local_root
                 .replace("${workspaceFolder}", &format!("{}", root.display()));
         }
-        result
     }
 }
 
@@ -298,12 +296,12 @@ mod tests {
         ];
 
         for (local_root, expected) in tests {
-            let mapping = PathMapping {
+            let mut mapping = PathMapping {
                 local_root,
                 remote_root: "/".to_string(),
             };
-            let resolved = mapping.resolve(&root);
-            assert_eq!(resolved.local_root, expected);
+            mapping.resolve(&root);
+            assert_eq!(mapping.local_root, expected);
         }
     }
 }

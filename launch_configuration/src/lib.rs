@@ -54,6 +54,16 @@ pub enum LaunchConfiguration {
     Debugpy(Debugpy),
 }
 
+impl LaunchConfiguration {
+    pub fn resolve(&mut self, root: impl AsRef<Path>) {
+        match self {
+            LaunchConfiguration::Debugpy(debugpy) => {
+                debugpy.resolve(root);
+            }
+        }
+    }
+}
+
 pub fn load(
     name: Option<&String>,
     mut r: impl std::io::Read,
@@ -144,7 +154,7 @@ pub fn load_from_path(
     Ok(config)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Debugpy {
     pub name: String,
@@ -155,8 +165,18 @@ pub struct Debugpy {
     pub just_my_code: Option<bool>,
     pub cwd: Option<PathBuf>,
 }
+impl Debugpy {
+    fn resolve(&mut self, root: impl AsRef<Path>){
+        let root = root.as_ref();
+        if let Some(mappings) = &mut self.path_mappings {
+            for mapping in mappings {
+                mapping.resolve(root);
+            }
+        }
+    }
+}
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ConnectionDetails {
     pub host: String,
     pub port: u16,
