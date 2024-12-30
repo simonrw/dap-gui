@@ -322,25 +322,28 @@ impl Debugger {
         let port = port.unwrap_or(5678);
 
         let config_path = config_path.as_ref();
-        let mut config = match launch_configuration::load_from_path(config_name.as_ref(), config_path)
-            .map_err(|e| {
-            PyRuntimeError::new_err(format!("loading launch configuration: {e}"))
-        })? {
-            ChosenLaunchConfiguration::Specific(config) => config,
-            ChosenLaunchConfiguration::NotFound => {
-                return Err(PyRuntimeError::new_err("no matching configuration found"));
-            }
-            ChosenLaunchConfiguration::ToBeChosen(configurations) => {
-                eprintln!("Configuration name not specified");
-                eprintln!("Available options:");
-                for config in &configurations {
-                    eprintln!("- {config}");
+        let mut config =
+            match launch_configuration::load_from_path(config_name.as_ref(), config_path).map_err(
+                |e| PyRuntimeError::new_err(format!("loading launch configuration: {e}")),
+            )? {
+                ChosenLaunchConfiguration::Specific(config) => config,
+                ChosenLaunchConfiguration::NotFound => {
+                    return Err(PyRuntimeError::new_err("no matching configuration found"));
                 }
-                // TODO: best option?
-                std::process::exit(1);
-            }
-        };
-        let root = config_path.parent().expect("getting parent for config path");
+                ChosenLaunchConfiguration::ToBeChosen(configurations) => {
+                    eprintln!("Configuration name not specified");
+                    eprintln!("Available options:");
+                    for config in &configurations {
+                        eprintln!("- {config}");
+                    }
+                    // TODO: best option?
+                    std::process::exit(1);
+                }
+            };
+        tracing::debug!(config = ?config, "chosen config");
+        let root = config_path
+            .parent()
+            .expect("getting parent for config path");
         config.resolve(root);
 
         let mut debug_root_dir = std::env::current_dir().unwrap();

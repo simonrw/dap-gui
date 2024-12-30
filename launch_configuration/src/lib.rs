@@ -166,7 +166,7 @@ pub struct Debugpy {
     pub cwd: Option<PathBuf>,
 }
 impl Debugpy {
-    fn resolve(&mut self, root: impl AsRef<Path>){
+    fn resolve(&mut self, root: impl AsRef<Path>) {
         let root = root.as_ref();
         if let Some(mappings) = &mut self.path_mappings {
             for mapping in mappings {

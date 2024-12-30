@@ -1,4 +1,4 @@
-from IPython import start_ipython
+from IPython import embed
 import argparse
 
 from pythondap.pythondap import Debugger, PausedFrame
@@ -39,5 +39,4 @@ def main():
     args = parser.parse_args()
 
     ns = DebugSession(breakpoints=args.breakpoint, file=args.file, config_path=args.launch_configuration, config_name=args.configuration)
-
-    start_ipython(user_ns=ns.__dict__)
+    embed()
