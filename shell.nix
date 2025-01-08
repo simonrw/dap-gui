@@ -33,6 +33,7 @@ in
         pyright
         toolchain
         uv
+        ruff
       ]
       ++ lib.optionals stdenv.isDarwin apple-deps
       ++ lib.optionals stdenv.isLinux [
