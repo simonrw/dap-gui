@@ -101,7 +101,7 @@ jobs:
         os: 
           - macos-latest  # arm64
           - macos-13  # x86_64
-          # TODO: windows-latest
+          - windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
