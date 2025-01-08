@@ -3,6 +3,7 @@ import argparse
 
 from pythondap.session import DebugSession
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-b", "--breakpoint", type=int, nargs="*", default=[])
@@ -11,5 +12,10 @@ def main():
     parser.add_argument("-n", "--configuration")
     args = parser.parse_args()
 
-    ns = DebugSession(breakpoints=args.breakpoint, file=args.file, config_path=args.launch_configuration, config_name=args.configuration)
+    ns = DebugSession(
+        breakpoints=args.breakpoint,
+        file=args.file,
+        config_path=args.launch_configuration,
+        config_name=args.configuration,
+    )
     embed()

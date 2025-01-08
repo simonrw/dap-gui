@@ -1,8 +1,35 @@
 from pythondap.pythondap import Debugger, PausedFrame
 
+
 class DebugSession:
-    def __init__(self, breakpoints, file, config_path, config_name=None, program=None):
-        self.d = Debugger(breakpoints=breakpoints, config_path=config_path, config_name=config_name, file=file, program=program)
+    def __init__(
+        self,
+        breakpoints,
+        file,
+        config_path,
+        config_name=None,
+        program=None,
+        port: int | None = None,
+    ):
+        if port:
+            print(f"Connecting on different {port=}")
+            self.d = Debugger.new_on_port(
+                port=port,
+                breakpoints=breakpoints,
+                config_path=config_path,
+                config_name=config_name,
+                file=file,
+                program=program,
+            )
+        else:
+            self.d = Debugger(
+                breakpoints=breakpoints,
+                config_path=config_path,
+                config_name=config_name,
+                file=file,
+                program=program,
+            )
+        print("Created debugger")
         self.stack: list = []
         self.frame: PausedFrame | None = None
 
@@ -26,5 +53,3 @@ class DebugSession:
         self.stack = state.stack
         self.frame = state.paused_frame
         return state
-
-
