@@ -1,20 +1,9 @@
 repos:
-  - repo: local
+  - repo: https://github.com/backplane/pre-commit-rust-hooks
+    rev: v1.1.0
     hooks:
-      - id: format
-        language: system
-        name: cargo fmt
-        entry: cargo fmt
-        pass_filenames: false
-        stages:
-          - pre-commit
-      - id: check
-        language: system
-        name: cargo check
-        entry: cargo check
-        pass_filenames: false
-        stages:
-          - pre-commit
+    - id: fmt
+    - id: check
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.6
     hooks:
