@@ -98,7 +98,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest] # TODO: , windows-latest]
+        os: 
+          - macos-latest  # arm64
+          - macos-13  # x86_64
+          # TODO: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
