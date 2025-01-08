@@ -25,6 +25,7 @@ use crate::{
 };
 
 /// How to launch a debugging session
+#[derive(Debug)]
 pub enum InitialiseArguments {
     /// Launch a new process with a debugger and connect to the session immediately
     Launch(state::LaunchArguments),
