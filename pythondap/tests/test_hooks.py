@@ -9,8 +9,7 @@ import pytest
 from pythondap.session import DebugSession
 
 
-PYTHON_CODE = """
-a = 10
+PYTHON_CODE = """a = 10
 b = 20
 a = a + b
 print(a)
@@ -54,15 +53,14 @@ def environment(run_server, tmp_path, write_config):
         with config_path.open("w") as outfile:
             write_config(outfile, script, config_name)
 
-        with run_server(sleep_time=0):
-            debugger = DebugSession(
-                breakpoints=breakpoints,
-                file=str(script),
-                config_path=str(config_path),
-                config_name=config_name,
-                program=script,
-            )
-            yield debugger
+        debugger = DebugSession(
+            breakpoints=breakpoints,
+            file=str(script),
+            config_path=str(config_path),
+            config_name=config_name,
+            program=script,
+        )
+        yield debugger
 
     yield inner
 
