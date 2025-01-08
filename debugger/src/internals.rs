@@ -130,7 +130,9 @@ impl DebuggerInternals {
         let _ = self.publisher.send(event);
     }
 
+    #[tracing::instrument(skip(self))]
     pub(crate) fn initialise(&mut self, arguments: InitialiseArguments) -> eyre::Result<()> {
+        tracing::debug!("initialising debugger internals");
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
             lines_start_at_one: false,
@@ -143,6 +145,7 @@ impl DebuggerInternals {
         });
 
         // TODO: deal with capabilities from the response
+        tracing::debug!(request = ?req, "sending initialize event");
         let _ = self.client.send(req).context("sending initialize event")?;
 
         match arguments {
@@ -156,6 +159,8 @@ impl DebuggerInternals {
                 self.client.execute(req).context("sending attach request")?;
             }
         }
+
+        tracing::debug!("initialised");
 
         Ok(())
     }

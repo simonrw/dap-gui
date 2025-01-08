@@ -265,6 +265,7 @@ impl Debugger {
             .wait_for_event(|evt| matches!(evt, Event::Running { .. }));
 
         // wait for stopped or terminated event
+        tracing::trace!("waiting for paused or ended event");
         match self.internal_debugger.wait_for_event(|evt| {
             matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
         }) {
@@ -291,6 +292,7 @@ impl Debugger {
         self.internal_debugger
             .step_over()
             .map_err(|e| PyRuntimeError::new_err(format!("stepping debugee: {e}")))?;
+        tracing::trace!("waiting for paused or ended event");
         match self.internal_debugger.wait_for_event(|evt| {
             matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
         }) {
@@ -330,6 +332,7 @@ impl Debugger {
         program: Option<PathBuf>,
     ) -> PyResult<Self> {
         let port = port.unwrap_or(5678);
+        tracing::debug!(%port, "creating Python debugger");
 
         let config_path = config_path.as_ref();
         let mut config =
@@ -387,7 +390,7 @@ impl Debugger {
                     "launch" => {
                         let launch_arguments = LaunchArguments {
                             program: program.ok_or_else(|| {
-                                PyRuntimeError::new_err(format!("program is a required argument"))
+                                PyRuntimeError::new_err("program is a required argument")
                             })?,
                             working_directory: Some(debug_root_dir.to_owned().to_path_buf()),
                             language: debugger::Language::DebugPy,
@@ -404,6 +407,7 @@ impl Debugger {
             }
         };
 
+        tracing::trace!("waiting for initialised event");
         debugger.wait_for_event(|e| matches!(e, debugger::Event::Initialised));
 
         if let Some(file_path) = file {
