@@ -1,8 +1,9 @@
 from contextlib import contextmanager
+import shutil
 import socket
 import subprocess as sp
-import shutil
 import sys
+import threading
 import time
 
 import pytest
@@ -36,24 +37,50 @@ def port() -> int:
     return get_free_tcp_port()
 
 
+class ChildMonitor(threading.Thread):
+    def __init__(self, child):
+        threading.Thread.__init__(self)
+        self.daemon = True
+        self.child = child
+
+    def run(self):
+        print("Monitoring server process")
+        ret = self.child.wait()
+        if ret != 0:
+            raise RuntimeError(f"Child server process failed with exit code {ret}")
+
+
 @pytest.fixture
 def run_server(port):
     @contextmanager
     def execute(sleep_time: int = 5):
-        cmd = [ sys.executable, "-m", "debugpy.adapter", "--host", "127.0.0.1", "--port", str(port), "--log-stderr", ]
+        print(f"{port=}")
+        cmd = [
+            sys.executable,
+            "-m",
+            "debugpy.adapter",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--log-stderr",
+        ]
         child = sp.Popen(cmd, stderr=sp.PIPE)
         assert child.stderr is not None
+        monitor = ChildMonitor(child)
+        monitor.start()
+
         for line in iter(child.stderr.readline, b""):
             line = line.decode()
-            if "Listening for incoming Client connections" in line:
+            if "listening for incoming client connections" in line.lower():
                 print("DAP server started up")
                 break
 
         if sleep_time > 0:
             print("Sleeping after server startup")
             time.sleep(sleep_time)
+
         yield
         child.kill()
-
 
     yield execute
