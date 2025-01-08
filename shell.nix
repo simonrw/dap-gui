@@ -15,6 +15,7 @@ with pkgs; let
       black
       scapy
       structlog
+      ruff
     ]);
 
   toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
