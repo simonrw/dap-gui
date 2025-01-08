@@ -34,6 +34,8 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
       - uses: rui314/setup-mold@v1
+      - name: Install nextest
+        uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
       - name: cargo generate-lockfile
         if: hashFiles('Cargo.lock') == ''
@@ -43,15 +45,16 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install debugpy
       # https://twitter.com/jonhoo/status/1571290371124260865
-      - name: cargo test --locked
+      - name: cargo nextest run --locked
         run: |
           source .venv/bin/activate
-          cargo test --locked --all-features --all-targets
+          cargo nextest run --locked --all-features --all-targets
       # https://github.com/rust-lang/cargo/issues/6669
       - name: cargo test --doc
         run: |
           source .venv/bin/activate
           cargo test --locked --all-features --doc
+
   minimal:
     runs-on: ubuntu-latest
     name: ubuntu / stable / minimal-versions
@@ -82,10 +85,13 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install debugpy
+      - name: Install nextest
+        uses: taiki-e/install-action@nextest
       - name: cargo test
         run: |
           source .venv/bin/activate
-          cargo test --locked --all-features --all-targets
+          cargo nextest run --locked --all-features --all-targets
+
   os-check:
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.os }} / stable
@@ -118,35 +124,51 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install debugpy
+      - name: Install nextest
+        uses: taiki-e/install-action@nextest
       - name: cargo test
         run: |
           source .venv/bin/activate
-          cargo test --locked --all-features --all-targets
-  # TODO
-  # python-tests:
-  #   runs-on: ${{ matrix.os }}
-  #   name: ${{ matrix.os }} / python
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       os: [ubuntu-latest, macos-latest]
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-python@v4
-  #       with:
-  #         python-version: "3.11"
-  #     - name: Install ${{ matrix.toolchain }}
-  #       uses: dtolnay/rust-toolchain@master
-  #       with:
-  #         toolchain: ${{ matrix.toolchain }}
-  #     - uses: Swatinem/rust-cache@v2
-  #     - name: cargo generate-lockfile
-  #       if: hashFiles('Cargo.lock') == ''
-  #       run: cargo generate-lockfile
-  #     - name: Create python venv with test dependencies
-  #       run: |
-  #         python -m venv .venv
-  #         .venv/bin/python -m pip install debugpy pytest
+          cargo nextest run --locked --all-features --all-targets
+
+  python:
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.os }} / python
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest  # arm64
+          - macos-13  # x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Install ${{ matrix.toolchain }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: beta
+      - uses: rui314/setup-mold@v1
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo generate-lockfile
+        if: hashFiles('Cargo.lock') == ''
+        run: cargo generate-lockfile
+      - name: Create python venv with debugpy
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install debugpy pytest
+      - name: Install pythondap package
+        uses: PyO3/maturin-action@v1
+        with:
+          command: develop --manifest-path pythondap/Cargo.toml --pip-path .venv/bin/pip
+          args: --release
+      - name: Run pythondap python tests
+        # TODO: run: .venv/bin/python -m pytest pythondap/tests
+        run: |
+          source .venv/bin/activate
+          python -m pytest pythondap/tests/test_hooks.py
 
 
   # TODO
@@ -171,4 +193,5 @@ jobs:
   #     - name: Upload to codecov.io
   #       uses: codecov/codecov-action@v3
   #       with:
+  #
   #         fail_ci_if_error: true
