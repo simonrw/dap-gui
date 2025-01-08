@@ -107,6 +107,7 @@ impl AttachArguments {
 }
 
 /// Arguments for launching a new process
+#[derive(Debug)]
 pub struct LaunchArguments {
     /// Program to run
     pub program: PathBuf,

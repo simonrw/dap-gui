@@ -1,4 +1,4 @@
-use debugger::{AttachArguments, Event, PausedFrame};
+use debugger::{AttachArguments, Event, LaunchArguments, PausedFrame};
 use launch_configuration::{ChosenLaunchConfiguration, LaunchConfiguration};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -217,26 +217,35 @@ pub(crate) struct Debugger {
 #[pymethods]
 impl Debugger {
     #[new]
-    #[pyo3(signature = (/, breakpoints, config_path, config_name=None, file=None))]
+    #[pyo3(signature = (/, breakpoints, config_path, config_name=None, file=None, program=None))]
     pub fn new(
         breakpoints: Vec<usize>,
         config_path: PathBuf,
         config_name: Option<String>,
         file: Option<PathBuf>,
+        program: Option<PathBuf>,
     ) -> PyResult<Self> {
-        Self::internal_new(None, breakpoints, config_path, config_name, file)
+        Self::internal_new(None, breakpoints, config_path, config_name, file, program)
     }
 
     #[staticmethod]
-    #[pyo3(signature = (/, port, breakpoints, config_path, config_name=None, file=None))]
+    #[pyo3(signature = (/, port, breakpoints, config_path, config_name=None, file=None, program=None))]
     pub fn new_on_port(
         port: u16,
         breakpoints: Vec<usize>,
         config_path: PathBuf,
         config_name: Option<String>,
         file: Option<PathBuf>,
+        program: Option<PathBuf>,
     ) -> PyResult<Self> {
-        Self::internal_new(Some(port), breakpoints, config_path, config_name, file)
+        Self::internal_new(
+            Some(port),
+            breakpoints,
+            config_path,
+            config_name,
+            file,
+            program,
+        )
     }
 
     pub fn resume(&mut self) -> PyResult<Option<ProgramState>> {
@@ -318,6 +327,7 @@ impl Debugger {
         config_path: impl AsRef<Path>,
         config_name: Option<String>,
         file: Option<PathBuf>,
+        program: Option<PathBuf>,
     ) -> PyResult<Self> {
         let port = port.unwrap_or(5678);
 
@@ -374,7 +384,21 @@ impl Debugger {
                             PyRuntimeError::new_err(format!("creating internal debugger: {e}"))
                         })?
                     }
-                    _ => todo!(),
+                    "launch" => {
+                        let launch_arguments = LaunchArguments {
+                            program: program.ok_or_else(|| {
+                                PyRuntimeError::new_err(format!("program is a required argument"))
+                            })?,
+                            working_directory: Some(debug_root_dir.to_owned().to_path_buf()),
+                            language: debugger::Language::DebugPy,
+                        };
+
+                        tracing::debug!(?launch_arguments, "generated launch configuration");
+                        debugger::Debugger::on_port(port, launch_arguments).map_err(|e| {
+                            PyRuntimeError::new_err(format!("creating internal debugger: {e}"))
+                        })?
+                    }
+                    other => todo!("Configuration type: '{other}' not implemented yet, or invalid"),
                 };
                 debugger
             }
