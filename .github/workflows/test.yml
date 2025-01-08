@@ -168,10 +168,9 @@ jobs:
           command: develop --manifest-path pythondap/Cargo.toml --pip-path .venv/bin/pip
           args: --release
       - name: Run pythondap python tests
-        # TODO: run: .venv/bin/python -m pytest pythondap/tests
         run: |
           source .venv/bin/activate
-          python -m pytest pythondap/tests/test_hooks.py
+          python -m pytest pythondap/tests
 
 
   # TODO
