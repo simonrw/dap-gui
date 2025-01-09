@@ -161,6 +161,7 @@ pub struct Debugpy {
     pub r#type: String,
     pub request: String,
     pub connect: Option<ConnectionDetails>,
+    pub program: Option<PathBuf>,
     pub path_mappings: Option<Vec<PathMapping>>,
     pub just_my_code: Option<bool>,
     pub cwd: Option<PathBuf>,

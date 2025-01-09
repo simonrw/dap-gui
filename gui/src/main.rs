@@ -7,7 +7,7 @@ use std::{
 };
 
 use clap::Parser;
-use debugger::{AttachArguments, Debugger, PausedFrame};
+use debugger::{AttachArguments, Debugger, LaunchArguments, PausedFrame};
 use eframe::egui::{self, Visuals};
 use eyre::WrapErr;
 use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
@@ -24,6 +24,9 @@ struct Args {
 
     #[clap(short, long)]
     name: Option<String>,
+
+    #[clap(short, long)]
+    breakpoints: Vec<usize>,
 }
 
 #[cfg(feature = "sentry")]
@@ -183,6 +186,7 @@ impl DebuggerApp {
                 cwd,
                 connect,
                 path_mappings,
+                program,
                 ..
             }) => {
                 if let Some(dir) = cwd {
@@ -200,6 +204,33 @@ impl DebuggerApp {
                         tracing::debug!(?launch_arguments, "generated launch configuration");
 
                         Debugger::new(launch_arguments).context("creating internal debugger")?
+                    }
+                    "launch" => {
+                        let Some(program) = program else {
+                            eyre::bail!("'program' is a required setting");
+                        };
+                        let launch_arguments = LaunchArguments {
+                            program: program.clone(),
+                            working_directory: Some(debug_root_dir.to_owned().to_path_buf()),
+                            language: debugger::Language::DebugPy,
+                        };
+
+                        tracing::debug!(?launch_arguments, "generated launch configuration");
+                        let debugger = debugger::Debugger::new(launch_arguments)
+                            .context("creating internal debugger")?;
+
+                        for line in args.breakpoints {
+                            let breakpoint = debugger::Breakpoint {
+                                path: program.clone(),
+                                line,
+                                ..Default::default()
+                            };
+                            debugger
+                                .add_breakpoint(&breakpoint)
+                                .context("adding breakpoint")?;
+                        }
+
+                        debugger
                     }
                     _ => todo!(),
                 };

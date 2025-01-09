@@ -11,6 +11,13 @@
       }
     },
     {
+        "name": "Launch",
+        "type": "debugpy",
+        "request": "launch",
+        "program": "test.py",
+        "justMyCode": false
+    },
+    {
       "name": "LocalStack",
       "type": "python",
       "request": "attach",
