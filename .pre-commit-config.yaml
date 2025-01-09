@@ -13,4 +13,12 @@ repos:
       # Run the formatter.
       - id: ruff-format
         args: ["pythondap"]
+  # pre-push configuration
+  - repo: https://github.com/backplane/pre-commit-rust-hooks
+    rev: v1.1.0
+    hooks:
+    - id: clippy
+    - id: test
+    stages:
+      - pre-push
 
