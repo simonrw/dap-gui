@@ -12,7 +12,7 @@ def main():
     parser.add_argument("-n", "--configuration")
     args = parser.parse_args()
 
-    ns = DebugSession(
+    ns = DebugSession(  # noqa: F841
         breakpoints=args.breakpoint,
         file=args.file,
         config_path=args.launch_configuration,
