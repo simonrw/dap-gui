@@ -18,7 +18,9 @@ repos:
     rev: v1.1.0
     hooks:
     - id: clippy
+      stages:
+        - pre-push
     - id: test
-    stages:
-      - pre-push
+      stages:
+        - pre-push
 
