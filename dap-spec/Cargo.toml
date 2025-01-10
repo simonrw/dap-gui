@@ -11,6 +11,7 @@ serde_json.workspace = true
 quote = "1.0.38"
 syn = { version = "2.0.96", features = ["full"] }
 eyre.workspace = true
+serde_path_to_error = "0.1.16"
 proc-macro2 = "1.0.92"
 serde.workspace = true
 serde_json.workspace = true

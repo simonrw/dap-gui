@@ -1,26 +1,55 @@
 use proc_macro2::TokenStream;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::{collections::HashMap, fmt::Display, path::PathBuf};
 
 // spec types
 
-#[derive(Deserialize, Serialize)]
-struct Definition<'i> {
-    #[serde(borrow, rename = "type")]
-    r#type: Option<&'i str>,
+#[derive(Deserialize, Debug)]
+struct ArrayItemDefinition {
+    r#type: String,
 }
 
-#[derive(Deserialize, Serialize)]
-struct Spec<'i> {
-    #[serde(borrow)]
-    definitions: HashMap<String, Definition<'i>>,
+#[derive(Deserialize, Debug)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum Property {
+    Integer {
+        description: String,
+    },
+    String {
+        description: String,
+        #[serde(rename = "_enum")]
+        allowed_values: Option<Vec<String>>,
+    },
+    Array {
+        items: ArrayItemDefinition,
+        description: String,
+    },
+    Object {
+        description: String,
+    },
+    Boolean {
+        description: String,
+    },
 }
 
-impl<'i> Display for Spec<'i> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let t = serde_json::to_string_pretty(self).unwrap();
-        f.write_str(&t)
-    }
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+enum Definition {
+    Root {
+        r#type: String,
+        title: Option<String>,
+        description: String,
+        properties: HashMap<String, Property>,
+    },
+    AllOf {
+        #[serde(rename = "allOf")]
+        all_of: Vec<serde_json::Value>,
+    },
+}
+
+#[derive(Deserialize, Debug)]
+struct Spec {
+    definitions: HashMap<String, Definition>,
 }
 
 // helper methods
@@ -42,7 +71,16 @@ fn main() {
         .canonicalize()
         .unwrap();
     let spec_content = std::fs::read_to_string(spec_path).unwrap();
-    let spec: Spec = serde_json::from_str(&spec_content).unwrap();
+    // let spec: Spec = serde_json::from_str(&spec_content).unwrap();
+    let jd = &mut serde_json::Deserializer::from_str(&spec_content);
+    let spec: Result<Spec, _> = serde_path_to_error::deserialize(jd);
+    match spec {
+        Ok(spec) => eprintln!("got spec: {spec:?}"),
+        Err(e) => {
+            let _path = e.path().to_string();
+            // TODO: panic!("parse error at {}: {}", path, e.inner());
+        }
+    }
 
     let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let out_path = out_dir.join("bindings.rs");
