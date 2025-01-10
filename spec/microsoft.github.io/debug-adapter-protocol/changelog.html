@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Change Log</title>
+    <meta name="description" content="Debug Adapter Protocol documentation and specification page.
+">
+
+
+    <!-- link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta.2/css/bootstrap.min.css" integrity="sha384-PsH8R72JQ3SOdhVi3uxftmaW6Vc51MKb0q5P2rRUpPvrszuE4W1povHYgTpBfshb" crossorigin="anonymous" -->
+    <link rel="stylesheet" href="css/bootswatch/cosmo/bootstrap.min.css">
+    <link rel="stylesheet" href="css/fontawesome-all.min.css">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="shortcut icon" href="https://microsoft.github.io/debug-adapter-protocol/img/favicon.png">
+
+    <link rel="canonical" href="https://microsoft.github.io/debug-adapter-protocol//changelog.html">
+    <link rel="alternate" type="application/rss+xml" title="Official page for Debug Adapter Protocol" href="https://microsoft.github.io/debug-adapter-protocol//debug-adapter-protocol/feed.xml" />
+</head>
+
+
+<body>
+    <div id='cookie-banner'></div>
+    <header class="navbar navbar-expand-lg navbar-dark bg-primary dap-navbar">
+    <div class="container navbar-container">
+        <a class="navbar-brand" href="index.html">
+            <h1>DAP</h1>
+        </a>
+
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="navbar-collapse collapse" id="navbarSupportedContent" role="navigation" aria-label="Top Level">
+            
+            <ul class="navbar-nav ml-auto">
+                <li  class="nav-item" >
+                    <a class="nav-link" href='https://microsoft.github.io/debug-adapter-protocol/overview'>Overview</a>
+                </li>
+                <li  class="nav-item" >
+                    <a class="nav-link" href="https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/">Implementations</a>
+                </li>
+                <li  class="nav-item" >
+                    <a class="nav-link" href='https://microsoft.github.io/debug-adapter-protocol/specification'>Specification</a>
+                </li>
+            </ul>
+        </div>
+
+    </div>
+</header>
+
+    <div class="page-content">
+        <div class="wrapper">
+            <div class="container">
+    <div class="row single-page">
+        <div class="col-lg-2 d-none d-xl-block">
+        </div>
+        <div class="col-md-12 col-lg-8">
+            <h1>Change Log</h1>
+            <div id="markdown-content-container"><h4 id="all-notable-changes-to-the-specification-will-be-documented-in-this-file">All notable changes to the specification will be documented in this file.</h4>
+
+<ul>
+  <li>1.69.x
+    <ul>
+      <li>Clarify the flow diagram to start a debug session</li>
+      <li>Add <code class="language-plaintext highlighter-rouge">supportsANSIStyling</code> capabilities to allow colorization of text from debug adapters</li>
+    </ul>
+  </li>
+  <li>1.68.x
+    <ul>
+      <li>Add <code class="language-plaintext highlighter-rouge">locationReference</code>s to Variable-related data types to allow navigation to declarations, and a corresponding <code class="language-plaintext highlighter-rouge">locations</code> request.</li>
+      <li>Clarify the meaning of “system process”</li>
+      <li>Clarify the lifetime of <code class="language-plaintext highlighter-rouge">variableReference</code>s after a <code class="language-plaintext highlighter-rouge">setVariable</code> call</li>
+      <li>Fix typographic errors in <code class="language-plaintext highlighter-rouge">StackFrame.canRestart</code></li>
+    </ul>
+  </li>
+  <li>1.67.x
+    <ul>
+      <li>Add <code class="language-plaintext highlighter-rouge">line</code>, <code class="language-plaintext highlighter-rouge">column</code>, and <code class="language-plaintext highlighter-rouge">source</code> location attributions to <code class="language-plaintext highlighter-rouge">EvaluateArguments</code></li>
+      <li>Add <code class="language-plaintext highlighter-rouge">returnValue</code> as a well-known <code class="language-plaintext highlighter-rouge">Scope.presentationHint</code></li>
+    </ul>
+  </li>
+  <li>1.66.x</li>
+  <li>
+    <p>Add <code class="language-plaintext highlighter-rouge">bytes</code> and <code class="language-plaintext highlighter-rouge">asAddress</code> properties to the <code class="language-plaintext highlighter-rouge">DataBreakpointInfo</code> request</p>
+  </li>
+  <li>1.65.x
+    <ul>
+      <li>Clarify handling of multiple filters in the <code class="language-plaintext highlighter-rouge">SetExceptionBreakpoints</code> request</li>
+      <li>Clarify lifetimes of objects created outside of suspended states</li>
+      <li>Add a <code class="language-plaintext highlighter-rouge">BreakpointMode</code> for setting different types of breakpoints</li>
+    </ul>
+  </li>
+  <li>1.64.x
+    <ul>
+      <li>Clarify that the <code class="language-plaintext highlighter-rouge">offset</code> in the <code class="language-plaintext highlighter-rouge">InstructionBreakpoint</code> is given in bytes</li>
+      <li>Add a <code class="language-plaintext highlighter-rouge">presentationHint</code> to the <code class="language-plaintext highlighter-rouge">DisassembledInstruction</code></li>
+      <li>Add a <code class="language-plaintext highlighter-rouge">reason</code> to the <code class="language-plaintext highlighter-rouge">Breakpoint</code> to indicate why verification may have failed</li>
+    </ul>
+  </li>
+  <li>1.63.x
+    <ul>
+      <li>Add <code class="language-plaintext highlighter-rouge">memoryReference</code> support to the <code class="language-plaintext highlighter-rouge">SetVariableResponse</code>/<code class="language-plaintext highlighter-rouge">SetExpressionResponse</code></li>
+      <li>Fix a typo in the description of <code class="language-plaintext highlighter-rouge">BreakpointLocationsArguments</code></li>
+      <li>Fix missing line break in <code class="language-plaintext highlighter-rouge">CancelRequest</code></li>
+      <li>Clarify <code class="language-plaintext highlighter-rouge">memoryReference</code> in <code class="language-plaintext highlighter-rouge">Variable</code> type</li>
+      <li>Clarify state of “object ID”s in <code class="language-plaintext highlighter-rouge">VariablePresentationHint</code></li>
+    </ul>
+  </li>
+  <li>1.62.x
+    <ul>
+      <li>Clarify lifetime of <code class="language-plaintext highlighter-rouge">DataBreakpoint.dataId</code></li>
+    </ul>
+  </li>
+  <li>1.61.x
+    <ul>
+      <li>Removed unused <code class="language-plaintext highlighter-rouge">ModulesViewDescriptor</code> interface</li>
+      <li>Clarify the applicability of <code class="language-plaintext highlighter-rouge">supportsVariablePaging</code></li>
+      <li>Fix mention of non-existent <code class="language-plaintext highlighter-rouge">hitCondition</code> in <code class="language-plaintext highlighter-rouge">SetExceptionBreakpointsResponse</code></li>
+    </ul>
+  </li>
+  <li>1.60.x
+    <ul>
+      <li>Clarify the usage of <code class="language-plaintext highlighter-rouge">hitCondition</code> and <code class="language-plaintext highlighter-rouge">logMessage</code> in <code class="language-plaintext highlighter-rouge">SetBreakpointsRequest</code></li>
+    </ul>
+  </li>
+  <li>1.59.x:
+    <ul>
+      <li>Add an optional <code class="language-plaintext highlighter-rouge">frameId</code> to the <code class="language-plaintext highlighter-rouge">DataBreakpointInfoRequest</code></li>
+      <li>Add <code class="language-plaintext highlighter-rouge">notStopped</code> as a well-known reason in <code class="language-plaintext highlighter-rouge">Response</code></li>
+      <li>Clarify the lifetime of <code class="language-plaintext highlighter-rouge">variablesReference</code>.</li>
+      <li>Clarify the default behavior when <code class="language-plaintext highlighter-rouge">kind</code> is omitted from the <code class="language-plaintext highlighter-rouge">RunInTerminalRequest</code>.</li>
+      <li>Clarify end of file behavior for <code class="language-plaintext highlighter-rouge">readMemory</code>.</li>
+    </ul>
+  </li>
+  <li>1.58.x:
+    <ul>
+      <li>Specify the measurement unit of various <code class="language-plaintext highlighter-rouge">column</code> and “character positions” properties to be “UTF-16 code units”.</li>
+    </ul>
+  </li>
+  <li>1.57.x:
+    <ul>
+      <li>Add the <code class="language-plaintext highlighter-rouge">argsCanBeInterpretedByShell</code> property to the <code class="language-plaintext highlighter-rouge">RunInTerminalRequest</code></li>
+    </ul>
+  </li>
+  <li>1.56.x:
+    <ul>
+      <li>Add additional information to the <code class="language-plaintext highlighter-rouge">StepInTarget</code></li>
+      <li>Clarification around wording for “clients”</li>
+      <li>Clarification around “falsey” in <code class="language-plaintext highlighter-rouge">CompletionItem.text</code></li>
+      <li>Specify checksums to be given a hexadecimal strings, and timestamps as RFC 3339 date strings</li>
+      <li>Make wording on source.origin more clear to be non-exhaustive</li>
+    </ul>
+  </li>
+  <li>1.55.x:
+    <ul>
+      <li>Improved descriptions for <code class="language-plaintext highlighter-rouge">terminate</code> and <code class="language-plaintext highlighter-rouge">disconnect</code> requests.</li>
+      <li>Add missing value <code class="language-plaintext highlighter-rouge">variables</code> to the <code class="language-plaintext highlighter-rouge">context</code> argument of the <code class="language-plaintext highlighter-rouge">evaluate</code>request.</li>
+      <li>Fix a mistake in the description of the <code class="language-plaintext highlighter-rouge">ExceptionFilterOptions</code> type.</li>
+    </ul>
+  </li>
+  <li>1.54.x:
+    <ul>
+      <li>Add a new boolean property <code class="language-plaintext highlighter-rouge">lazy</code>  on the <code class="language-plaintext highlighter-rouge">VariablePresentationHint</code>. Clients can use that flag to present the variable with a UI that supports a specific gesture to trigger its evaluation.</li>
+    </ul>
+  </li>
+  <li>1.53.x:
+    <ul>
+      <li>Add a new <code class="language-plaintext highlighter-rouge">detail</code> property on the CompletionItem</li>
+    </ul>
+  </li>
+  <li>1.52.x:
+    <ul>
+      <li>clarify comment for <code class="language-plaintext highlighter-rouge">Variable.value</code>.</li>
+    </ul>
+  </li>
+  <li>1.51.x:
+    <ul>
+      <li>Add a new category <code class="language-plaintext highlighter-rouge">important</code> to  the <code class="language-plaintext highlighter-rouge">output</code> event. This is a hint for clients to show the message with a highly visible UI.</li>
+      <li>Clarify the description of all execution control requests (<code class="language-plaintext highlighter-rouge">continue</code>, <code class="language-plaintext highlighter-rouge">next</code>, <code class="language-plaintext highlighter-rouge">stepIn</code>, <code class="language-plaintext highlighter-rouge">stepOut</code>, <code class="language-plaintext highlighter-rouge">stepBack</code>, <code class="language-plaintext highlighter-rouge">reverseContinue</code>)</li>
+      <li>Add a new capability <code class="language-plaintext highlighter-rouge">supportsSingleThreadExecutionRequests</code> to indicate that the execution control requests support the <code class="language-plaintext highlighter-rouge">singleThread</code> property.</li>
+      <li>Add a new optional <code class="language-plaintext highlighter-rouge">singleThread</code> property to all execution control requests.</li>
+    </ul>
+  </li>
+  <li>1.49.x:
+    <ul>
+      <li>Add <code class="language-plaintext highlighter-rouge">memory</code> event and a corresponding <strong>client</strong> capability <code class="language-plaintext highlighter-rouge">supportsMemoryEvent</code>.</li>
+    </ul>
+  </li>
+  <li>1.48.x:
+    <ul>
+      <li>Add guidance for the case that a debug adapter implements both <code class="language-plaintext highlighter-rouge">setVariable</code> and <code class="language-plaintext highlighter-rouge">setExpression</code> and clients need to decide which request to use.</li>
+      <li>Add <code class="language-plaintext highlighter-rouge">writeMemory</code> request and a corresponding <code class="language-plaintext highlighter-rouge">supportsWriteMemoryRequest</code> capability.</li>
+    </ul>
+  </li>
+  <li>1.47.x:
+    <ul>
+      <li>The <code class="language-plaintext highlighter-rouge">setExceptionBreakpoints</code> can now optionally return an array of <code class="language-plaintext highlighter-rouge">Breakpoint</code>s as the other <code class="language-plaintext highlighter-rouge">setXxxxBreakpoints</code> do. This allows clients to show validation error messages for individual exception breakpoints or filters.</li>
+      <li>The <code class="language-plaintext highlighter-rouge">restart</code> request got a new optional parameter <code class="language-plaintext highlighter-rouge">arguments</code> where a client can pass the latest version of a launch or attach configuration.</li>
+      <li>Adds a new optional argument <code class="language-plaintext highlighter-rouge">suspendDebuggee</code> to the <code class="language-plaintext highlighter-rouge">disconnect</code> request. If a debug adapter has opted into this feature with the <code class="language-plaintext highlighter-rouge">supportSuspendDebuggee</code> capability, a client can use this to control whether the debuggee should be suspended when the debugger is disconnected.</li>
+    </ul>
+  </li>
+  <li>1.46.x:
+    <ul>
+      <li>Add an optional attribute <code class="language-plaintext highlighter-rouge">hitBreakpointIds</code> to the <code class="language-plaintext highlighter-rouge">stopped</code> event which contains the ids of the breakpoints that triggered the event.</li>
+    </ul>
+  </li>
+  <li>1.45.x:
+    <ul>
+      <li>Add new UI attribute <code class="language-plaintext highlighter-rouge">description</code> and <code class="language-plaintext highlighter-rouge">conditionDescription</code> to the <code class="language-plaintext highlighter-rouge">ExceptionBreakpointsFilter</code>. With these clients can display additional information about exception breakpoints.</li>
+      <li>Improved description for <code class="language-plaintext highlighter-rouge">setExceptionBreakpoints</code> request by adding guidance for what an adapter should do if the user inputs an invalid exception breakpoint condition.</li>
+      <li>Add new optional boolean property <code class="language-plaintext highlighter-rouge">canRestart</code> to the stack frame. It indicated whether the stack frame can be restarted with the <code class="language-plaintext highlighter-rouge">restart</code>request.</li>
+    </ul>
+  </li>
+  <li>1.44.x:
+    <ul>
+      <li>Deprecated the value <code class="language-plaintext highlighter-rouge">dataBreakpoint</code> of <code class="language-plaintext highlighter-rouge">VariablePresentationHint.kind</code>. Instead a new value <code class="language-plaintext highlighter-rouge">hasDataBreakpoint</code> has been added to the <code class="language-plaintext highlighter-rouge">VariablePresentationHint.attribute</code>.</li>
+    </ul>
+  </li>
+  <li>1.43.x:
+    <ul>
+      <li>Add support for conditional exceptions. With this the <code class="language-plaintext highlighter-rouge">setExceptionBreakpoints</code> request got a new property <code class="language-plaintext highlighter-rouge">filterOptions</code> for setting the exception filters and their conditions. The corresponding capability is <code class="language-plaintext highlighter-rouge">supportsExceptionFilterOptions</code>.</li>
+      <li>Clarify the description of the <code class="language-plaintext highlighter-rouge">stackTrace</code> request and its <code class="language-plaintext highlighter-rouge">totalFrames</code> property.</li>
+      <li>Clarify the description of the <code class="language-plaintext highlighter-rouge">cwd</code> property of the <code class="language-plaintext highlighter-rouge">runInTerminal</code> request: a client is only expected to execute a change directory command if <code class="language-plaintext highlighter-rouge">cwd</code> contains a non-empty, valid path.</li>
+    </ul>
+  </li>
+  <li>1.42.x:
+    <ul>
+      <li>Add <code class="language-plaintext highlighter-rouge">invalidated</code> event and a corresponding <strong>client</strong> capability <code class="language-plaintext highlighter-rouge">supportsInvalidatedEvent</code>.</li>
+    </ul>
+  </li>
+  <li>1.41.x:
+    <ul>
+      <li>Add “stepping granularity” support for the stepping requests <code class="language-plaintext highlighter-rouge">next</code>, <code class="language-plaintext highlighter-rouge">stepIn</code>, <code class="language-plaintext highlighter-rouge">stepOut</code>, <code class="language-plaintext highlighter-rouge">stepBack</code> and a corresponding <strong>client</strong> capability <code class="language-plaintext highlighter-rouge">supportsSteppingGranularity</code>.</li>
+      <li>Add instruction breakpoints and a corresponding <strong>client</strong> capability <code class="language-plaintext highlighter-rouge">supportsInstructionBreakpoints</code>.</li>
+    </ul>
+  </li>
+  <li>1.40.x:
+    <ul>
+      <li>New value <code class="language-plaintext highlighter-rouge">clipboard</code> for <code class="language-plaintext highlighter-rouge">context</code> argument of <code class="language-plaintext highlighter-rouge">evaluate</code> request.</li>
+      <li>Add support for reporting progress via <code class="language-plaintext highlighter-rouge">progressStart</code>, <code class="language-plaintext highlighter-rouge">progressUpdate</code>, and <code class="language-plaintext highlighter-rouge">progressEnd</code> events and a corresponding <strong>client</strong> capability <code class="language-plaintext highlighter-rouge">supportsProgressReporting</code>. Progress can be cancelled via a new <code class="language-plaintext highlighter-rouge">progressId</code> argument for the <code class="language-plaintext highlighter-rouge">cancel</code> request.</li>
+      <li>Clarifed descriptions of all optional requests, events, and attributes to make clear what is the corresponding capability.</li>
+    </ul>
+  </li>
+  <li>1.39.x:
+    <ul>
+      <li>add optional <code class="language-plaintext highlighter-rouge">selectionStart</code> and <code class="language-plaintext highlighter-rouge">selectionLength</code> attributes to completion item. With these attributes the selection range or position can be controlled after the completion text has been inserted.</li>
+      <li>add optional <code class="language-plaintext highlighter-rouge">group</code> attribute to <code class="language-plaintext highlighter-rouge">output</code> event in order to keep an output log organized by grouping related messages.</li>
+    </ul>
+  </li>
+  <li>1.38.x:
+    <ul>
+      <li>Fixes some typos and improves some comments.</li>
+    </ul>
+  </li>
+  <li>1.37.x:
+    <ul>
+      <li>Adds a <code class="language-plaintext highlighter-rouge">breakpointLocations</code> request (and a corresponding <code class="language-plaintext highlighter-rouge">supportsBreakpointLocationsRequest</code> capability) for finding the possible breakpoints for a source range.</li>
+      <li>Adds cancellation support for requests via a new <code class="language-plaintext highlighter-rouge">cancel</code> request and a corresponding <code class="language-plaintext highlighter-rouge">supportsCancelRequest</code> capability.</li>
+      <li>Improves some comments.</li>
+    </ul>
+  </li>
+  <li>1.36.x:
+    <ul>
+      <li>Introduces a capability <code class="language-plaintext highlighter-rouge">completionTriggerCharacters</code> for announcing the characters that a frontend UI should use to trigger completion.</li>
+      <li>Adds an optional <code class="language-plaintext highlighter-rouge">sortText</code> attribute to the <code class="language-plaintext highlighter-rouge">CompletionItem</code> type.</li>
+      <li>In the schema change “number” to “integer” in cases where a float makes no sense, e.g. for IDs.</li>
+    </ul>
+  </li>
+  <li>1.35.x:
+    <ul>
+      <li>Adds an optional <code class="language-plaintext highlighter-rouge">presentationHint</code> attribute to the <code class="language-plaintext highlighter-rouge">Scope</code> type which can be used to add semantic to the scope’s contents. An example is to mark a scope as a “registers” scope that contains “registers” instead of variables.</li>
+      <li>Adds experimental support for memory access via a new <code class="language-plaintext highlighter-rouge">readMemory</code> request and a corresponding <code class="language-plaintext highlighter-rouge">supportsReadMemoryRequest</code> capability.</li>
+      <li>Adds experimental support for memory disassembly via a new <code class="language-plaintext highlighter-rouge">disassemble</code> request and a corresponding <code class="language-plaintext highlighter-rouge">supportsDisassembleRequest</code> capability.</li>
+    </ul>
+  </li>
+  <li>1.34.x:
+    <ul>
+      <li>Adds support for data breakpoints via the ‘dataBreakpointInfo’ and ‘setDataBreakpoints’ requests and the ‘supportsDataBreakpoints’ capability.</li>
+      <li>Improves some comments.</li>
+    </ul>
+  </li>
+  <li>1.33.x:
+    <ul>
+      <li>Point out that the breakpoint’s <code class="language-plaintext highlighter-rouge">id</code> attribute is mandatory when <code class="language-plaintext highlighter-rouge">breakpoint</code> events are used.</li>
+      <li>Return a new attribute <code class="language-plaintext highlighter-rouge">shellProcessId</code> from the <code class="language-plaintext highlighter-rouge">runInTerminal</code> request.</li>
+    </ul>
+  </li>
+  <li>1.32.x:
+    <ul>
+      <li>Adds an optional boolean argument <code class="language-plaintext highlighter-rouge">restart</code> to the <code class="language-plaintext highlighter-rouge">terminate</code> and <code class="language-plaintext highlighter-rouge">disconnect</code> requests. The value <code class="language-plaintext highlighter-rouge">true</code> indicates that the <code class="language-plaintext highlighter-rouge">terminate</code> or <code class="language-plaintext highlighter-rouge">disconnect</code> request is part of a restart sequence.</li>
+      <li>Move specification to DAP web site.</li>
+    </ul>
+  </li>
+  <li>1.31.x:
+    <ul>
+      <li>Adds a new optional <code class="language-plaintext highlighter-rouge">terminate</code> request which can be used to give a debuggee the chance to shutdown gracefully. A corresponding <code class="language-plaintext highlighter-rouge">supportsTerminateRequest</code> capability announces that an adapter implements the request.</li>
+    </ul>
+  </li>
+  <li>1.30.x:
+    <ul>
+      <li>Comment cosmetics.</li>
+    </ul>
+  </li>
+  <li>1.29.x:
+    <ul>
+      <li>Adds a new value for the ‘reason’ attribute of the ‘stopped’ event. This is used when an adapter implements the ‘goto’ request.</li>
+    </ul>
+  </li>
+  <li>1.28.x:
+    <ul>
+      <li>Adds an optional attribute <code class="language-plaintext highlighter-rouge">clientName</code> to the <code class="language-plaintext highlighter-rouge">Initialize</code> request. This makes it possible to surface the human readable name of the client in error messages coming from the adapter.</li>
+      <li>Adds a <code class="language-plaintext highlighter-rouge">terminateThreads</code> request and a corresponding <code class="language-plaintext highlighter-rouge">supportsTerminateThreadsRequest</code> capability.</li>
+      <li>Made the <code class="language-plaintext highlighter-rouge">__restart</code> attribute official on the <code class="language-plaintext highlighter-rouge">launch</code> or <code class="language-plaintext highlighter-rouge">attach</code> requests. It corresponds to the <code class="language-plaintext highlighter-rouge">restart</code> attribute on the <code class="language-plaintext highlighter-rouge">terminated</code> event.</li>
+      <li>Adds a <code class="language-plaintext highlighter-rouge">setExpression</code> request and a corresponding <code class="language-plaintext highlighter-rouge">supportsSetExpression</code> capability. This request can be used to assign a value to an assignable expression (aka “l-value”).</li>
+      <li>Adds a new optional <code class="language-plaintext highlighter-rouge">preserveFocusHint</code> to the <code class="language-plaintext highlighter-rouge">stopped</code> event. A value of true hints to the frontend that this event should not change the focus.</li>
+    </ul>
+  </li>
+  <li>1.27.x:
+    <ul>
+      <li>Adds a new <code class="language-plaintext highlighter-rouge">capabilities</code> event that hints to the frontend that one or more capabilities got updated.</li>
+      <li>Initial support for logPoints: new attribute <code class="language-plaintext highlighter-rouge">SourceBreakpoint.logMessage</code> and capability <code class="language-plaintext highlighter-rouge">supportsLogPoint</code>.</li>
+    </ul>
+  </li>
+  <li>
+    <p>1.26.x:
+no protocol changes</p>
+  </li>
+  <li>1.25.x:
+    <ul>
+      <li>Adds a new enum value <code class="language-plaintext highlighter-rouge">virtual</code> for the <code class="language-plaintext highlighter-rouge">presentationHint</code> attribute of type <code class="language-plaintext highlighter-rouge">Variable</code>.</li>
+      <li>To remove env variables from the environment support a ‘null’ value for <code class="language-plaintext highlighter-rouge">env</code> attribute in <code class="language-plaintext highlighter-rouge">runInTerminal</code> request.</li>
+    </ul>
+  </li>
+  <li>1.24.x:
+    <ul>
+      <li>Adds <code class="language-plaintext highlighter-rouge">removed</code> to the value set of the <code class="language-plaintext highlighter-rouge">reason</code> attribute of the <code class="language-plaintext highlighter-rouge">BreakpointEvent</code>.</li>
+      <li>Adds a <code class="language-plaintext highlighter-rouge">locale</code> attribute to the <code class="language-plaintext highlighter-rouge">initialize</code> request. The adapter can use this information to translate user visible information.</li>
+    </ul>
+  </li>
+  <li>1.23.x:
+    <ul>
+      <li>Adds a <code class="language-plaintext highlighter-rouge">source</code>, <code class="language-plaintext highlighter-rouge">line</code>, and <code class="language-plaintext highlighter-rouge">column</code> attributes to the <code class="language-plaintext highlighter-rouge">Output</code> event. With this a frontend can show a link to the source where the output was generated.</li>
+      <li>Adds support for retrieving loaded scripts and receiving loaded script events (<code class="language-plaintext highlighter-rouge">LoadedSourcesRequest</code>, <code class="language-plaintext highlighter-rouge">LoadedSourceEvent</code>).</li>
+      <li>Adds display hints for variables and evaluation results (type <code class="language-plaintext highlighter-rouge">VariablePresentationHint</code>).</li>
+    </ul>
+  </li>
+  <li>1.22.x:
+    <ul>
+      <li>Adds a new enum value <code class="language-plaintext highlighter-rouge">normal</code> for the <code class="language-plaintext highlighter-rouge">presentationHint</code> attribute of type <code class="language-plaintext highlighter-rouge">Source</code>.</li>
+      <li>Adds a new event <code class="language-plaintext highlighter-rouge">process</code> that conveys process ID and other information about the debuggee.</li>
+    </ul>
+  </li>
+  <li>1.21.x:
+    <ul>
+      <li>Adds optional attribute <code class="language-plaintext highlighter-rouge">includeAll</code> to type <code class="language-plaintext highlighter-rouge">StackFrameFormat</code>. With this the <code class="language-plaintext highlighter-rouge">StackTraceRequest</code> can be parameterized to include all stack frames, including those the DA might otherwise hide.</li>
+      <li>Adds capability <code class="language-plaintext highlighter-rouge">supportsDelayedStackTraceLoading</code> that indicates that a debug adapter supports the delayed loading of parts of the stack. This requires that both the <code class="language-plaintext highlighter-rouge">startFrame</code> and <code class="language-plaintext highlighter-rouge">levels</code> arguments and the <code class="language-plaintext highlighter-rouge">totalFrames</code> result of the <code class="language-plaintext highlighter-rouge">StackTraceRequest</code> are supported.</li>
+    </ul>
+  </li>
+  <li>1.20.x:
+    <ul>
+      <li>Extends the type of the <code class="language-plaintext highlighter-rouge">TerminatedEvent.body.restart</code> attribute from <code class="language-plaintext highlighter-rouge">boolean</code> to <code class="language-plaintext highlighter-rouge">any</code>. This makes it possible to loop arbitrary data from one debug session to the next.</li>
+      <li>Adds a new enum value <code class="language-plaintext highlighter-rouge">subtle</code> for the <code class="language-plaintext highlighter-rouge">presentationHint</code> attribute of type <code class="language-plaintext highlighter-rouge">StackFrame</code>.</li>
+    </ul>
+  </li>
+  <li>1.19.x:
+    <ul>
+      <li>Adds a new optional argument <code class="language-plaintext highlighter-rouge">terminateDebuggee</code> to the <code class="language-plaintext highlighter-rouge">disconnect</code> request. If a debug adapter has opted into this feature with the ‘supportTerminateDebuggee’ capability, a client can use this to control whether the debuggee should be terminated when the debugger is disconnected.</li>
+    </ul>
+  </li>
+  <li>1.18.x:
+    <ul>
+      <li>Adds optional attribute <code class="language-plaintext highlighter-rouge">source</code> to the <code class="language-plaintext highlighter-rouge">SourceArguments</code>.</li>
+      <li>Made StoppedEvent’s <code class="language-plaintext highlighter-rouge">reason</code> attribute robust against translation by introducing a new <code class="language-plaintext highlighter-rouge">description</code> attribute.</li>
+      <li>Add a new optional attribute <code class="language-plaintext highlighter-rouge">presentationHint</code> to the <code class="language-plaintext highlighter-rouge">StackFrame</code> type. This attribute can be used to control how the frame is rendered in the UI.</li>
+    </ul>
+  </li>
+  <li>1.17.x:
+    <ul>
+      <li>Adds optional attribute <code class="language-plaintext highlighter-rouge">clientID</code> to the <code class="language-plaintext highlighter-rouge">InitializeRequestArguments</code>.</li>
+      <li>Adds support for obtaining exception details: <code class="language-plaintext highlighter-rouge">ExceptionInfoRequest</code>, <code class="language-plaintext highlighter-rouge">ExceptionDetails</code>.</li>
+      <li>Adds optional parameter <code class="language-plaintext highlighter-rouge">format</code> to the <code class="language-plaintext highlighter-rouge">SetVariableRequest</code>.</li>
+    </ul>
+  </li>
+  <li>1.16.x:
+    <ul>
+      <li>Updated comments for <code class="language-plaintext highlighter-rouge">path</code> and <code class="language-plaintext highlighter-rouge">sourceReference</code> attributes of <code class="language-plaintext highlighter-rouge">Source</code> type (the frontend no longer needs to have a notion of ‘internal’ modules; it just loads the content of a Source either through the sourceReference or the path).</li>
+      <li>Adds optional <code class="language-plaintext highlighter-rouge">presentationHint</code> attribute to <code class="language-plaintext highlighter-rouge">Source</code> type. This allows to control how the frontend shows a source reference in th UI.</li>
+      <li>Removed <code class="language-plaintext highlighter-rouge">SHA1Normalized</code>and <code class="language-plaintext highlighter-rouge">SHA256Normalized</code> values from type <code class="language-plaintext highlighter-rouge">ChecksumAlgorithm</code>.</li>
+    </ul>
+  </li>
+  <li>1.15.x:
+    <ul>
+      <li>Adds a <code class="language-plaintext highlighter-rouge">reverseContinue</code> request.</li>
+      <li>Adds a <code class="language-plaintext highlighter-rouge">restart</code> request and a corresponding <code class="language-plaintext highlighter-rouge">supportsRestartRequest</code> capability.</li>
+      <li>Adds a <code class="language-plaintext highlighter-rouge">variablesReference</code> attribute to the <code class="language-plaintext highlighter-rouge">OutputEvent</code>.</li>
+      <li>Adds support for exception configuration options.</li>
+      <li>Adds formatting options support for values returned from <code class="language-plaintext highlighter-rouge">VariablesRequest</code>, <code class="language-plaintext highlighter-rouge">EvaluateRequest</code>, and <code class="language-plaintext highlighter-rouge">StackTraceRequest</code>.</li>
+    </ul>
+  </li>
+  <li>1.14.x:
+    <ul>
+      <li>Adds optional <code class="language-plaintext highlighter-rouge">type</code> attribute to the <code class="language-plaintext highlighter-rouge">SetVariableResponse</code> type.</li>
+      <li>Support to return a structured object from the <code class="language-plaintext highlighter-rouge">SetVariableRequest</code>.</li>
+      <li>Fine tuning of <code class="language-plaintext highlighter-rouge">Module</code> part of the protocol.</li>
+      <li>Adds optional attribute <code class="language-plaintext highlighter-rouge">evaluatable</code> to <code class="language-plaintext highlighter-rouge">Variable</code> type.</li>
+      <li>Adds optional checksum support to <code class="language-plaintext highlighter-rouge">Source</code> type.</li>
+      <li>Adds optional source range to <code class="language-plaintext highlighter-rouge">Scope</code> type.</li>
+    </ul>
+  </li>
+  <li>1.13.x:
+    <ul>
+      <li>Fix typo in <code class="language-plaintext highlighter-rouge">Capabilities</code> type.</li>
+      <li>Adds an optional <code class="language-plaintext highlighter-rouge">hitCondition</code> attribute to breakpoints and a corresponding <code class="language-plaintext highlighter-rouge">supportsHitConditionalBreakpoints</code>capability.</li>
+    </ul>
+  </li>
+  <li>1.12.x:
+    <ul>
+      <li>Adds a new optional attribute <code class="language-plaintext highlighter-rouge">frameId</code> to the <code class="language-plaintext highlighter-rouge">completionRequest</code>.</li>
+      <li>Introduces a <code class="language-plaintext highlighter-rouge">runInTerminalRequest</code> so that a debug adapter can run a debuggee in a terminal managed by the frontend.</li>
+      <li>Adds a <code class="language-plaintext highlighter-rouge">type</code> attribute (and a value set) to the <code class="language-plaintext highlighter-rouge">CompletionItem</code>.</li>
+    </ul>
+  </li>
+  <li>1.11.x:
+    <ul>
+      <li>Adds a new optional attribute <code class="language-plaintext highlighter-rouge">mimeType</code> to the <code class="language-plaintext highlighter-rouge">SourceResponse</code>.</li>
+      <li>Adds a new optional attribute <code class="language-plaintext highlighter-rouge">sourceModified</code> to the <code class="language-plaintext highlighter-rouge">SetBreakpointsArguments</code> that indicates that the underlying source has been modified which results in new breakpoint locations.</li>
+      <li>Adds a new optional attribute <code class="language-plaintext highlighter-rouge">supportsVariableType</code> to <code class="language-plaintext highlighter-rouge">InitializeRequestArguments</code>. True indicates that the client shows the variable’s type attribute in the UI.</li>
+      <li>Adds optional ‘type’ attribute to the <code class="language-plaintext highlighter-rouge">EvaluateResponse</code>.</li>
+      <li>Introduces the <code class="language-plaintext highlighter-rouge">RestartFrameRequest</code> and a corresponding <code class="language-plaintext highlighter-rouge">supportsRestartFrame</code> capability.</li>
+      <li>Introduces a <code class="language-plaintext highlighter-rouge">ContinuedEvent</code> so that a debug adapter can explicit trigger that a thread has continued execution.</li>
+      <li>Adds support for step in targets (request <code class="language-plaintext highlighter-rouge">StepInTargetsRequest</code>, type <code class="language-plaintext highlighter-rouge">StepInTarget</code>, capability <code class="language-plaintext highlighter-rouge">supportsStepInTargetsRequest</code>)</li>
+      <li>Adds support for goto targets (requests <code class="language-plaintext highlighter-rouge">GotoTargetsRequest</code> and <code class="language-plaintext highlighter-rouge">GotoRequest</code>, type <code class="language-plaintext highlighter-rouge">GotoTarget</code>, capability <code class="language-plaintext highlighter-rouge">supportsGotoTargetsRequest</code>)</li>
+      <li>Adds support for variable paging, that is named and indexed children of a variable can be requested in pages (chunks).</li>
+      <li>Adds experimental support for completion proposals.</li>
+    </ul>
+  </li>
+  <li>1.10.x:
+    <ul>
+      <li>Introduces a <code class="language-plaintext highlighter-rouge">stepBack</code> request and a corresponding <code class="language-plaintext highlighter-rouge">supportsStepBack</code> capability.</li>
+      <li>Introduces the type <code class="language-plaintext highlighter-rouge">Module</code>, a <code class="language-plaintext highlighter-rouge">ModuleRequest</code>, and a <code class="language-plaintext highlighter-rouge">ModuleEvent</code></li>
+      <li>Introduces the <code class="language-plaintext highlighter-rouge">setVariableRequest</code></li>
+      <li>Adds new optional attributes <code class="language-plaintext highlighter-rouge">type</code> and <code class="language-plaintext highlighter-rouge">kind</code> for a <code class="language-plaintext highlighter-rouge">Variable</code>.</li>
+      <li>Adds optional attributes <code class="language-plaintext highlighter-rouge">endLine</code> and <code class="language-plaintext highlighter-rouge">endColumn</code> to <code class="language-plaintext highlighter-rouge">StackFrame</code> and <code class="language-plaintext highlighter-rouge">Breakpoint</code> types.</li>
+    </ul>
+  </li>
+  <li>1.9.x:
+    <ul>
+      <li>Introduces a <code class="language-plaintext highlighter-rouge">allThreadsContinued</code> attribute on the <code class="language-plaintext highlighter-rouge">ContinueResponse</code> to indicate that all threads are continued and not only the one specified.</li>
+    </ul>
+  </li>
+  <li>1.8.x:
+    <ul>
+      <li>Introduces <code class="language-plaintext highlighter-rouge">ExceptionBreakpointsFilter</code> and fixed corresponding capability.</li>
+      <li>Adds optional <code class="language-plaintext highlighter-rouge">noDebug</code> attribute to <code class="language-plaintext highlighter-rouge">LaunchRequestArguments</code>.</li>
+      <li>Adds optional <code class="language-plaintext highlighter-rouge">startFrame</code> argument to <code class="language-plaintext highlighter-rouge">StackTraceArguments</code> to allow for paging.</li>
+      <li>Adds optional <code class="language-plaintext highlighter-rouge">totalFrames</code> argument to <code class="language-plaintext highlighter-rouge">StackTraceResponse</code> to allow for paging.</li>
+      <li>Improve comment: <code class="language-plaintext highlighter-rouge">InitializedEvent</code> must not be sent before <code class="language-plaintext highlighter-rouge">InitializeRequest</code> has returned its result.</li>
+    </ul>
+  </li>
+  <li>1.7.x:
+    <ul>
+      <li>Adds optional <code class="language-plaintext highlighter-rouge">url</code> and <code class="language-plaintext highlighter-rouge">urlLabel</code> attributes to the error messages. The frontend will show this as a UI to open additional information in a browser.</li>
+      <li>Added option <code class="language-plaintext highlighter-rouge">default</code> attribute to the <code class="language-plaintext highlighter-rouge">exceptionBreakpointFilters</code> capability.</li>
+      <li>Adds optional attribute <code class="language-plaintext highlighter-rouge">allThreadsStopped</code> to the <code class="language-plaintext highlighter-rouge">StoppedEvent</code> to indicate that all threads are stopped (and not only the one mentioned in the event).</li>
+    </ul>
+  </li>
+  <li>1.6.x:
+    <ul>
+      <li>A boolean <code class="language-plaintext highlighter-rouge">supportsConditionalBreakpoints</code> in <code class="language-plaintext highlighter-rouge">Capabilities</code> indicates whether the debug adapter supports conditional breakpoints.</li>
+      <li>Adds an optional <code class="language-plaintext highlighter-rouge">exceptionBreakpointFilters</code> capability that lists the filters available for the <code class="language-plaintext highlighter-rouge">setExceptionBreakpoints</code> request.</li>
+      <li>Adds an optional <code class="language-plaintext highlighter-rouge">restart</code> attribute to the <code class="language-plaintext highlighter-rouge">TerminatedEvent</code> which can be used to request a restart of the debug session.</li>
+    </ul>
+  </li>
+  <li>1.5.x:
+    <ul>
+      <li>A boolean <code class="language-plaintext highlighter-rouge">supportsFunctionBreakpoints</code> in <code class="language-plaintext highlighter-rouge">Capabilities</code> indicates whether the debug adapter implements the function breakpoints.</li>
+      <li>Renamed <code class="language-plaintext highlighter-rouge">supportEvaluateForHovers</code> in <code class="language-plaintext highlighter-rouge">Capabilities</code> to <code class="language-plaintext highlighter-rouge">supportsEvaluateForHovers</code>.</li>
+    </ul>
+  </li>
+  <li>1.4.x:
+    <ul>
+      <li>Made the <code class="language-plaintext highlighter-rouge">body</code> of the <code class="language-plaintext highlighter-rouge">InitializeResponse</code> optional (for backward compatibility).</li>
+    </ul>
+  </li>
+  <li>1.3.x: Version introduces support for feature negotiation.
+    <ul>
+      <li>The <code class="language-plaintext highlighter-rouge">InitializeResponse</code> has now attributes for these features:
+        <ul>
+          <li>A boolean <code class="language-plaintext highlighter-rouge">supportsConfigurationDoneRequest</code> indicates whether the debug adapter implements the <code class="language-plaintext highlighter-rouge">ConfigurationDoneRequest</code>.</li>
+          <li>A boolean <code class="language-plaintext highlighter-rouge">supportEvaluateForHovers</code> indicates whether the debug adapter supports a side effect free <code class="language-plaintext highlighter-rouge">EvaluateRequest</code>.</li>
+        </ul>
+      </li>
+      <li>Adds an optional <code class="language-plaintext highlighter-rouge">data</code> attribute to the <code class="language-plaintext highlighter-rouge">OutputEvent</code> and a <code class="language-plaintext highlighter-rouge">telemetry</code> category.</li>
+      <li>Adds a new context type <code class="language-plaintext highlighter-rouge">hover</code> to the <code class="language-plaintext highlighter-rouge">context</code> attribute of the <code class="language-plaintext highlighter-rouge">EvaluateArguments</code>.</li>
+    </ul>
+  </li>
+  <li>1.2.x: Version adds a new request:
+    <ul>
+      <li>Introduces a <code class="language-plaintext highlighter-rouge">ConfigurationDoneRequest</code> that VS Code sends to indicate that the configuration of the debug session has finished and that debugging can start.</li>
+    </ul>
+  </li>
+  <li>1.1.x: Version adds support for conditional breakpoints and breakpoints in virtual documents:
+    <ul>
+      <li>Type <code class="language-plaintext highlighter-rouge">Source</code> supports optional <code class="language-plaintext highlighter-rouge">origin</code> attribute to provide information that is shown in the debug UI.</li>
+      <li>Type <code class="language-plaintext highlighter-rouge">Source</code> supports an optional <code class="language-plaintext highlighter-rouge">adapterData</code> attribute that the VS Code debug UI will transparently persists for breakpoints.</li>
+      <li>Introduces type <code class="language-plaintext highlighter-rouge">SourceBreakpoint</code> that makes it possible to provide <code class="language-plaintext highlighter-rouge">column</code> and <code class="language-plaintext highlighter-rouge">condition</code> information when specifying a breakpoint.</li>
+    </ul>
+  </li>
+  <li>1.0.1: Initial version of the debug protocol</li>
+</ul>
+</div>
+        </div>
+        <div class="col-lg-2 d-none d-xl-block">
+        </div>
+    </div>
+</div>
+        </div>
+    </div>
+
+    <footer class="footer">
+    <script>
+        function manageConsent() {
+            if (WcpConsent.siteConsent.isConsentRequired) {
+                WcpConsent.siteConsent.manageConsent();
+            }
+        }
+    </script>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-sm-8">
+                <ul class="links">
+                    <li>
+                        <span class="message">Hello from Seattle and Zürich.</span>
+                    </li>
+                    <li class="github-button-container">
+                        <a class="github-button" href="https://github.com/Microsoft/debug-adapter-protocol" data-icon="octicon-star" data-show-count="true" aria-label="Star Microsoft/debug-adapter-protocol on GitHub">Star</a>
+                    </li>
+                    <li class="github-button-container">
+                        <a class="github-button" href="https://github.com/Microsoft/debug-adapter-protocol/subscription" aria-label="Watch Microsoft/debug-adapter-protocol on GitHub">Watch</a>
+                    </li>
+                </ul>
+            </div>
+            <div class="col-sm-4">
+                <ul class="links">
+                    <li style="visibility: hidden;" >
+                        <a id="footer-cookie-link" style="cursor: pointer; padding-right:20px" onclick="manageConsent()"
+                            aria-label="Manage cookies">Manage cookies</a>
+                    </li>
+                    <li>
+                        <div class="copyright">
+                            <a id="footer-microsoft-link" class="logo" href="https://www.microsoft.com">
+                                <picture>
+                                    <source srcset="img/microsoft-logo.png" media="(prefers-color-scheme: dark)"></source>
+                                    <img src="img/microsoft-logo-inverted.png" height="20" alt="Microsoft">
+                                </picture>
+                            </a>
+                            <span>© 2024 Microsoft</span>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script>
+  var baseurl = '/debug-adapter-protocol'
+</script>
+
+<script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+
+<!-- Microsoft EU cookie compliance library -->
+<script src="https://wcpstatic.microsoft.com/mscc/lib/v2/wcp-consent.js"></script>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-62780441-30"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.3/umd/popper.min.js" integrity="sha384-vFJXuSJphROIrBnz7yo7oB41mKfc8JzQZiCq4NCceLEaO4IHwicKwpJf9c9IpFgh" crossorigin="anonymous"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta.2/js/bootstrap.min.js" integrity="sha384-alpBpkh1PFOepccYVYDB4do5UnbKysX5WZXm3XxPqe5iKTfUKjNkCk9SaVuEZflJ" crossorigin="anonymous"></script>
+<script async defer src="https://buttons.github.io/buttons.js"></script>
+<script src="js/page.js"></script>
+</body>
+
+</html>

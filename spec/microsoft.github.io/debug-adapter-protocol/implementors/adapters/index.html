@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Debug Adapters</title>
+    <meta name="description" content="The following table lists the known debug adapters that implement the Debug Adapter Protocol. You may find these useful as reference material when writing yo...">
+
+
+    <!-- link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta.2/css/bootstrap.min.css" integrity="sha384-PsH8R72JQ3SOdhVi3uxftmaW6Vc51MKb0q5P2rRUpPvrszuE4W1povHYgTpBfshb" crossorigin="anonymous" -->
+    <link rel="stylesheet" href="../../css/bootswatch/cosmo/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/fontawesome-all.min.css">
+    <link rel="stylesheet" href="../../css/main.css">
+    <link rel="shortcut icon" href="https://microsoft.github.io/debug-adapter-protocol/img/favicon.png">
+
+    <link rel="canonical" href="index.html">
+    <link rel="alternate" type="application/rss+xml" title="Official page for Debug Adapter Protocol" href="https://microsoft.github.io/debug-adapter-protocol//debug-adapter-protocol/feed.xml" />
+</head>
+
+
+<body>
+    <div id='cookie-banner'></div>
+    <header class="navbar navbar-expand-lg navbar-dark bg-primary dap-navbar">
+    <div class="container navbar-container">
+        <a class="navbar-brand" href="../../index.html">
+            <h1>DAP</h1>
+        </a>
+
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="navbar-collapse collapse" id="navbarSupportedContent" role="navigation" aria-label="Top Level">
+            
+            <ul class="navbar-nav ml-auto">
+                <li  class="nav-item" >
+                    <a class="nav-link" href='https://microsoft.github.io/debug-adapter-protocol/overview'>Overview</a>
+                </li>
+                <li  class="nav-item active" >
+                    <a class="nav-link" href="https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/">Implementations</a>
+                </li>
+                <li  class="nav-item" >
+                    <a class="nav-link" href='https://microsoft.github.io/debug-adapter-protocol/specification'>Specification</a>
+                </li>
+            </ul>
+        </div>
+
+    </div>
+</header>
+
+    <div class="page-content">
+        <div class="wrapper">
+            <div class="container">
+    <div class="row single-page">
+        <div class="col-lg-2 d-none d-lg-block dap-sidebar">
+            <div class="card">
+                <ul class="nav flex-column list-unstyled">
+                    
+                    
+                    <li  class="nav-item active" >
+                        <a class="nav-link" href="https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/">
+                            Debug Adapters
+                        </a>
+                    </li>
+                    
+                    <li  class="nav-item" >
+                        <a class="nav-link" href="https://microsoft.github.io/debug-adapter-protocol/implementors/tools/">
+                            Supporting Tools
+                        </a>
+                    </li>
+                    
+                    <li  class="nav-item" >
+                        <a class="nav-link" href="https://microsoft.github.io/debug-adapter-protocol/implementors/sdks/">
+                            SDKs
+                        </a>
+                    </li>
+                    
+                </ul>
+            </div>
+        </div>
+
+        <div class="col-md-12 col-lg-8" role="navigation" aria-label="Main">
+            <nav id="small-nav" class="docs-nav d-lg-none">
+                <h4>Topics</h4>
+                <select id="small-nav-dropdown" aria-label="topics">
+                    
+                    
+                    <option value="/debug-adapter-protocol/implementors/adapters/" selected >Debug Adapters</option>
+                    
+                    <option value="/debug-adapter-protocol/implementors/tools/"  >Supporting Tools</option>
+                    
+                    <option value="/debug-adapter-protocol/implementors/sdks/"  >SDKs</option>
+                    
+                </select>
+            </nav>
+
+            <h1>Implementations</h1>
+            <h2>Debug Adapters</h2>
+            <div  id="markdown-content-container"><p>The following table lists the known debug adapters that implement the Debug Adapter Protocol. You may find these useful as reference material when writing your own debug adapter, or for use in your editor of choice.</p>
+
+<p>Many adapters publish releases tailored for specific editors, such as VS Code, and some document how to run standalone DAP servers which can be used in any editor which supports them (in <a href="https://www.jetbrains.com/help/idea/configuring-third-party-tools.html">IntelliJ</a> or <a href="https://code.visualstudio.com/api/extension-guides/debugger-extension#development-setup-for-mock-debug">VS Code</a> for example).</p>
+
+<table class="table table-bordered table-responsive">
+  <thead>
+    <tr>
+      <th>Adapter</th>
+      <th>Maintainer</th>
+      <th>Usage</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="https://github.com/adelphes/android-dev-ext">Android</a></td>
+      <td><a href="https://github.com/adelphes">@adelphes</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=adelphes.android-dev-ext">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/camel-tooling/camel-debug-adapter">Apache Camel</a></td>
+      <td><a href="https://github.com/camel-tooling/camel-debug-adapter/graphs/contributors">contributors</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=redhat.vscode-debug-adapter-apache-camel">VS Code</a>, <a href="https://marketplace.eclipse.org/content/textual-debugging-apache-camel">Eclipse</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/forcedotcom/salesforcedx-vscode">Apex</a></td>
+      <td><a href="https://github.com/ntotten">@ntotten</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=salesforce.salesforcedx-vscode-apex-debugger">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/ballerina-platform/ballerina-lang/">Ballerina</a></td>
+      <td><a href="https://ballerina.io/">Ballerina.io</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=wso2.ballerina">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Microsoft/vscode-cpptools">C/C++</a></td>
+      <td><a href="https://github.com/WardenGnaw">@WardenGnaw</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Marus/cortex-debug">C/C++/Rust</a></td>
+      <td><a href="https://github.com/Marus">@Marus</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=marus25.cortex-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/OmniSharp/omnisharp-vscode">C#</a></td>
+      <td><a href="https://github.com/gregg-miskelly">@gregg-miskelly</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=ms-vscode.csharp">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/RechInformatica/rech-cobol-debugger">Cobol</a></td>
+      <td><a href="https://github.com/RechInformatica">@RechInformatica</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=rechinformatica.rech-cobol-debugger">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Microsoft/vscode-cordova">Cordova Tools</a></td>
+      <td><a href="https://github.com/MSLaguana">@MSLaguana</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=vsmobile.cordova-tools">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/dart-lang/sdk">Dart</a></td>
+      <td><a href="https://github.com/DanTup">@DanTup</a> <a href="https://github.com/devoncarew">@devoncarew</a></td>
+      <td><a href="https://github.com/dart-lang/sdk/blob/master/pkg/dds/tool/dap/README.md">DAP Server</a>, <a href="https://marketplace.visualstudio.com/items?itemName=Dart-Code.dart-code">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/WebFreak001/code-debug">Debug</a></td>
+      <td><a href="https://github.com/WebFreak001">@WebFreak001</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=webfreak.debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/microsoft/vscode-chrome-debug">Debugger for Chrome</a></td>
+      <td><a href="https://github.com/roblourens">@roblourens</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=msjsdiag.debugger-for-chrome">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Microsoft/vscode-edge-debug2">Debugger for Edge</a></td>
+      <td><a href="https://github.com/andysterland">@andysterland</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=msjsdiag.debugger-for-edge">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Kode/vscode-electron-debug">Debugger for Electron</a></td>
+      <td><a href="https://github.com/Kode">@Kode</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=kodetech.electron-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/hbenl/vscode-firefox-debug">Debugger for Firefox</a></td>
+      <td><a href="https://github.com/hbenl">@hbenl</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=hbenl.vscode-firefox-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Kode/vscode-krom-debug">Debugger for Krom</a></td>
+      <td><a href="https://github.com/Kode">@Kode</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=kodetech.krom-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/BroadcomMFD/debugger-for-mainframe">Debugger for IBM enterprise COBOL for z/OS</a></td>
+      <td><a href="https://www.broadcom.com">@Broadcom</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=broadcomMFD.debugger-for-mainframe">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Samsung/netcoredbg">Debugger for .NET Core</a></td>
+      <td><a href="https://github.com/ayuckhulk">@ayuckhulk</a></td>
+      <td><a href="https://github.com/Samsung/netcoredbg/blob/master/doc/cli.md">DAP Server</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/iradul/vscode-phantomjs-debug">Debugger for PhantomJS</a></td>
+      <td><a href="https://github.com/iradul">@iradul</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=iradul.debugger-for-phantomjs">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Unity-Technologies/vscode-unity-debug">Debugger for Unity</a></td>
+      <td><a href="https://github.com/lukaszunity">@lukaszunity</a> <a href="https://github.com/miniwolf">@miniwolf</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=Unity.unity-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/maziac/dezog">DeZog - Z80 Assembly Debugger</a></td>
+      <td><a href="https://github.com/maziac">@maziac</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=maziac.dezog">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/svaarala/duktape">Duktape Debugger</a></td>
+      <td><a href="https://github.com/svaarala">@svaarala</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=HaroldBrenes.duk-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/elixir-lsp/elixir-ls">Elixir</a></td>
+      <td><a href="https://github.com/elixir-lsp">Elixir LSP</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=JakeBecker.elixir-ls">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Calindro/emulicious-debugger">Emulicious Debugger</a></td>
+      <td><a href="https://github.com/Calindro">@Calindro</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=emulicious.emulicious-debugger">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/erlang-ls/erlang_ls">Erlang</a></td>
+      <td><a href="https://github.com/robertoaloi">@robertoaloi</a> and <a href="https://github.com/erlang-ls/erlang_ls/graphs/contributors">Contributors</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=erlang-ls.erlang-ls">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/espressif/esp-debug-adapter">ESP32 Debugger</a></td>
+      <td><a href="https://github.com/espressif">@espressif</a></td>
+      <td><a href="https://github.com/espressif/esp-debug-adapter#usage">DAP Server</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/yurydelendik/vscode-ff-debug">Firefox Remote Debug</a></td>
+      <td><a href="https://github.com/yurydelendik">@yurydelendik</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=yurydelendik.firefox-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vshaxe/flash-debugger">Flash</a></td>
+      <td><a href="https://github.com/vshaxe/">@vshaxe</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=vshaxe.haxe-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/flutter/flutter">Flutter</a></td>
+      <td><a href="https://github.com/DanTup">@DanTup</a> <a href="https://github.com/devoncarew">@devoncarew</a></td>
+      <td><a href="https://github.com/flutter/flutter/blob/master/packages/flutter_tools/lib/src/debug_adapters/README.md">DAP Server</a>, <a href="https://marketplace.visualstudio.com/items?itemName=Dart-Code.flutter">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/go-delve/delve/tree/master/service/dap">Go Delve Debugger</a></td>
+      <td><a href="https://github.com/polinasok">@polinasok</a> and <a href="https://github.com/go-delve">Delve</a></td>
+      <td><a href="https://github.com/go-delve/delve/tree/master/Documentation/api/dap">DAP Server</a>, <a href="https://github.com/golang/vscode-go/blob/master/docs/debugging.md">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/APerricone/harbourCodeExtension">Harbour</a></td>
+      <td><a href="https://github.com/APerricone">@APerricone</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=aperricone.harbour">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vshaxe/hashlink-debugger">HashLink</a></td>
+      <td><a href="https://github.com/vshaxe/">@vshaxe</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=HaxeFoundation.haxe-hl">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/phoityne/phoityne-vscode">Haskell GHCi debug viewer Phoityne</a></td>
+      <td><a href="https://github.com/phoityne">@phoityne</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=phoityne.phoityne-vscode">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vshaxe/eval-debugger">Haxe Eval</a></td>
+      <td><a href="https://github.com/vshaxe/">@vshaxe</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=nadako.vshaxe">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vshaxe/hxcpp-debugger">HXCPP</a></td>
+      <td><a href="https://github.com/vshaxe/">@vshaxe</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=vshaxe.hxcpp-debugger">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Microsoft/vscode-java-debug">Java Debugger</a></td>
+      <td><a href="https://github.com/akaroml">@akaroml</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=vscjava.vscode-java-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/microsoft/vscode-js-debug">JavaScript Debugger</a></td>
+      <td><a href="https://github.com/connor4312">@connor4312</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=ms-vscode.js-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/awto/effectfuljs/tree/master/packages/vscode-debugger">JavaScript with Time-Traveling and Persistent State</a></td>
+      <td><a href="https://github.com/awto">@awto</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=effectful.debugger">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=muji.jsirdebugger">JSIRDebugger</a></td>
+      <td>muji</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/intuit/karate/tree/develop/karate-core/src/main/java/com/intuit/karate/debug">Karate</a></td>
+      <td><a href="https://twitter.com/kirk_slota">@kirk_slota</a> <a href="https://twitter.com/ptrthomas">@ptrthomas</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=kirkslota.karate-runner">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/fwcd/kotlin-debug-adapter">Kotlin</a></td>
+      <td><a href="https://github.com/fwcd">@fwcd</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=fwcd.kotlin">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vadimcn/vscode-lldb">LLDB Debugger</a></td>
+      <td><a href="https://github.com/vadimcn">@vadimcn</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=vadimcn.vscode-lldb">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/dibyendumajumdar/ravi-vscode-debugger">Lua and Ravi 5.3 Debugger</a></td>
+      <td><a href="https://github.com/dibyendumajumdar">@dibyendumajumdar</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=ravilang.ravi-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/actboy168/lua-debug">Lua Debug</a></td>
+      <td><a href="https://github.com/actboy168">@actboy168</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=actboy168.lua-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Microsoft/vscode-mock-debug">Mock Debug</a></td>
+      <td><a href="https://github.com/roblourens">@roblourens</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=ms-vscode.mock-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Microsoft/vscode-mono-debug">Mono Debug</a></td>
+      <td><a href="https://github.com/akoeplinger">@akoeplinger</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=ms-vscode.mono-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/utdscheld/name">NAME</a></td>
+      <td><a href="https://personal.utdallas.edu/~John.Cole/">John Cole</a></td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/NativeScript/nativescript-vscode-extension/">NativeScript</a></td>
+      <td><a href="https://github.com/ivanbuhov">@ivanbuhov</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=Telerik.nativescript">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Microsoft/vscode-node-debug">Node Debug</a></td>
+      <td><a href="https://github.com/weinand">@weinand</a></td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/hackwaly/ocamlearlybird">OCaml Earlybird</a></td>
+      <td><a href="https://github.com/sim642">@sim642</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=ocamllabs.ocaml-platform">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/EvilBeaver/OneScript">OneScript Debug</a></td>
+      <td><a href="https://github.com/EvilBeaver">@EvilBeaver</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=EvilBeaver.oscript-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/quantag/qasm-adapter-vscode">OpenQASM</a></td>
+      <td><a href="https://github.com/quantag">@quantag</a></td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/joelday/papyrus-debug-server">Papyrus</a></td>
+      <td><a href="https://github.com/joelday">@joelday</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=joelday.papyrus-lang-vscode">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Nihilus118/vscode-perl-debug">Perl Debug</a></td>
+      <td><a href="https://github.com/Nihilus118">@Nihilus118</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=Nihilus118.perl-debugger">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/richterger/Perl-LanguageServer">Perl::LanguageServer</a></td>
+      <td><a href="https://github.com/richterger">@richterger</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=richterger.perl">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/xdebug/vscode-php-debug">Php</a></td>
+      <td><a href="https://github.com/zobo">@zobo</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=xdebug.php-debug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/PowerShell/vscode-powershell">PowerShell</a></td>
+      <td><a href="https://github.com/daviwil">@daviwil</a> <a href="https://github.com/rkeithhill">@rkeithhill</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=ms-vscode.PowerShell">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/lingua-pupuli/puppet-editor-services">Puppet</a></td>
+      <td><a href="https://github.com/glennsarti">@glennsarti</a> <a href="https://github.com/jpogran">@jpogran</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=jpogran.puppet-vscode">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Microsoft/vscode-python">Python</a></td>
+      <td><a href="https://github.com/DonJayamanne">@DonJayamanne</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=ms-python.python">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/ManuelHentschel/VSCode-R-Debugger">R Debugger</a></td>
+      <td><a href="https://github.com/ManuelHentschel">@ManuelHentschel</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=RDebugger.r-debugger">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Microsoft/vscode-react-native/issues">React Native Tools</a></td>
+      <td><a href="https://github.com/MSLaguana">@MSLaguana</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=vsmobile.vscode-react-native">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Shopify/ruby-lsp">Ruby LSP</a></td>
+      <td><a href="https://github.com/Shopify">@Shopify</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=Shopify.ruby-lsp">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://rubygems.org/gems/byebug-dap">Ruby Byebug</a></td>
+      <td><a href="https://gitlab.com/firelizzard">Ethan Reesor</a></td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><a href="https://gitlab.com/firelizzard/vscode-byebug">Ruby Byebug (VSCode)</a></td>
+      <td><a href="https://gitlab.com/firelizzard">Ethan Reesor</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=ethan-reesor.vscode-byebug">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/probe-rs/vscode">Rust (for embedded)</a></td>
+      <td><a href="https://github.com/probe-rs">probe.rs community</a></td>
+      <td><a href="https://probe.rs/docs/tools/vscode/">VS Code</a>, <a href="https://marketplace.eclipse.org/content/eclipse-corrosion-rust-editing-and-debugging">Eclipse</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/scalacenter/scala-debug-adapter">Scala</a></td>
+      <td><a href="https://github.com/adpi2">@adpi2</a></td>
+      <td><a href="https://index.scala-lang.org/scalacenter/scala-debug-adapter">SBT</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/eshelyaron/debug_adapter">SWI-Prolog</a></td>
+      <td><a href="https://github.com/eshelyaron">@eshelyaron</a></td>
+      <td><a href="https://github.com/eshelyaron/debug_adapter#installation">SWI and Emacs</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/BowlerHatLLC/vscode-nextgenas">SWF</a></td>
+      <td><a href="https://github.com/joshtynjala">@joshtynjala</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=bowlerhatllc.vscode-nextgenas">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/tlaplus/vscode-tlaplus">TLA+</a></td>
+      <td><a href="https://github.com/lemmy">@lemmy</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=alygin.vscode-tlaplus-nightly">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/nickbattle/vdmj/tree/master/lsp">VDM-SL, VDM++, VDM-RT</a></td>
+      <td><a href="https://github.com/nickbattle">@nickbattle</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=jonaskrask.vdm-vscode">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/ruby/vscode-rdbg">VSCode rdbg Ruby Debugger</a></td>
+      <td><a href="https://github.com/ko1">@ko1</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=KoichiSasada.vscode-rdbg">VS Code</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/kenkangxgwe/lsp-wl?tab=readme-ov-file#debug-adapter-features">Wolfram Language</a></td>
+      <td><a href="https://github.com/kenkangxgwe/lsp-wl">@kenkangxgwe</a></td>
+      <td><a href="https://marketplace.visualstudio.com/items?itemName=lsp-wl.lsp-wl-client">VS Code</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<p><em>If you are missing a debug adapter implementation please create a pull request in GitHub against this markdown <a href="https://github.com/Microsoft/debug-adapter-protocol/blob/main/_implementors/adapters.md">document</a></em></p>
+</div>
+        </div>
+
+        <div class="col-lg-2 d-none d-xl-block">
+
+        </div>
+    </div>
+</div>
+
+        </div>
+    </div>
+
+    <footer class="footer">
+    <script>
+        function manageConsent() {
+            if (WcpConsent.siteConsent.isConsentRequired) {
+                WcpConsent.siteConsent.manageConsent();
+            }
+        }
+    </script>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-sm-8">
+                <ul class="links">
+                    <li>
+                        <span class="message">Hello from Seattle and Zürich.</span>
+                    </li>
+                    <li class="github-button-container">
+                        <a class="github-button" href="https://github.com/Microsoft/debug-adapter-protocol" data-icon="octicon-star" data-show-count="true" aria-label="Star Microsoft/debug-adapter-protocol on GitHub">Star</a>
+                    </li>
+                    <li class="github-button-container">
+                        <a class="github-button" href="https://github.com/Microsoft/debug-adapter-protocol/subscription" aria-label="Watch Microsoft/debug-adapter-protocol on GitHub">Watch</a>
+                    </li>
+                </ul>
+            </div>
+            <div class="col-sm-4">
+                <ul class="links">
+                    <li style="visibility: hidden;" >
+                        <a id="footer-cookie-link" style="cursor: pointer; padding-right:20px" onclick="manageConsent()"
+                            aria-label="Manage cookies">Manage cookies</a>
+                    </li>
+                    <li>
+                        <div class="copyright">
+                            <a id="footer-microsoft-link" class="logo" href="https://www.microsoft.com">
+                                <picture>
+                                    <source srcset="../../img/microsoft-logo.png" media="(prefers-color-scheme: dark)"></source>
+                                    <img src="../../img/microsoft-logo-inverted.png" height="20" alt="Microsoft">
+                                </picture>
+                            </a>
+                            <span>© 2024 Microsoft</span>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script>
+  var baseurl = '/debug-adapter-protocol'
+</script>
+
+<script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+
+<!-- Microsoft EU cookie compliance library -->
+<script src="https://wcpstatic.microsoft.com/mscc/lib/v2/wcp-consent.js"></script>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-62780441-30"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.3/umd/popper.min.js" integrity="sha384-vFJXuSJphROIrBnz7yo7oB41mKfc8JzQZiCq4NCceLEaO4IHwicKwpJf9c9IpFgh" crossorigin="anonymous"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta.2/js/bootstrap.min.js" integrity="sha384-alpBpkh1PFOepccYVYDB4do5UnbKysX5WZXm3XxPqe5iKTfUKjNkCk9SaVuEZflJ" crossorigin="anonymous"></script>
+<script async defer src="https://buttons.github.io/buttons.js"></script>
+<script src="../../js/page.js"></script>
+</body>
+
+</html>
