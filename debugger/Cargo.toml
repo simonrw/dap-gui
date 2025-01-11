@@ -14,8 +14,14 @@ serde.workspace = true
 transport = { path = "../transport" }
 retry = "2.0.0"
 dirs.workspace = true
+launch_configuration = { path = "../launch_configuration", optional = true }
 
 [dev-dependencies]
 color-eyre.workspace = true
 ctor.workspace = true
 tracing-subscriber.workspace = true
+serde_json.workspace = true
+tempfile = "3.15.0"
+
+[features]
+launch-configuration = ["dep:launch_configuration"]

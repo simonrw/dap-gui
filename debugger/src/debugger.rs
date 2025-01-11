@@ -1,7 +1,7 @@
 use std::{
     io,
     net::{TcpStream, ToSocketAddrs},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     thread,
     time::Duration,
@@ -149,6 +149,26 @@ impl Debugger {
     #[tracing::instrument(skip(initialise_arguments))]
     pub fn new(initialise_arguments: impl Into<InitialiseArguments>) -> eyre::Result<Self> {
         Self::on_port(DEFAULT_DAP_PORT, initialise_arguments)
+    }
+
+    #[cfg(feature = "launch-configuration")]
+    /// Read a VS Code style launch configuration file and create a debugger suitable for one of
+    /// the launch configurations
+    pub fn from_launch_configuration(
+        configuration_path: impl AsRef<Path>,
+        configuration_name: impl Into<String>,
+    ) -> eyre::Result<Self> {
+        use launch_configuration::ChosenLaunchConfiguration;
+
+        let name = configuration_name.into();
+        let config = launch_configuration::load_from_path(Some(&name), configuration_path)
+            .context("loading launch configuration")?;
+        match config {
+            ChosenLaunchConfiguration::Specific(config) => {
+                todo!()
+            }
+            _ => Err(eyre::eyre!("specified configuration {name} not found")),
+        }
     }
 
     /// Return a [`crossbeam_channel::Receiver<Event>`] to subscribe to debugging events
@@ -355,5 +375,44 @@ impl Drop for Debugger {
             terminate_debugee: true,
         }))
         .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Debugger;
+    use std::path::PathBuf;
+
+    #[cfg(feature = "launch-configuration")]
+    #[test]
+    fn error_missing_configuration() {
+        let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap())
+            .join("..")
+            .join("test.py")
+            .canonicalize()
+            .unwrap();
+
+        let tdir = tempfile::tempdir().unwrap();
+        let temp_script_path = tdir.path().join("script.py");
+        std::fs::copy(root, &temp_script_path).unwrap();
+
+        let config = serde_json::json!({
+            "version": "0.2.0",
+            "configurations": [
+            {
+                "name": "Launch",
+                "type": "debugpy",
+                "request": "launch",
+                "program": format!("{}", temp_script_path.display()),
+            },
+            ],
+        });
+        let config_file_path = tdir.path().join("launch.json");
+        let config_file_obj = std::fs::File::create(&config_file_path).unwrap();
+        serde_json::to_writer(config_file_obj, &config).unwrap();
+
+        let bad_name = "abc";
+
+        assert!(Debugger::from_launch_configuration(&config_file_path, bad_name).is_err());
     }
 }
