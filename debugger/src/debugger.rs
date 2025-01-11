@@ -151,7 +151,6 @@ impl Debugger {
         Self::on_port(DEFAULT_DAP_PORT, initialise_arguments)
     }
 
-    #[cfg(feature = "launch-configuration")]
     /// Read a VS Code style launch configuration file and create a debugger suitable for one of
     /// the launch configurations
     pub fn from_launch_configuration(
@@ -383,7 +382,6 @@ mod tests {
     use super::Debugger;
     use std::path::PathBuf;
 
-    #[cfg(feature = "launch-configuration")]
     #[test]
     fn error_missing_configuration() {
         let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap())
