@@ -9,7 +9,7 @@ name = "pythondap"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.23.3" }
+pyo3 = { version = "0.23.4" }
 debugger = { path = "../debugger" }
 transport = { path = "../transport" }
 launch_configuration = { path = "../launch_configuration" }
