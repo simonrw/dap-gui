@@ -1,7 +1,9 @@
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
+use std::path::PathBuf;
 
+use clap::Parser;
 use color_eyre::eyre::{self, Context};
 
 struct App {
@@ -41,9 +43,19 @@ impl App {
     }
 }
 
+#[derive(Parser)]
+struct Args {
+    launch_configuration: PathBuf,
+
+    #[clap(short, long)]
+    name: String,
+}
+
 fn main() -> eyre::Result<()> {
     color_eyre::install().context("installing color_eyre")?;
     tracing_subscriber::fmt::init();
+
+    let args = Args::parse();
 
     let mut app = App::new();
     loop {

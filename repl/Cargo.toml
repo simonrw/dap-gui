@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+clap.workspace = true
 debugger = { path = "../debugger" }
 server = { path = "../server" }
 transport = { path = "../transport" }
