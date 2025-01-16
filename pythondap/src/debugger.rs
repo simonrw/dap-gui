@@ -142,11 +142,6 @@ pub struct ProgramState {
 
 #[pymethods]
 impl ProgramState {
-    fn __getattr__(&self, name: &Bound<'_, PyAny>) -> PyResult<String> {
-        let name: String = name.extract()?;
-        Ok(name)
-    }
-
     /// Show the source code around the current execution position
     fn show(&self) -> PyResult<()> {
         let source = self.paused_frame.stack().source()?;
