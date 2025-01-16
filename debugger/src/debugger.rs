@@ -8,6 +8,7 @@ use std::{
 };
 
 use eyre::WrapErr;
+use launch_configuration::LaunchConfiguration;
 use retry::{delay::Exponential, retry};
 use server::Implementation;
 use transport::{
@@ -21,7 +22,7 @@ use crate::{
     internals::DebuggerInternals,
     state::{self, DebuggerState},
     types::{self, EvaluateResult},
-    Event,
+    Event, LaunchArguments,
 };
 
 /// How to launch a debugging session
@@ -43,6 +44,21 @@ impl From<state::LaunchArguments> for InitialiseArguments {
 impl From<state::AttachArguments> for InitialiseArguments {
     fn from(value: state::AttachArguments) -> Self {
         Self::Attach(value)
+    }
+}
+
+impl From<LaunchConfiguration> for InitialiseArguments {
+    fn from(value: LaunchConfiguration) -> Self {
+        match value {
+            LaunchConfiguration::Debugpy(debugpy) => match debugpy.request.as_str() {
+                "launch" => InitialiseArguments::Launch(LaunchArguments {
+                    program: debugpy.program.expect("program must be specified"),
+                    working_directory: None,
+                    language: crate::Language::DebugPy,
+                }),
+                other => todo!("{other}"),
+            },
+        }
     }
 }
 
@@ -163,9 +179,7 @@ impl Debugger {
         let config = launch_configuration::load_from_path(Some(&name), configuration_path)
             .context("loading launch configuration")?;
         match config {
-            ChosenLaunchConfiguration::Specific(config) => {
-                todo!()
-            }
+            ChosenLaunchConfiguration::Specific(config) => Debugger::new(config),
             _ => Err(eyre::eyre!("specified configuration {name} not found")),
         }
     }
