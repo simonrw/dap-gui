@@ -5,16 +5,20 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use color_eyre::eyre::{self, Context};
+use debugger::Breakpoint;
+use debugger::Debugger;
 
 struct App {
+    debugger: Debugger,
     stdin: BufReader<std::io::Stdin>,
     stdout: std::io::Stdout,
     input_buffer: String,
 }
 
 impl App {
-    fn new() -> Self {
+    fn new(debugger: Debugger) -> Self {
         Self {
+            debugger,
             stdin: BufReader::new(std::io::stdin()),
             stdout: std::io::stdout(),
             input_buffer: String::new(),
@@ -43,12 +47,15 @@ impl App {
     }
 }
 
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 struct Args {
     launch_configuration: PathBuf,
 
     #[clap(short, long)]
     name: String,
+
+    #[clap(short, long)]
+    breakpoints: Vec<Breakpoint>,
 }
 
 fn main() -> eyre::Result<()> {
@@ -56,8 +63,15 @@ fn main() -> eyre::Result<()> {
     tracing_subscriber::fmt::init();
 
     let args = Args::parse();
+    let debugger = Debugger::from_launch_configuration(args.launch_configuration, args.name)
+        .context("creating debugger")?;
+    for breakpoint in args.breakpoints {
+        debugger
+            .add_breakpoint(&breakpoint)
+            .context("adding breakpoint")?;
+    }
 
-    let mut app = App::new();
+    let mut app = App::new(debugger);
     loop {
         match app.loop_step() {
             Ok(ShouldQuit::True) => break,
