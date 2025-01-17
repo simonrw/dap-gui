@@ -1,7 +1,4 @@
-use std::io::BufRead;
-use std::io::BufReader;
-use std::io::Write;
-use std::path::PathBuf;
+use std::{io::Write, path::PathBuf};
 
 use clap::Parser;
 use color_eyre::eyre::{self, Context};
@@ -10,7 +7,7 @@ use debugger::Debugger;
 
 struct App {
     debugger: Debugger,
-    stdin: BufReader<std::io::Stdin>,
+    stdin: std::io::Stdin,
     stdout: std::io::Stdout,
     input_buffer: String,
 }
@@ -19,7 +16,7 @@ impl App {
     fn new(debugger: Debugger) -> Self {
         Self {
             debugger,
-            stdin: BufReader::new(std::io::stdin()),
+            stdin: std::io::stdin(),
             stdout: std::io::stdout(),
             input_buffer: String::new(),
         }
