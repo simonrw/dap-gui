@@ -38,6 +38,7 @@ impl App {
     fn handle_input(&mut self, input: &str) -> eyre::Result<ShouldQuit> {
         match input {
             "q" => return Ok(ShouldQuit::True),
+            "" => return Ok(ShouldQuit::False),
             other => writeln!(self.stdout, "Unhandled commmand: '{}'", other)?,
         }
         Ok(ShouldQuit::False)
