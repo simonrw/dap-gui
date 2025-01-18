@@ -282,6 +282,7 @@ impl DebuggerInternals {
                 tracing::debug!(?event, "unknown event");
             }
         }
+        tracing::debug!(?event, "event handled");
     }
 
     #[tracing::instrument(skip(self), level = "trace", ret)]

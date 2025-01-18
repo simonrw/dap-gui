@@ -157,7 +157,16 @@ impl Debugger {
         let background_events = events.clone();
         thread::spawn(move || loop {
             let event = background_events.recv().unwrap();
-            background_internals.lock().unwrap().on_event(event);
+            let lock_id = Uuid::new_v4().to_string();
+            let span = tracing::trace_span!("", %lock_id);
+            let _guard = span.enter();
+
+            tracing::trace!(is_poisoned = %background_internals.is_poisoned(), "trying to unlock background internals");
+            let mut b = background_internals.lock().unwrap();
+            tracing::trace!(?event, "handling event");
+            b.on_event(event);
+            drop(b);
+            tracing::trace!("locked background internals");
         });
 
         Ok(Self {
@@ -214,10 +223,7 @@ impl Debugger {
         path: impl Into<PathBuf>,
     ) -> eyre::Result<Vec<BreakpointLocation>> {
         let locations = self
-            .internals
-            .lock()
-            .unwrap()
-            .get_breakpoint_locations(path)
+            .with_internals(|internals| internals.get_breakpoint_locations(path))
             .context("getting breakpoint locations")?;
         Ok(locations)
     }
@@ -233,11 +239,13 @@ impl Debugger {
     /// Launch a debugging session
     pub fn start(&self) -> eyre::Result<()> {
         self.with_internals(|internals| {
-            let _ = internals
+            internals
                 .client
                 .send(requests::RequestBody::ConfigurationDone)
-                .context("completing configuration")?;
+        })
+        .context("completing configuration")?;
 
+        self.with_internals(|internals| {
             internals.set_state(DebuggerState::Running);
             Ok(())
         })
