@@ -45,6 +45,10 @@ impl App {
     fn handle_input(&mut self, input: &str) -> eyre::Result<ShouldQuit> {
         match input {
             "q" => return Ok(ShouldQuit::True),
+            "c" => {
+                tracing::debug!("executing continue command");
+                self.debugger.r#continue().context("resuming execution")?;
+            }
             "" => return Ok(ShouldQuit::False),
             other => writeln!(self.stdout, "Unhandled commmand: '{}'", other)?,
         }
