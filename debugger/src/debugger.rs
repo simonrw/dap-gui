@@ -196,12 +196,16 @@ impl Debugger {
     }
 
     /// Add a breakpoint for the current debugging session
+    #[tracing::instrument(skip(self))]
     pub fn add_breakpoint(
         &self,
         breakpoint: &types::Breakpoint,
     ) -> eyre::Result<types::BreakpointId> {
-        let mut internals = self.internals.lock().unwrap();
-        internals.add_breakpoint(breakpoint)
+        self.with_internals(|internals| {
+            internals
+                .add_breakpoint(breakpoint)
+                .context("adding breakpoint")
+        })
     }
 
     pub fn get_breakpoint_locations(
@@ -219,24 +223,24 @@ impl Debugger {
 
     /// Return the list of breakpoints configured
     pub fn breakpoints(&self) -> Vec<types::Breakpoint> {
-        self.internals
-            .lock()
-            .unwrap()
-            .breakpoints
-            .clone()
-            .values()
-            .cloned()
-            .collect()
+        self.with_internals(|internals| {
+            Ok(internals.breakpoints.clone().values().cloned().collect())
+        })
+        .unwrap()
     }
 
     /// Launch a debugging session
     pub fn start(&self) -> eyre::Result<()> {
-        let mut internals = self.internals.lock().unwrap();
-        let _ = internals
-            .client
-            .send(requests::RequestBody::ConfigurationDone)
-            .context("completing configuration")?;
-        internals.set_state(DebuggerState::Running);
+        self.with_internals(|internals| {
+            let _ = internals
+                .client
+                .send(requests::RequestBody::ConfigurationDone)
+                .context("completing configuration")?;
+
+            internals.set_state(DebuggerState::Running);
+            Ok(())
+        })
+        .context("completing configuration")?;
         Ok(())
     }
 
@@ -246,15 +250,13 @@ impl Debugger {
         input: &str,
         frame_id: StackFrameId,
     ) -> eyre::Result<Option<EvaluateResult>> {
-        let internals = self.internals.lock().unwrap();
         let req = requests::RequestBody::Evaluate(requests::Evaluate {
             expression: input.to_string(),
             frame_id: Some(frame_id),
             context: Some("repl".to_string()),
         });
-        let res = internals
-            .client
-            .send(req)
+        let res = self
+            .with_internals(|internals| internals.client.send(req))
             .context("sending evaluate request")?;
         match res {
             responses::Response {
@@ -284,74 +286,79 @@ impl Debugger {
     }
 
     /// Resume execution of the debugee
+    #[tracing::instrument(skip(self))]
     pub fn r#continue(&self) -> eyre::Result<()> {
-        let internals = self.internals.lock().unwrap();
-        match internals.current_thread_id {
-            Some(thread_id) => {
-                internals
-                    .client
-                    .execute(requests::RequestBody::Continue(requests::Continue {
-                        thread_id,
-                        single_thread: false,
-                    }))
-                    .context("sending continue request")?;
+        self.with_internals(|internals| {
+            match internals.current_thread_id {
+                Some(thread_id) => {
+                    internals
+                        .client
+                        .execute(requests::RequestBody::Continue(requests::Continue {
+                            thread_id,
+                            single_thread: false,
+                        }))
+                        .context("sending continue request")?;
+                }
+                None => eyre::bail!("logic error: no current thread id"),
             }
-            None => eyre::bail!("logic error: no current thread id"),
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Step over a statement
     pub fn step_over(&self) -> eyre::Result<()> {
-        let internals = self.internals.lock().unwrap();
-        match internals.current_thread_id {
-            Some(thread_id) => {
-                internals
-                    .client
-                    .execute(requests::RequestBody::Next(requests::Next { thread_id }))
-                    .context("sending step_over request")?;
+        self.with_internals(|internals| {
+            match internals.current_thread_id {
+                Some(thread_id) => {
+                    internals
+                        .client
+                        .execute(requests::RequestBody::Next(requests::Next { thread_id }))
+                        .context("sending step_over request")?;
+                }
+                None => eyre::bail!("logic error: no current thread id"),
             }
-            None => eyre::bail!("logic error: no current thread id"),
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Step into a statement
     pub fn step_in(&self) -> eyre::Result<()> {
-        let internals = self.internals.lock().unwrap();
-        match internals.current_thread_id {
-            Some(thread_id) => {
-                internals
-                    .client
-                    .execute(requests::RequestBody::StepIn(requests::StepIn {
-                        thread_id,
-                    }))
-                    .context("sending step_in` request")?;
+        self.with_internals(|internals| {
+            match internals.current_thread_id {
+                Some(thread_id) => {
+                    internals
+                        .client
+                        .execute(requests::RequestBody::StepIn(requests::StepIn {
+                            thread_id,
+                        }))
+                        .context("sending step_in` request")?;
+                }
+                None => eyre::bail!("logic error: no current thread id"),
             }
-            None => eyre::bail!("logic error: no current thread id"),
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Step out of a statement
     pub fn step_out(&self) -> eyre::Result<()> {
-        let internals = self.internals.lock().unwrap();
-        match internals.current_thread_id {
-            Some(thread_id) => {
-                internals
-                    .client
-                    .execute(requests::RequestBody::StepOut(requests::StepOut {
-                        thread_id,
-                    }))
-                    .context("sending `step_out` request")?;
+        self.with_internals(|internals| {
+            match internals.current_thread_id {
+                Some(thread_id) => {
+                    internals
+                        .client
+                        .execute(requests::RequestBody::StepOut(requests::StepOut {
+                            thread_id,
+                        }))
+                        .context("sending `step_out` request")?;
+                }
+                None => eyre::bail!("logic error: no current thread id"),
             }
-            None => eyre::bail!("logic error: no current thread id"),
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     fn execute(&self, body: requests::RequestBody) -> eyre::Result<()> {
-        self.internals.lock().unwrap().client.execute(body)
+        self.with_internals(|internals| internals.client.execute(body))
     }
 
     /// Pause the debugging session waiting for a specific event, where the predicate returns true
@@ -378,12 +385,26 @@ impl Debugger {
 
     /// Change the current scope to a new stack frame
     pub fn change_scope(&self, stack_frame_id: StackFrameId) -> eyre::Result<()> {
-        self.internals
-            .lock()
-            .unwrap()
-            .change_scope(stack_frame_id)
-            .wrap_err("changing scope")?;
-        Ok(())
+        self.with_internals(|internals| {
+            internals
+                .change_scope(stack_frame_id)
+                .wrap_err("changing scope")?;
+            Ok(())
+        })
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn with_internals<F, T>(&self, f: F) -> eyre::Result<T>
+    where
+        F: FnOnce(&mut DebuggerInternals) -> eyre::Result<T>,
+    {
+        tracing::trace!(poisoned = %self.internals.is_poisoned(), "trying to lock internals");
+        let mut internals = self.internals.lock().unwrap();
+        tracing::trace!("executing operation");
+        let res = f(&mut internals);
+        drop(internals);
+        tracing::trace!("unlocked internals");
+        res
     }
 }
 

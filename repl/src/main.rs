@@ -71,12 +71,15 @@ fn main() -> eyre::Result<()> {
     let debugger = Debugger::from_launch_configuration(args.launch_configuration, args.name)
         .context("creating debugger")?;
     for breakpoint in args.breakpoints {
+        tracing::debug!(?breakpoint, "adding breakpoint");
         debugger
             .add_breakpoint(&breakpoint)
             .context("adding breakpoint")?;
     }
+    tracing::debug!("breakpoints added");
 
     let mut app = App::new(debugger);
+    tracing::debug!("debugger set up");
     loop {
         match app.loop_step() {
             Ok(ShouldQuit::True) => break,

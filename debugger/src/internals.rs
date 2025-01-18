@@ -284,7 +284,7 @@ impl DebuggerInternals {
         }
     }
 
-    #[tracing::instrument(skip(self), level = "trace")]
+    #[tracing::instrument(skip(self), level = "trace", ret)]
     pub(crate) fn add_breakpoint(&mut self, breakpoint: &Breakpoint) -> eyre::Result<BreakpointId> {
         tracing::debug!("adding breakpoint");
         let id = self.next_id();
@@ -303,6 +303,7 @@ impl DebuggerInternals {
     }
 
     fn broadcast_breakpoints(&mut self) -> eyre::Result<()> {
+        tracing::debug!("broadcasting breakpoints");
         // TODO: don't assume the breakpoints are for the same file
         if self.breakpoints.is_empty() {
             return Ok(());
@@ -331,10 +332,12 @@ impl DebuggerInternals {
                 ..Default::default()
             });
 
+            tracing::debug!("sending broadcast breakpoints message");
             let _ = self
                 .client
                 .send(req)
                 .context("broadcasting breakpoints to debugee")?;
+            tracing::debug!("broadcast breakpoints message sent");
         }
         Ok(())
     }
