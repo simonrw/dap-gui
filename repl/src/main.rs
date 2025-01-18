@@ -23,12 +23,19 @@ impl App {
     }
 
     fn loop_step(&mut self) -> eyre::Result<ShouldQuit> {
+        tracing::trace!("locking stdout");
         let mut stdout = self.stdout.lock();
+        tracing::trace!("writing prompt to stdout");
         write!(&mut stdout, "> ")?;
+        tracing::trace!("prompt written, flushing stdout");
         stdout.flush()?;
+        tracing::trace!("stdout flushed");
 
-        let _n = self.stdin.read_line(&mut self.input_buffer)?;
+        tracing::trace!("reading from stdin");
+        let n = self.stdin.read_line(&mut self.input_buffer)?;
+        tracing::trace!(%n, "read bytes from stdin");
         let input = self.input_buffer.trim().to_owned();
+        tracing::trace!(%input, "parsed command");
 
         let res = self.handle_input(&input).context("handling command");
         self.input_buffer.clear();
