@@ -7,8 +7,6 @@ use debugger::Debugger;
 
 struct App {
     debugger: Debugger,
-    stdin: std::io::Stdin,
-    stdout: std::io::Stdout,
     input_buffer: String,
 }
 
@@ -16,23 +14,19 @@ impl App {
     fn new(debugger: Debugger) -> Self {
         Self {
             debugger,
-            stdin: std::io::stdin(),
-            stdout: std::io::stdout(),
             input_buffer: String::new(),
         }
     }
 
     fn loop_step(&mut self) -> eyre::Result<ShouldQuit> {
         tracing::trace!("locking stdout");
-        let mut stdout = self.stdout.lock();
-        tracing::trace!("writing prompt to stdout");
-        write!(&mut stdout, "> ")?;
+        print!("> ");
         tracing::trace!("prompt written, flushing stdout");
-        stdout.flush()?;
+        std::io::stdout().flush()?;
         tracing::trace!("stdout flushed");
 
         tracing::trace!("reading from stdin");
-        let n = self.stdin.read_line(&mut self.input_buffer)?;
+        let n = std::io::stdin().read_line(&mut self.input_buffer)?;
         tracing::trace!(%n, "read bytes from stdin");
         let input = self.input_buffer.trim().to_owned();
         tracing::trace!(%input, "parsed command");
@@ -50,7 +44,7 @@ impl App {
                 self.debugger.r#continue().context("resuming execution")?;
             }
             "" => return Ok(ShouldQuit::False),
-            other => writeln!(self.stdout, "Unhandled commmand: '{}'", other)?,
+            other => println!("Unhandled commmand: '{}'", other),
         }
         Ok(ShouldQuit::False)
     }
