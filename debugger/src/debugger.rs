@@ -17,6 +17,7 @@ use transport::{
     types::{BreakpointLocation, StackFrameId},
     DEFAULT_DAP_PORT,
 };
+use uuid::Uuid;
 
 use crate::{
     internals::DebuggerInternals,
@@ -393,7 +394,7 @@ impl Debugger {
         })
     }
 
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(lock_id = Uuid::new_v4().to_string()))]
     fn with_internals<F, T>(&self, f: F) -> eyre::Result<T>
     where
         F: FnOnce(&mut DebuggerInternals) -> eyre::Result<T>,
