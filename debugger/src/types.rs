@@ -31,9 +31,24 @@ impl FromStr for Breakpoint {
             .ok_or_else(|| eyre::eyre!("breakpoint specification '{s}' has no colon"))?;
 
         let lineno = lineno_str.parse().wrap_err("invalid line number")?;
+        let mut path = PathBuf::from(path_str);
+
+        // if passed a relative path, assume the current working directory
+        if path.is_relative() {
+            path = std::env::current_dir()
+                .context("getting current working directory")?
+                .join(path);
+        }
+
+        eyre::ensure!(
+            path.is_file(),
+            "breakpoint cannot be set on a non-existent file: {}",
+            path.display()
+        );
+
         Ok(Self {
             name: None,
-            path: PathBuf::from(path_str),
+            path,
             line: lineno,
         })
     }
@@ -54,7 +69,7 @@ pub struct EvaluateResult {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, str::FromStr};
+    use std::path::PathBuf;
 
     use super::Breakpoint;
 
@@ -67,8 +82,8 @@ mod tests {
                     let s2 = format!("{e2}");
                     assert_eq!(s1, s2);
                 }
-                (Err(_), _) => panic!("not equal"),
-                (_, Err(_)) => panic!("not equal"),
+                (Err(e), Ok(o)) => panic!("not equal, Err({:?}) != Ok({:?})", e, o),
+                (Ok(o), Err(e)) => panic!("not equal, Ok({:?}) != Err({:?})", o, e),
             }
         }};
     }
@@ -87,29 +102,27 @@ mod tests {
         assert_eq!(path, home_dir.join("test"));
     }
 
-    #[test]
-    fn breakpoint_from_str() {
-        let cases = vec![
-            (
-                "",
-                Err(eyre::eyre!("breakpoint specification '' has no colon")),
-            ),
-            (
-                "test",
-                Err(eyre::eyre!("breakpoint specification 'test' has no colon")),
-            ),
-            ("test.py:foo", Err(eyre::eyre!("invalid line number"))),
-            (
-                "test.py:16",
-                Ok(Breakpoint {
-                    path: PathBuf::from("test.py"),
-                    line: 16,
-                    name: None,
-                }),
-            ),
-        ];
-        for (input, expected) in cases {
-            assert_res_eq!(Breakpoint::from_str(input), expected);
+    macro_rules! breakpoint_from_str_tests {
+        ($($name:ident: $value:expr,)*) => {
+            mod breakpoint_from_str {
+                use super::super::Breakpoint;
+                use std::{path::PathBuf, str::FromStr};
+
+                $(
+                    #[test]
+                    fn $name () {
+                        let (input, expected): (&str, eyre::Result<Breakpoint>) = $value;
+                        assert_res_eq!(Breakpoint::from_str(input), expected);
+                    }
+                )*
+            }
         }
+    }
+
+    breakpoint_from_str_tests! {
+        empty_string: ("", Err(eyre::eyre!("breakpoint specification '' has no colon"))),
+        invalid_structure: ("test", Err(eyre::eyre!("breakpoint specification 'test' has no colon"))),
+        invalid_line_number: ("test.py:foo", Err(eyre::eyre!("invalid line number"))),
+        success: ("../test.py:16", Ok(Breakpoint { path: PathBuf::from("../test.py"), line: 16, name: None })),
     }
 }
