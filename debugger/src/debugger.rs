@@ -22,7 +22,7 @@ use crate::{
     internals::DebuggerInternals,
     state::{self, DebuggerState},
     types::{self, EvaluateResult},
-    Event, LaunchArguments,
+    AttachArguments, Event, Language, LaunchArguments,
 };
 
 /// How to launch a debugging session
@@ -55,6 +55,12 @@ impl From<LaunchConfiguration> for InitialiseArguments {
                     program: debugpy.program.expect("program must be specified"),
                     working_directory: None,
                     language: crate::Language::DebugPy,
+                }),
+                "attach" => InitialiseArguments::Attach(AttachArguments {
+                    port: debugpy.connect.map(|c| c.port),
+                    language: Language::DebugPy,
+                    path_mappings: debugpy.path_mappings,
+                    working_directory: debugpy.cwd.expect("TODO: cwd must be specified"),
                 }),
                 other => todo!("{other}"),
             },
