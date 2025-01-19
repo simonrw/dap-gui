@@ -1,5 +1,7 @@
 use std::{
     io::{BufRead, BufReader},
+    // TODO: windows?
+    os::unix::process::CommandExt,
     process::{Child, Stdio},
     sync::mpsc,
     thread,
@@ -19,20 +21,32 @@ impl Server for DebugpyServer {
 
         tracing::debug!(port = ?port, "starting server process");
         let cwd = std::env::current_dir().unwrap();
-        let mut child = std::process::Command::new("python")
-            .args([
-                "-m",
-                "debugpy.adapter",
-                "--host",
-                "127.0.0.1",
-                "--port",
-                &format!("{port}"),
-                "--log-stderr",
-            ])
-            .stderr(Stdio::piped())
-            .current_dir(cwd.join("..").canonicalize().unwrap())
-            .spawn()
-            .context("spawning background process")?;
+
+        // TODO: safety
+        let mut child = unsafe {
+            std::process::Command::new("python")
+                .args([
+                    "-m",
+                    "debugpy.adapter",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    &format!("{port}"),
+                    "--log-stderr",
+                ])
+                .pre_exec(|| {
+                    // Prevent interrupt signals in the child from affecting the parent
+                    nix::unistd::setsid()
+                        .map(|pid| {
+                            tracing::debug!(?pid, "set new process session for debugger");
+                        })
+                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                })
+                .stderr(Stdio::piped())
+                .current_dir(cwd.join("..").canonicalize().unwrap())
+                .spawn()
+                .context("spawning background process")?
+        };
 
         // wait until server is ready
         tracing::debug!("waiting until server is ready");
