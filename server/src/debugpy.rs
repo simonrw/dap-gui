@@ -43,6 +43,7 @@ impl Server for DebugpyServer {
                         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
                 })
                 .stderr(Stdio::piped())
+                .stdout(Stdio::piped())
                 .current_dir(cwd.join("..").canonicalize().unwrap())
                 .spawn()
                 .context("spawning background process")?
