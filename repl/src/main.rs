@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Mutex};
 
 use clap::Parser;
 use color_eyre::{eyre::Context, Result};
@@ -11,6 +11,7 @@ use ratatui::{
     widgets::{Block, List, ListItem, Paragraph},
     DefaultTerminal, Frame,
 };
+use tracing_subscriber::{fmt::MakeWriter, EnvFilter};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -156,7 +157,11 @@ impl App {
 
 fn main() -> Result<()> {
     color_eyre::install()?;
-    tracing_subscriber::fmt::init();
+    let log_file = std::fs::File::create("log.log")?;
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_writer(Mutex::new(log_file))
+        .init();
 
     let args = Args::parse();
     let debugger = Debugger::from_launch_configuration(args.launch_configuration, args.name)
