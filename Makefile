@@ -29,3 +29,7 @@ python-develop: ## Compile and install a development version of the debugger
 .PHONY: repl-attach
 repl-attach:
 	cargo r -p repl -- launch.json -n Attach -b attach.py:29
+
+.PHONY: repl-launch
+repl-launch:
+	cargo r -p repl -- launch.json -n Launch -b test.py:4
