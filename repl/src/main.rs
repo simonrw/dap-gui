@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Mutex};
 
 use clap::Parser;
-use color_eyre::{eyre::Context, Result};
+use color_eyre::{eyre, eyre::Context};
 use crossterm::event::{self, Event, KeyCode};
 use debugger::{Breakpoint, Debugger};
 use ratatui::{
@@ -63,18 +63,39 @@ impl App {
         new_cursor_pos.clamp(0, self.input.chars().count())
     }
 
-    fn run_command(&mut self) {
+    fn run_command(&mut self) -> eyre::Result<()> {
         // TODO: execute debugger command
-        match self.input.as_str() {
+        let command: Vec<_> = self.input.split_whitespace().collect();
+        eyre::ensure!(!command.is_empty(), "no command given");
+        match command[0] {
             "c" => {
                 tracing::debug!("executing continue command");
-                self.debugger.r#continue().expect("continuing execution");
+                self.debugger.r#continue().context("continuing execution")?;
+            }
+            "n" => {
+                tracing::debug!("executing step_over command");
+                self.debugger.step_over().context("stepping over")?;
+            }
+            "i" => {
+                tracing::debug!("executing step_in command");
+                self.debugger.step_in().context("stepping in")?;
+            }
+            "o" => {
+                tracing::debug!("executing step_out command");
+                self.debugger.step_out().context("stepping out")?;
+            }
+            "p" => {
+                eyre::ensure!(command.len() > 1, "no variables given to print");
+                for variable_name in command.iter().skip(1) {
+                    tracing::warn!(name = %*variable_name, "todo: printing variable");
+                }
             }
             other => tracing::warn!(%other, "unhandled command"),
         }
 
         self.input.clear();
         self.reset_cursor();
+        Ok(())
     }
 
     fn delete_char(&mut self) {
@@ -108,12 +129,16 @@ impl App {
         self.character_index = 0;
     }
 
-    fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
+    fn run(mut self, mut terminal: DefaultTerminal) -> eyre::Result<()> {
         loop {
             terminal.draw(|frame| self.draw(frame))?;
             if let Event::Key(key) = event::read()? {
                 match key.code {
-                    KeyCode::Enter => self.run_command(),
+                    KeyCode::Enter => {
+                        if let Err(e) = self.run_command() {
+                            tracing::warn!(error = %e, "error running command");
+                        }
+                    }
                     KeyCode::Char(to_insert) => self.enter_char(to_insert),
                     KeyCode::Backspace => self.delete_char(),
                     KeyCode::Left => self.move_cursor_left(),
@@ -155,7 +180,7 @@ impl App {
     }
 }
 
-fn main() -> Result<()> {
+fn main() -> eyre::Result<()> {
     color_eyre::install()?;
     let log_file = std::fs::File::create("log.log")?;
     tracing_subscriber::fmt()
