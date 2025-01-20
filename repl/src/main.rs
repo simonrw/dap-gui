@@ -1,7 +1,8 @@
-use std::{path::PathBuf, sync::Mutex};
+use std::{path::PathBuf, rc::Rc, sync::Mutex, time::Duration};
 
 use clap::Parser;
 use color_eyre::{eyre, eyre::Context};
+use crossbeam_channel::{Receiver, TryRecvError};
 use crossterm::event::{self, Event, KeyCode};
 use debugger::{Breakpoint, Debugger};
 use ratatui::{
@@ -11,7 +12,7 @@ use ratatui::{
     widgets::{Block, List, ListItem, Paragraph},
     DefaultTerminal, Frame,
 };
-use tracing_subscriber::{fmt::MakeWriter, EnvFilter};
+use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -28,15 +29,20 @@ struct App {
     input: String,
     character_index: usize,
     messages: Vec<String>,
+    events: Receiver<debugger::Event>,
+    should_terminate: bool,
 }
 
 impl App {
     fn new(debugger: Debugger) -> Self {
+        let events = debugger.events();
         Self {
             debugger,
             input: String::new(),
             character_index: 0,
             messages: Vec::new(),
+            events,
+            should_terminate: false,
         }
     }
 
@@ -131,23 +137,67 @@ impl App {
 
     fn run(mut self, mut terminal: DefaultTerminal) -> eyre::Result<()> {
         loop {
+            if self.should_terminate {
+                tracing::info!("terminating application");
+                return Ok(());
+            }
+
+            // debugger events
+            // TODO: try to handle multiple events?
+            match self.events.try_recv() {
+                Ok(event) => self
+                    .handle_debugger_event(event)
+                    .context("handling debugger event")?,
+                Err(TryRecvError::Empty) => {}
+                Err(TryRecvError::Disconnected) => {
+                    tracing::info!("debugger disconnected, terminating application");
+                    return Ok(());
+                }
+            }
+
+            // rendering
             terminal.draw(|frame| self.draw(frame))?;
-            if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Enter => {
-                        if let Err(e) = self.run_command() {
-                            tracing::warn!(error = %e, "error running command");
+
+            // user input, but only if there is a queued event
+            if event::poll(Duration::from_millis(50))? {
+                if let Event::Key(key) = event::read()? {
+                    match key.code {
+                        KeyCode::Enter => {
+                            if let Err(e) = self.run_command() {
+                                tracing::warn!(error = %e, "error running command");
+                            }
                         }
+                        KeyCode::Char(to_insert) => self.enter_char(to_insert),
+                        KeyCode::Backspace => self.delete_char(),
+                        KeyCode::Left => self.move_cursor_left(),
+                        KeyCode::Right => self.move_cursor_right(),
+                        KeyCode::Esc => break Ok(()),
+                        _ => {}
                     }
-                    KeyCode::Char(to_insert) => self.enter_char(to_insert),
-                    KeyCode::Backspace => self.delete_char(),
-                    KeyCode::Left => self.move_cursor_left(),
-                    KeyCode::Right => self.move_cursor_right(),
-                    KeyCode::Esc => break Ok(()),
-                    _ => {}
                 }
             }
         }
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn handle_debugger_event(&mut self, event: debugger::Event) -> eyre::Result<()> {
+        tracing::debug!("got debugger event");
+        match event {
+            debugger::Event::Paused {
+                stack,
+                breakpoints,
+                paused_frame,
+            } => {}
+            debugger::Event::ScopeChange {
+                stack,
+                breakpoints,
+                paused_frame,
+            } => {}
+            debugger::Event::Running => {}
+            debugger::Event::Ended => self.should_terminate = true,
+            _ => {}
+        }
+        Ok(())
     }
 
     fn draw(&self, frame: &mut Frame) {
