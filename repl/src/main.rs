@@ -144,6 +144,7 @@ impl App {
 
             // debugger events
             // TODO: try to handle multiple events?
+            // TODO: select over keyboard and debugger events to prevent blocking
             match self.events.try_recv() {
                 Ok(event) => self
                     .handle_debugger_event(event)
@@ -201,6 +202,7 @@ impl App {
     }
 
     fn draw(&self, frame: &mut Frame) {
+        // TODO: coloured bar at the bottom showing debugging state
         let vertical = Layout::vertical([Constraint::Length(3), Constraint::Min(1)]);
         let [input_area, messages_area] = vertical.areas(frame.area());
 
