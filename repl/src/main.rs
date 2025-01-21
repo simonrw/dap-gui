@@ -1,8 +1,8 @@
-use std::{path::PathBuf, rc::Rc, sync::Mutex, time::Duration};
+use std::{path::PathBuf, sync::Mutex};
 
 use clap::Parser;
 use color_eyre::{eyre, eyre::Context};
-use crossbeam_channel::{Receiver, TryRecvError};
+use crossbeam_channel::Receiver;
 use crossterm::event::{self, Event, KeyCode};
 use debugger::{Breakpoint, Debugger};
 use ratatui::{
@@ -136,47 +136,63 @@ impl App {
     }
 
     fn run(mut self, mut terminal: DefaultTerminal) -> eyre::Result<()> {
+        // set up background thread polling for keyboard events
+        let (tx, rx) = crossbeam_channel::unbounded();
+        std::thread::spawn(move || loop {
+            match event::read() {
+                Ok(event) => {
+                    let _ = tx.send(event);
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "error reading from event stream");
+                }
+            }
+        });
+
         loop {
             if self.should_terminate {
                 tracing::info!("terminating application");
                 return Ok(());
             }
 
+            crossbeam_channel::select! {
+                recv(self.events) -> msg => match msg {
+                    Ok(event) => self
+                        .handle_debugger_event(event)
+                        .context("handling debugger event")?,
+                    Err(e) => {
+                        tracing::info!(error = %e, "error while reading event stream");
+                    },
+                },
+
+
+                recv(rx) -> msg => {
+                    #[allow(clippy::single_match)]
+                    match msg? {
+                        Event::Key(key) => match key.code {
+                            KeyCode::Enter => {
+                                if let Err(e) = self.run_command() {
+                                    tracing::warn!(error = %e, "error running command");
+                                }
+                            }
+                            KeyCode::Char(to_insert) => self.enter_char(to_insert),
+                            KeyCode::Backspace => self.delete_char(),
+                            KeyCode::Left => self.move_cursor_left(),
+                            KeyCode::Right => self.move_cursor_right(),
+                            KeyCode::Esc => break Ok(()),
+                            _ => {}
+                        },
+                        _ => {},
+                    }
+                },
+            }
+
             // debugger events
             // TODO: try to handle multiple events?
             // TODO: select over keyboard and debugger events to prevent blocking
-            match self.events.try_recv() {
-                Ok(event) => self
-                    .handle_debugger_event(event)
-                    .context("handling debugger event")?,
-                Err(TryRecvError::Empty) => {}
-                Err(TryRecvError::Disconnected) => {
-                    tracing::info!("debugger disconnected, terminating application");
-                    return Ok(());
-                }
-            }
 
             // rendering
             terminal.draw(|frame| self.draw(frame))?;
-
-            // user input, but only if there is a queued event
-            if event::poll(Duration::from_millis(50))? {
-                if let Event::Key(key) = event::read()? {
-                    match key.code {
-                        KeyCode::Enter => {
-                            if let Err(e) = self.run_command() {
-                                tracing::warn!(error = %e, "error running command");
-                            }
-                        }
-                        KeyCode::Char(to_insert) => self.enter_char(to_insert),
-                        KeyCode::Backspace => self.delete_char(),
-                        KeyCode::Left => self.move_cursor_left(),
-                        KeyCode::Right => self.move_cursor_right(),
-                        KeyCode::Esc => break Ok(()),
-                        _ => {}
-                    }
-                }
-            }
         }
     }
 
@@ -184,16 +200,8 @@ impl App {
     fn handle_debugger_event(&mut self, event: debugger::Event) -> eyre::Result<()> {
         tracing::debug!("got debugger event");
         match event {
-            debugger::Event::Paused {
-                stack,
-                breakpoints,
-                paused_frame,
-            } => {}
-            debugger::Event::ScopeChange {
-                stack,
-                breakpoints,
-                paused_frame,
-            } => {}
+            debugger::Event::Paused { .. } => {}
+            debugger::Event::ScopeChange { .. } => {}
             debugger::Event::Running => {}
             debugger::Event::Ended => self.should_terminate = true,
             _ => {}
