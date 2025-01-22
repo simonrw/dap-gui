@@ -22,7 +22,16 @@ repos:
     - id: clippy
       stages:
         - pre-push
-    - id: test
-      stages:
-        - pre-push
 
+  - repo: local
+    hooks:
+      - id: test
+        name: cargo nextest
+        stages:
+          - pre-push
+        entry: cargo nextest run
+        language: system
+        always_run: false
+        pass_filenames: false
+        types:
+          - rust
