@@ -211,9 +211,14 @@ impl App {
 
     fn draw(&self, frame: &mut Frame) {
         // TODO: coloured bar at the bottom showing debugging state
-        let vertical = Layout::vertical([Constraint::Length(3), Constraint::Min(1)]);
-        let [input_area, messages_area] = vertical.areas(frame.area());
+        let vertical = Layout::vertical([
+            Constraint::Length(3),
+            Constraint::Min(1),
+            Constraint::Min(10),
+        ]);
+        let [input_area, _code_area, bottom_area] = vertical.areas(frame.area());
 
+        // input box
         let input = Paragraph::new(self.input.as_str())
             .style(Style::default().fg(Color::Yellow))
             .block(Block::bordered().title("Input"));
@@ -226,17 +231,16 @@ impl App {
             input_area.y + 1,
         ));
 
-        let messages: Vec<ListItem> = self
-            .messages
-            .iter()
-            .enumerate()
-            .map(|(i, m)| {
-                let content = Line::from(Span::raw(format!("{i}: {m}")));
-                ListItem::new(content)
-            })
-            .collect();
-        let messages = List::new(messages).block(Block::bordered().title("Messages"));
-        frame.render_widget(messages, messages_area);
+        // code area
+        // bottom area
+        let horizontal = Layout::horizontal([
+            Constraint::Ratio(1, 3),
+            Constraint::Ratio(1, 3),
+            Constraint::Ratio(1, 3),
+        ]);
+        let [variables_area, _repl_area, _] = horizontal.areas(bottom_area);
+        let variables = Paragraph::new("variables").block(Block::bordered().title("Variables"));
+        frame.render_widget(variables, variables_area);
     }
 }
 
