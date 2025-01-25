@@ -1,23 +1,49 @@
+use std::thread::JoinHandle;
 use std::{io::Write, path::PathBuf};
 
 use clap::Parser;
 use color_eyre::eyre::{self, Context};
+use crossbeam_channel::Receiver;
 use debugger::Breakpoint;
 use debugger::Debugger;
 use debugger::ProgramDescription;
 
 struct App {
     debugger: Debugger,
-    input_buffer: String,
     program_description: Option<ProgramDescription>,
+    debugger_events: Receiver<debugger::Event>,
+    input_rx: Receiver<String>,
+
+    #[allow(dead_code)]
+    input_thread: JoinHandle<String>,
 }
 
 impl App {
     fn new(debugger: Debugger) -> Self {
+        let debugger_events = debugger.events();
+
+        // handle input
+        let (input_tx, input_rx) = crossbeam_channel::unbounded();
+        let input_thread = std::thread::spawn(move || {
+            let mut buffer = String::new();
+            loop {
+                let n = std::io::stdin()
+                    .read_line(&mut buffer)
+                    .expect("reading from stdin");
+                if n != 0 {
+                    let input = buffer.trim().to_owned();
+                    let _ = input_tx.send(input);
+                    buffer.clear();
+                }
+            }
+        });
+
         Self {
             debugger,
-            input_buffer: String::new(),
             program_description: None,
+            debugger_events,
+            input_thread,
+            input_rx,
         }
     }
 
@@ -28,22 +54,68 @@ impl App {
         std::io::stdout().flush()?;
         tracing::trace!("stdout flushed");
 
-        tracing::trace!("reading from stdin");
-        let n = std::io::stdin().read_line(&mut self.input_buffer)?;
-        tracing::trace!(%n, "read bytes from stdin");
-        let input = self.input_buffer.trim().to_owned();
-        tracing::trace!(%input, "parsed command");
+        crossbeam_channel::select! {
+            recv(self.input_rx) -> input =>
+                self.handle_input(&input.expect("recv error")).context("handling command"),
+            recv(self.debugger_events) -> event => if let Ok(event) = event {
+                self.handle_debugger_event(event).context("handling debugger event")
+            } else {
+                Ok(ShouldQuit::False)
+            },
+        }
+    }
 
-        let res = self.handle_input(&input).context("handling command");
-        self.input_buffer.clear();
-        res
+    #[tracing::instrument(skip(self))]
+    fn handle_debugger_event(&mut self, event: debugger::Event) -> eyre::Result<ShouldQuit> {
+        match event {
+            debugger::Event::Uninitialised => todo!(),
+            debugger::Event::Initialised => todo!(),
+            debugger::Event::Paused(program_description) => {
+                println!(
+                    "program paused at {}:{}",
+                    &program_description
+                        .paused_frame
+                        .frame
+                        .source
+                        .as_ref()
+                        .unwrap()
+                        .path
+                        .as_ref()
+                        .unwrap()
+                        .display(),
+                    program_description.paused_frame.frame.line
+                );
+                self.program_description = Some(program_description);
+            }
+            debugger::Event::ScopeChange(_program_description) => todo!(),
+            debugger::Event::Running => {
+                println!("program running");
+                self.program_description = None;
+            }
+            debugger::Event::Ended => todo!(),
+        }
+        Ok(ShouldQuit::False)
     }
 
     fn handle_input(&mut self, input: &str) -> eyre::Result<ShouldQuit> {
         match input {
             "q" => return Ok(ShouldQuit::True),
             "w" => {
-                if let Some(_description) = &self.program_description {
+                if let Some(description) = &self.program_description {
+                    println!(
+                        "{}:{}",
+                        &description
+                            .paused_frame
+                            .frame
+                            .source
+                            .as_ref()
+                            .unwrap()
+                            .path
+                            .as_ref()
+                            .unwrap()
+                            .display(),
+                        description.paused_frame.frame.line
+                    );
                 } else {
                     println!("???");
                 }
