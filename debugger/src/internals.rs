@@ -10,7 +10,7 @@ use transport::{
 
 use crate::{
     debugger::InitialiseArguments,
-    state::DebuggerState,
+    state::{DebuggerState, ProgramDescription},
     types::{Breakpoint, BreakpointId, PausedFrame},
     Event,
 };
@@ -75,11 +75,11 @@ impl DebuggerInternals {
         let paused_frame = self
             .compute_paused_frame(chosen_stack_frame)
             .context("computing paused frame")?;
-        self.emit(Event::ScopeChange {
+        self.emit(Event::ScopeChange(ProgramDescription {
             stack: stack_frames,
             breakpoints: self.breakpoints.values().cloned().collect(),
             paused_frame,
-        });
+        }));
 
         Ok(())
     }

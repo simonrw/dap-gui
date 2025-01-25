@@ -8,5 +8,5 @@ pub mod utils;
 
 pub use debugger::{Debugger, InitialiseArguments};
 pub use internals::FileSource;
-pub use state::{AttachArguments, Event, Language, LaunchArguments};
+pub use state::{AttachArguments, Event, Language, LaunchArguments, ProgramDescription};
 pub use types::{Breakpoint, EvaluateResult, PausedFrame};

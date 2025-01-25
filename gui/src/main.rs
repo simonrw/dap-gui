@@ -7,8 +7,11 @@ use std::{
 };
 
 use clap::Parser;
-use debugger::{AttachArguments, Debugger, LaunchArguments, PausedFrame};
-use eframe::egui::{self, Visuals};
+use debugger::{AttachArguments, Debugger, LaunchArguments, PausedFrame, ProgramDescription};
+use eframe::{
+    egui::{self, Visuals},
+    glow::Program,
+};
 use eyre::WrapErr;
 use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
 use state::StateManager;
@@ -64,11 +67,11 @@ impl From<debugger::Event> for State {
     fn from(event: debugger::Event) -> Self {
         match event {
             debugger::Event::Initialised => State::Running,
-            debugger::Event::Paused {
+            debugger::Event::Paused(ProgramDescription {
                 stack,
                 paused_frame,
                 breakpoints,
-            } => State::Paused {
+            }) => State::Paused {
                 stack,
                 paused_frame: Box::new(paused_frame),
                 breakpoints,
@@ -76,11 +79,11 @@ impl From<debugger::Event> for State {
             debugger::Event::Running => State::Running,
             debugger::Event::Ended => State::Terminated,
             debugger::Event::Uninitialised => State::Initialising,
-            debugger::Event::ScopeChange {
+            debugger::Event::ScopeChange(ProgramDescription {
                 stack,
                 breakpoints,
                 paused_frame,
-            } => State::Paused {
+            }) => State::Paused {
                 stack,
                 breakpoints,
                 paused_frame: Box::new(paused_frame),

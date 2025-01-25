@@ -5,7 +5,7 @@ use clap::Parser;
 use code_view::{CodeViewer, CodeViewerAction};
 use color_eyre::eyre::{self, Context};
 use dark_light::Mode;
-use debugger::{AttachArguments, Debugger, Event};
+use debugger::{AttachArguments, Debugger, Event, ProgramDescription};
 use iced::keyboard::{Key, Modifiers};
 use iced::widget::{button, column, container, row, text, text_editor, Container};
 use iced::{
@@ -282,9 +282,9 @@ impl Application for DebuggerApp {
                 Message::DebuggerMessage(event) => match *event {
                     Event::Uninitialised => todo!(),
                     Event::Initialised => todo!(),
-                    Event::Paused {
+                    Event::Paused(ProgramDescription {
                         breakpoints, stack, ..
-                    } => {
+                    }) => {
                         self.state = AppState::Paused {
                             args: Args::default(),
                             active_tab: TabId::Variables,

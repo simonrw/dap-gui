@@ -1,4 +1,4 @@
-use debugger::{AttachArguments, Event, LaunchArguments, PausedFrame};
+use debugger::{AttachArguments, Event, LaunchArguments, PausedFrame, ProgramDescription};
 use launch_configuration::{ChosenLaunchConfiguration, LaunchConfiguration};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -264,11 +264,11 @@ impl Debugger {
         match self.internal_debugger.wait_for_event(|evt| {
             matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
         }) {
-            Event::Paused {
+            Event::Paused(ProgramDescription {
                 stack,
                 paused_frame,
                 ..
-            } => {
+            }) => {
                 tracing::debug!("paused");
                 Ok(Some(ProgramState {
                     stack: stack.into_iter().map(From::from).collect(),
@@ -291,11 +291,11 @@ impl Debugger {
         match self.internal_debugger.wait_for_event(|evt| {
             matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
         }) {
-            Event::Paused {
+            Event::Paused(ProgramDescription {
                 stack,
                 paused_frame,
                 ..
-            } => {
+            }) => {
                 tracing::debug!("paused");
                 Ok(Some(ProgramState {
                     stack: stack.into_iter().map(From::from).collect(),
