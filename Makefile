@@ -18,10 +18,18 @@ run-attach:
 run: 			## Run the debugger
 	cargo run --bin dap-gui-ui -- $(RUN_ARGS)
 
-.PHONY: repl
-repl: python-develop ## Open ipython repl with debugger loaded
+.PHONY: pyrepl
+pyrepl: python-develop ## Open ipython repl with debugger loaded
 	pythondap -b 9 -f ./attach.py launch_configuration/testdata/vscode/localstack.code-workspace -n "Remote Attach (ext)"
 
 .PHOHY: python-develop
 python-develop: ## Compile and install a development version of the debugger
 	maturin develop --manifest-path pythondap/Cargo.toml
+
+.PHONY: repl-attach
+repl-attach:
+	cargo r -p repl -- launch.json -n Attach -b attach.py:29
+
+.PHONY: repl-launch
+repl-launch:
+	cargo r -p repl -- launch.json -n Launch -b test.py:4

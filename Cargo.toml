@@ -12,6 +12,7 @@ members = [
     "launch_configuration",
     "dap-codec",
     "gui2",
+    "repl",
 ]
 
 [workspace.dependencies]

@@ -1,0 +1,16 @@
+[package]
+name = "repl"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap.workspace = true
+debugger = { path = "../debugger" }
+server = { path = "../server" }
+transport = { path = "../transport" }
+color-eyre.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+ratatui = "0.29.0"
+crossterm = "0.28.1"
+crossbeam-channel.workspace = true
