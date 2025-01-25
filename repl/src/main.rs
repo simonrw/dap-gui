@@ -238,9 +238,13 @@ impl App {
             Constraint::Ratio(1, 3),
             Constraint::Ratio(1, 3),
         ]);
-        let [variables_area, _repl_area, _] = horizontal.areas(bottom_area);
-        let variables = Paragraph::new("variables").block(Block::bordered().title("Variables"));
+        let [variables_area, _repl_area, output_area] = horizontal.areas(bottom_area);
+
+        let variables = Paragraph::default().block(Block::bordered().title("Variables"));
         frame.render_widget(variables, variables_area);
+
+        let output = Paragraph::default().block(Block::bordered().title("Output"));
+        frame.render_widget(output, output_area);
     }
 }
 
