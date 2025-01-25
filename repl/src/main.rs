@@ -4,10 +4,12 @@ use clap::Parser;
 use color_eyre::eyre::{self, Context};
 use debugger::Breakpoint;
 use debugger::Debugger;
+use debugger::ProgramDescription;
 
 struct App {
     debugger: Debugger,
     input_buffer: String,
+    program_description: Option<ProgramDescription>,
 }
 
 impl App {
@@ -15,6 +17,7 @@ impl App {
         Self {
             debugger,
             input_buffer: String::new(),
+            program_description: None,
         }
     }
 
@@ -39,6 +42,12 @@ impl App {
     fn handle_input(&mut self, input: &str) -> eyre::Result<ShouldQuit> {
         match input {
             "q" => return Ok(ShouldQuit::True),
+            "w" => {
+                if let Some(description) = &self.program_description {
+                } else {
+                    println!("???");
+                }
+            }
             "c" => {
                 tracing::debug!("executing continue command");
                 self.debugger.r#continue().context("resuming execution")?;
