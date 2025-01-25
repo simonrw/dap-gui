@@ -43,7 +43,7 @@ impl App {
         match input {
             "q" => return Ok(ShouldQuit::True),
             "w" => {
-                if let Some(description) = &self.program_description {
+                if let Some(_description) = &self.program_description {
                 } else {
                     println!("???");
                 }

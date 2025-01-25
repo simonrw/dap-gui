@@ -2,10 +2,7 @@
 //!
 //! This crate handles parsing the launch configurations, primarily of VS Code.
 
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use eyre::Context;
 use serde::Deserialize;
@@ -37,15 +34,15 @@ struct VsCodeLaunchConfiguration {
 enum ConfigFormat {
     VsCode(VsCodeLaunchConfiguration),
     VsCodeWorkspace {
-        folders: Vec<Folder>,
-        settings: HashMap<String, serde_json::Value>,
+        // folders: Vec<Folder>,
+        // settings: HashMap<String, serde_json::Value>,
         launch: VsCodeLaunchConfiguration,
     },
 }
 
 #[derive(Deserialize)]
 struct Folder {
-    path: String,
+    // path: String,
 }
 
 #[derive(Debug, Deserialize)]

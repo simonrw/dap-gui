@@ -8,10 +8,7 @@ use std::{
 
 use clap::Parser;
 use debugger::{AttachArguments, Debugger, LaunchArguments, PausedFrame, ProgramDescription};
-use eframe::{
-    egui::{self, Visuals},
-    glow::Program,
-};
+use eframe::egui::{self, Visuals};
 use eyre::WrapErr;
 use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
 use state::StateManager;

@@ -8,8 +8,7 @@ use debugger::{Breakpoint, Debugger};
 use ratatui::{
     layout::{Constraint, Layout, Position},
     style::{Color, Style},
-    text::{Line, Span},
-    widgets::{Block, List, ListItem, Paragraph},
+    widgets::{Block, Paragraph},
     DefaultTerminal, Frame,
 };
 use tracing_subscriber::EnvFilter;
@@ -28,7 +27,6 @@ struct App {
     debugger: Debugger,
     input: String,
     character_index: usize,
-    messages: Vec<String>,
     events: Receiver<debugger::Event>,
     should_terminate: bool,
 }
@@ -40,7 +38,6 @@ impl App {
             debugger,
             input: String::new(),
             character_index: 0,
-            messages: Vec::new(),
             events,
             should_terminate: false,
         }
