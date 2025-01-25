@@ -92,7 +92,10 @@ impl App {
                 println!("program running");
                 self.program_description = None;
             }
-            debugger::Event::Ended => todo!(),
+            debugger::Event::Ended => {
+                println!("program completed");
+                return Ok(ShouldQuit::True);
+            }
         }
         Ok(ShouldQuit::False)
     }
