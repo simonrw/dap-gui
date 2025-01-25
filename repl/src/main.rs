@@ -68,6 +68,7 @@ fn main() -> eyre::Result<()> {
     let args = Args::parse();
     let debugger = Debugger::from_launch_configuration(args.launch_configuration, args.name)
         .context("creating debugger")?;
+    debugger.wait_for_event(|event| matches!(event, debugger::Event::Initialised));
     for breakpoint in args.breakpoints {
         tracing::debug!(?breakpoint, "adding breakpoint");
         debugger
@@ -75,6 +76,8 @@ fn main() -> eyre::Result<()> {
             .context("adding breakpoint")?;
     }
     tracing::debug!("breakpoints added");
+    debugger.start().context("starting debugger")?;
+    tracing::debug!("debugger started");
 
     let mut app = App::new(debugger);
     tracing::debug!("debugger set up");
