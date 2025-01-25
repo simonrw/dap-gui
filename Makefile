@@ -33,3 +33,11 @@ tui-attach:
 .PHONY: tui-launch
 tui-launch:
 	cargo r -p tui -- launch.json -n Launch -b test.py:4
+
+.PHONY: repl-attach
+repl-attach:
+	cargo r -p repl -- launch.json -n Attach -b attach.py:29
+
+.PHONY: repl-launch
+repl-launch:
+	cargo r -p repl -- launch.json -n Launch -b test.py:4

@@ -13,6 +13,7 @@ members = [
     "dap-codec",
     "gui2",
     "tui",
+    "repl",
 ]
 
 [workspace.dependencies]
