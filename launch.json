@@ -43,6 +43,30 @@
           "remoteRoot": "/opt/code/localstack/localstack"
         }
       ]
+    },
+    {
+      "name": "repl",
+      "type": "lldb",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "cargo": {
+        "args": [
+          "build",
+          "-p",
+          "repl",
+          "--bin=repl"
+        ],
+        "filter": {
+          "kind": "bin"
+        }
+      },
+      "args": [
+        "launch.json",
+        "-n",
+        "Launch",
+        "-b",
+        "test.py:4"
+      ]
     }
   ]
 }

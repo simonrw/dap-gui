@@ -46,9 +46,10 @@ struct Folder {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(untagged)]
+#[serde(tag = "type", rename_all = "lowercase")]
 pub enum LaunchConfiguration {
     Debugpy(Debugpy),
+    LLDB(LLDB),
 }
 
 impl LaunchConfiguration {
@@ -57,6 +58,7 @@ impl LaunchConfiguration {
             LaunchConfiguration::Debugpy(debugpy) => {
                 debugpy.resolve(root);
             }
+            LaunchConfiguration::LLDB(lldb) => lldb.resolve(root),
         }
     }
 }
@@ -88,6 +90,9 @@ fn from_str(name: Option<&String>, contents: &str) -> eyre::Result<ChosenLaunchC
                                 return Ok(ChosenLaunchConfiguration::Specific(configuration));
                             }
                         }
+                        LaunchConfiguration::LLDB(LLDB { .. }) => {
+                            todo!()
+                        }
                     }
                 }
             } else {
@@ -95,6 +100,7 @@ fn from_str(name: Option<&String>, contents: &str) -> eyre::Result<ChosenLaunchC
                     .iter()
                     .map(|c| match &c {
                         LaunchConfiguration::Debugpy(Debugpy { name, .. }) => name.clone(),
+                        LaunchConfiguration::LLDB(LLDB { name, .. }) => name.clone(),
                     })
                     .collect();
                 return Ok(ChosenLaunchConfiguration::ToBeChosen(configuration_names));
@@ -114,6 +120,13 @@ fn from_str(name: Option<&String>, contents: &str) -> eyre::Result<ChosenLaunchC
                                 return Ok(ChosenLaunchConfiguration::Specific(configuration));
                             }
                         }
+                        LaunchConfiguration::LLDB(LLDB {
+                            name: config_name, ..
+                        }) => {
+                            if config_name == name {
+                                return Ok(ChosenLaunchConfiguration::Specific(configuration));
+                            }
+                        }
                     }
                 }
             } else {
@@ -121,6 +134,7 @@ fn from_str(name: Option<&String>, contents: &str) -> eyre::Result<ChosenLaunchC
                     .iter()
                     .map(|c| match &c {
                         LaunchConfiguration::Debugpy(Debugpy { name, .. }) => name.clone(),
+                        LaunchConfiguration::LLDB(LLDB { name, .. }) => name.clone(),
                     })
                     .collect();
                 return Ok(ChosenLaunchConfiguration::ToBeChosen(configuration_names));
@@ -155,7 +169,6 @@ pub fn load_from_path(
 #[serde(rename_all = "camelCase")]
 pub struct Debugpy {
     pub name: String,
-    pub r#type: String,
     pub request: String,
     pub connect: Option<ConnectionDetails>,
     pub program: Option<PathBuf>,
@@ -163,6 +176,7 @@ pub struct Debugpy {
     pub just_my_code: Option<bool>,
     pub cwd: Option<PathBuf>,
 }
+
 impl Debugpy {
     fn resolve(&mut self, root: impl AsRef<Path>) {
         let root = root.as_ref();
@@ -175,7 +189,34 @@ impl Debugpy {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LLDB {
+    pub name: String,
+    pub request: String,
+    pub connect: Option<ConnectionDetails>,
+    pub cargo: CargoConfig,
+    pub cwd: Option<String>,
+}
+
+impl LLDB {
+    fn resolve(&mut self, _root: impl AsRef<Path>) {}
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct ConnectionDetails {
     pub host: String,
     pub port: u16,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CargoConfig {
+    pub args: Vec<String>,
+    pub filter: CargoFilter,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CargoFilter {
+    pub kind: String,
 }

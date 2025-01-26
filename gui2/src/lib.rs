@@ -147,6 +147,7 @@ impl DebuggerApp {
                 };
                 debugger
             }
+            other => todo!("{other:?}"),
         };
 
         debugger.wait_for_event(|e| matches!(e, debugger::Event::Initialised));

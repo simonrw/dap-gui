@@ -236,6 +236,7 @@ impl DebuggerApp {
                 };
                 debugger
             }
+            other => todo!("{other:?}"),
         };
 
         let events = debugger.events();

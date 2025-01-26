@@ -400,6 +400,7 @@ impl Debugger {
                 };
                 debugger
             }
+            other => todo!("{other:?}"),
         };
 
         tracing::trace!("waiting for initialised event");

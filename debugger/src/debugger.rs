@@ -65,6 +65,18 @@ impl From<LaunchConfiguration> for InitialiseArguments {
                 }),
                 other => todo!("{other}"),
             },
+            LaunchConfiguration::LLDB(lldb) => match lldb.request.as_str() {
+                "launch" =>
+                {
+                    #[allow(unreachable_code)]
+                    InitialiseArguments::Launch(LaunchArguments {
+                        working_directory: None,
+                        language: crate::Language::DebugPy,
+                        program: todo!(),
+                    })
+                }
+                other => todo!("{other}"),
+            },
         }
     }
 }

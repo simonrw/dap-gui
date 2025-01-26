@@ -1,6 +1,6 @@
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
-use launch_configuration::{load_from_path, ChosenLaunchConfiguration};
+use launch_configuration::{load_from_path, ChosenLaunchConfiguration, LaunchConfiguration};
 
 #[pyclass]
 pub struct PyChosenLaunchConfiguration {
@@ -13,9 +13,8 @@ impl From<ChosenLaunchConfiguration> for PyChosenLaunchConfiguration {
         match value {
             ChosenLaunchConfiguration::Specific(launch_configuration) => match launch_configuration
             {
-                launch_configuration::LaunchConfiguration::Debugpy(debugpy) => {
-                    Self { name: debugpy.name }
-                }
+                LaunchConfiguration::Debugpy(debugpy) => Self { name: debugpy.name },
+                LaunchConfiguration::LLDB(lldb) => Self { name: lldb.name },
             },
             _ => todo!("unhandled case for chosen launch configuration",),
         }
