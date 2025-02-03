@@ -129,6 +129,12 @@ impl App {
                 tracing::debug!("executing continue command");
                 self.debugger.r#continue().context("resuming execution")?;
             }
+            "?" => {
+                println!(". Commands:");
+                println!(". q - quit");
+                println!(". w - where");
+                println!(". c - continue");
+            }
             "" => return Ok(ShouldQuit::False),
             other => println!("Unhandled commmand: '{}'", other),
         }
@@ -171,6 +177,7 @@ fn main() -> eyre::Result<()> {
 
     let mut app = App::new(debugger);
     tracing::debug!("debugger set up");
+    println!(". enter '?' for help");
     loop {
         match app.loop_step() {
             Ok(ShouldQuit::True) => break,
