@@ -29,6 +29,7 @@ in
         cargo-hack
         cargo-nextest
         custom-python
+        delve
         maturin
         pyright
         toolchain
