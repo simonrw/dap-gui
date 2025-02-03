@@ -49,13 +49,14 @@ struct Folder {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum LaunchConfiguration {
     Debugpy(Debugpy),
+    Python(Debugpy),
     LLDB(LLDB),
 }
 
 impl LaunchConfiguration {
     pub fn resolve(&mut self, root: impl AsRef<Path>) {
         match self {
-            LaunchConfiguration::Debugpy(debugpy) => {
+            LaunchConfiguration::Debugpy(debugpy) | LaunchConfiguration::Python(debugpy) => {
                 debugpy.resolve(root);
             }
             LaunchConfiguration::LLDB(lldb) => lldb.resolve(root),
@@ -83,9 +84,11 @@ fn from_str(name: Option<&String>, contents: &str) -> eyre::Result<ChosenLaunchC
             if let Some(name) = name {
                 for configuration in configurations {
                     match &configuration {
-                        LaunchConfiguration::Debugpy(Debugpy {
-                            name: config_name, ..
-                        }) => {
+                        LaunchConfiguration::Debugpy(debugpy)
+                        | LaunchConfiguration::Python(debugpy) => {
+                            let Debugpy {
+                                name: config_name, ..
+                            } = debugpy;
                             if config_name == name {
                                 return Ok(ChosenLaunchConfiguration::Specific(configuration));
                             }
@@ -99,7 +102,11 @@ fn from_str(name: Option<&String>, contents: &str) -> eyre::Result<ChosenLaunchC
                 let configuration_names: Vec<_> = configurations
                     .iter()
                     .map(|c| match &c {
-                        LaunchConfiguration::Debugpy(Debugpy { name, .. }) => name.clone(),
+                        LaunchConfiguration::Debugpy(debugpy)
+                        | LaunchConfiguration::Python(debugpy) => {
+                            let Debugpy { name, .. } = debugpy;
+                            name.clone()
+                        }
                         LaunchConfiguration::LLDB(LLDB { name, .. }) => name.clone(),
                     })
                     .collect();
@@ -113,9 +120,11 @@ fn from_str(name: Option<&String>, contents: &str) -> eyre::Result<ChosenLaunchC
             if let Some(name) = name {
                 for configuration in configurations {
                     match &configuration {
-                        LaunchConfiguration::Debugpy(Debugpy {
-                            name: config_name, ..
-                        }) => {
+                        LaunchConfiguration::Debugpy(debugpy)
+                        | LaunchConfiguration::Python(debugpy) => {
+                            let Debugpy {
+                                name: config_name, ..
+                            } = debugpy;
                             if config_name == name {
                                 return Ok(ChosenLaunchConfiguration::Specific(configuration));
                             }
@@ -133,7 +142,11 @@ fn from_str(name: Option<&String>, contents: &str) -> eyre::Result<ChosenLaunchC
                 let configuration_names: Vec<_> = configurations
                     .iter()
                     .map(|c| match &c {
-                        LaunchConfiguration::Debugpy(Debugpy { name, .. }) => name.clone(),
+                        LaunchConfiguration::Debugpy(debugpy)
+                        | LaunchConfiguration::Python(debugpy) => {
+                            let Debugpy { name, .. } = debugpy;
+                            name.clone()
+                        }
                         LaunchConfiguration::LLDB(LLDB { name, .. }) => name.clone(),
                     })
                     .collect();

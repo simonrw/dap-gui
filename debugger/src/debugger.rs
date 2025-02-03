@@ -51,20 +51,22 @@ impl From<state::AttachArguments> for InitialiseArguments {
 impl From<LaunchConfiguration> for InitialiseArguments {
     fn from(value: LaunchConfiguration) -> Self {
         match value {
-            LaunchConfiguration::Debugpy(debugpy) => match debugpy.request.as_str() {
-                "launch" => InitialiseArguments::Launch(LaunchArguments {
-                    program: debugpy.program.expect("program must be specified"),
-                    working_directory: None,
-                    language: crate::Language::DebugPy,
-                }),
-                "attach" => InitialiseArguments::Attach(AttachArguments {
-                    port: debugpy.connect.map(|c| c.port),
-                    language: Language::DebugPy,
-                    path_mappings: debugpy.path_mappings,
-                    working_directory: debugpy.cwd.expect("TODO: cwd must be specified"),
-                }),
-                other => todo!("{other}"),
-            },
+            LaunchConfiguration::Debugpy(debugpy) | LaunchConfiguration::Python(debugpy) => {
+                match debugpy.request.as_str() {
+                    "launch" => InitialiseArguments::Launch(LaunchArguments {
+                        program: debugpy.program.expect("program must be specified"),
+                        working_directory: None,
+                        language: crate::Language::DebugPy,
+                    }),
+                    "attach" => InitialiseArguments::Attach(AttachArguments {
+                        port: debugpy.connect.map(|c| c.port),
+                        language: Language::DebugPy,
+                        path_mappings: debugpy.path_mappings,
+                        working_directory: debugpy.cwd.expect("TODO: cwd must be specified"),
+                    }),
+                    other => todo!("{other}"),
+                }
+            }
             LaunchConfiguration::LLDB(lldb) => match lldb.request.as_str() {
                 "launch" =>
                 {

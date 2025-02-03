@@ -11,11 +11,13 @@ pub struct PyChosenLaunchConfiguration {
 impl From<ChosenLaunchConfiguration> for PyChosenLaunchConfiguration {
     fn from(value: ChosenLaunchConfiguration) -> Self {
         match value {
-            ChosenLaunchConfiguration::Specific(launch_configuration) => match launch_configuration
-            {
-                LaunchConfiguration::Debugpy(debugpy) => Self { name: debugpy.name },
-                LaunchConfiguration::LLDB(lldb) => Self { name: lldb.name },
-            },
+            ChosenLaunchConfiguration::Specific(launch_configuration) => {
+                match launch_configuration {
+                    LaunchConfiguration::Debugpy(debugpy)
+                    | LaunchConfiguration::Python(debugpy) => Self { name: debugpy.name },
+                    LaunchConfiguration::LLDB(lldb) => Self { name: lldb.name },
+                }
+            }
             _ => todo!("unhandled case for chosen launch configuration",),
         }
     }
