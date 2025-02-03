@@ -1,3 +1,4 @@
+use std::sync::Mutex;
 use std::thread::JoinHandle;
 use std::{io::Write, path::PathBuf};
 
@@ -7,6 +8,7 @@ use crossbeam_channel::Receiver;
 use debugger::Breakpoint;
 use debugger::Debugger;
 use debugger::ProgramDescription;
+use tracing_subscriber::filter::EnvFilter;
 
 struct App {
     debugger: Debugger,
@@ -147,7 +149,11 @@ struct Args {
 
 fn main() -> eyre::Result<()> {
     color_eyre::install().context("installing color_eyre")?;
-    tracing_subscriber::fmt::init();
+    let log_file = std::fs::File::create("log.log")?;
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_writer(Mutex::new(log_file))
+        .init();
 
     let args = Args::parse();
     let debugger = Debugger::from_launch_configuration(args.launch_configuration, args.name)
