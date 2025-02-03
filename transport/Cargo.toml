@@ -9,7 +9,7 @@ edition = "2021"
 eyre.workspace = true
 crossbeam-channel.workspace = true
 tracing.workspace = true
-bytes = "1.9.0"
+bytes = "1.10.0"
 oneshot = { version = "0.1.8", default-features = false, features = ["std"] }
 serde_json.workspace = true
 serde.workspace = true
