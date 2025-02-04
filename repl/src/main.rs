@@ -127,11 +127,22 @@ impl App {
                 tracing::debug!("executing continue command");
                 self.debugger.r#continue().context("resuming execution")?;
             }
+            "v" => {
+                tracing::debug!("printing variable names in scope");
+                if let Some(ProgramState { paused_frame, .. }) = &self.program_description {
+                    for var in &paused_frame.variables {
+                        println!(". {}", var.name);
+                    }
+                } else {
+                    println!("???");
+                }
+            }
             "?" => {
                 println!(". Commands:");
                 println!(". q - quit");
                 println!(". w - where");
                 println!(". c - continue");
+                println!(". v - variables");
             }
             "" => return Ok(ShouldQuit::False),
             other => println!("Unhandled commmand: '{}'", other),
