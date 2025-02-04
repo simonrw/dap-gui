@@ -21,7 +21,7 @@ pub(crate) enum DebuggerState {
 
 /// Represents the current program state
 #[derive(Debug, Clone)]
-pub struct ProgramDescription {
+pub struct ProgramState {
     pub stack: Vec<types::StackFrame>,
     pub breakpoints: Vec<types::Breakpoint>,
     pub paused_frame: types::PausedFrame,
@@ -31,8 +31,8 @@ pub struct ProgramDescription {
 pub enum Event {
     Uninitialised,
     Initialised,
-    Paused(ProgramDescription),
-    ScopeChange(ProgramDescription),
+    Paused(ProgramState),
+    ScopeChange(ProgramState),
     Running,
     Ended,
 }
@@ -46,7 +46,7 @@ impl<'a> From<&'a DebuggerState> for Event {
                 paused_frame,
                 breakpoints,
                 ..
-            } => Event::Paused(ProgramDescription {
+            } => Event::Paused(ProgramState {
                 stack: stack.clone(),
                 paused_frame: *paused_frame.clone(),
                 breakpoints: breakpoints.clone(),

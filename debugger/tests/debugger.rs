@@ -1,4 +1,4 @@
-use debugger::{Debugger, PausedFrame, ProgramDescription};
+use debugger::{Debugger, PausedFrame, ProgramState};
 use eyre::WrapErr;
 use std::{io::IsTerminal, thread, time::Duration};
 use tracing_subscriber::EnvFilter;
@@ -85,7 +85,7 @@ fn test_remote_attach() -> eyre::Result<()> {
         matches!(e, debugger::Event::Running { .. })
     });
 
-    let debugger::Event::Paused(ProgramDescription { paused_frame, .. }) =
+    let debugger::Event::Paused(ProgramState { paused_frame, .. }) =
         wait_for_event("paused event", &drx, |e| {
             matches!(e, debugger::Event::Paused { .. })
         })
@@ -159,7 +159,7 @@ fn test_debugger() -> eyre::Result<()> {
         matches!(e, debugger::Event::Running { .. })
     });
 
-    let debugger::Event::Paused(ProgramDescription { paused_frame, .. }) =
+    let debugger::Event::Paused(ProgramState { paused_frame, .. }) =
         wait_for_event("paused event", &drx, |e| {
             matches!(e, debugger::Event::Paused { .. })
         })

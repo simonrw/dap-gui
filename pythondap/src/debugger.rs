@@ -1,4 +1,4 @@
-use debugger::{AttachArguments, Event, LaunchArguments, PausedFrame, ProgramDescription};
+use debugger::{AttachArguments, Event, LaunchArguments, PausedFrame};
 use launch_configuration::{ChosenLaunchConfiguration, LaunchConfiguration};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -264,7 +264,7 @@ impl Debugger {
         match self.internal_debugger.wait_for_event(|evt| {
             matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
         }) {
-            Event::Paused(ProgramDescription {
+            Event::Paused(debugger::ProgramState {
                 stack,
                 paused_frame,
                 ..
@@ -291,7 +291,7 @@ impl Debugger {
         match self.internal_debugger.wait_for_event(|evt| {
             matches!(evt, Event::Paused { .. }) || matches!(evt, Event::Ended)
         }) {
-            Event::Paused(ProgramDescription {
+            Event::Paused(debugger::ProgramState {
                 stack,
                 paused_frame,
                 ..

@@ -5,14 +5,12 @@ use std::{io::Write, path::PathBuf};
 use clap::Parser;
 use color_eyre::eyre::{self, Context};
 use crossbeam_channel::Receiver;
-use debugger::Breakpoint;
-use debugger::Debugger;
-use debugger::ProgramDescription;
+use debugger::{Breakpoint, Debugger, ProgramState};
 use tracing_subscriber::filter::EnvFilter;
 
 struct App {
     debugger: Debugger,
-    program_description: Option<ProgramDescription>,
+    program_description: Option<ProgramState>,
     debugger_events: Receiver<debugger::Event>,
     input_rx: Receiver<String>,
 
