@@ -45,7 +45,7 @@ in
 
     env = {
       RUST_BACKTRACE = "1";
-      RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug,pythondap=debug,tui=debug";
+      RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug,pythondap=debug,tui=debug,repl=debug";
       RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
     };
 

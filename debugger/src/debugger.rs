@@ -14,7 +14,7 @@ use server::Implementation;
 use transport::{
     requests::{self, Disconnect},
     responses,
-    types::{BreakpointLocation, StackFrameId},
+    types::{BreakpointLocation, StackFrameId, Variable},
     DEFAULT_DAP_PORT,
 };
 use uuid::Uuid;
@@ -378,6 +378,10 @@ impl Debugger {
             }
             Ok(())
         })
+    }
+
+    pub fn variables(&self, variables_reference: i64) -> eyre::Result<Vec<Variable>> {
+        self.with_internals(|internals| internals.variables(variables_reference))
     }
 
     fn execute(&self, body: requests::RequestBody) -> eyre::Result<()> {

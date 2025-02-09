@@ -7,6 +7,27 @@ use color_eyre::eyre::{self, Context};
 use crossbeam_channel::Receiver;
 use debugger::{Breakpoint, Debugger, ProgramState};
 use tracing_subscriber::filter::EnvFilter;
+use transport::types::Variable;
+
+// TODO: this would be better async
+fn print_var(debugger: &mut Debugger, v: Variable) -> eyre::Result<()> {
+    let span = tracing::debug_span!("print_var", name = %v.name);
+    let _guard = span.enter();
+
+    // TODO: presentation hint
+    if v.variables_reference == 0 {
+        tracing::debug!(name = ?v.name, "got leaf variable");
+        println!(". {} = {}", v.name, v.value);
+    } else {
+        tracing::debug!(vref = %v.variables_reference, "recursing into variable");
+        let vs = debugger.variables(v.variables_reference)?;
+        for vv in vs {
+            tracing::debug!(?vv, "recursing");
+            print_var(debugger, vv.clone())?;
+        }
+    }
+    Ok(())
+}
 
 struct App {
     debugger: Debugger,
@@ -128,10 +149,11 @@ impl App {
                 self.debugger.r#continue().context("resuming execution")?;
             }
             "v" => {
-                tracing::debug!("printing variable names in scope");
                 if let Some(ProgramState { paused_frame, .. }) = &self.program_description {
+                    tracing::debug!("printing variable names in scope");
                     for var in &paused_frame.variables {
-                        println!(". {}", var.name);
+                        tracing::debug!(?var, "printing variable recursively");
+                        print_var(&mut self.debugger, var.clone()).context("printing variable")?;
                     }
                 } else {
                     println!("???");
@@ -215,7 +237,7 @@ fn main() -> eyre::Result<()> {
         match app.loop_step() {
             Ok(ShouldQuit::True) => break,
             Ok(ShouldQuit::False) => {}
-            Err(e) => eyre::bail!("Error running command: {e}"),
+            Err(e) => eyre::bail!("Error running command: {e:?}"),
         }
     }
 

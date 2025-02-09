@@ -4,7 +4,9 @@ use std::{collections::HashMap, path::PathBuf};
 use transport::{
     requests::{self, Initialize, PathFormat},
     responses::{self, ResponseBody},
-    types::{BreakpointLocation, Source, SourceBreakpoint, StackFrame, StackFrameId, ThreadId},
+    types::{
+        BreakpointLocation, Source, SourceBreakpoint, StackFrame, StackFrameId, ThreadId, Variable,
+    },
     Client,
 };
 
@@ -84,7 +86,7 @@ impl DebuggerInternals {
         Ok(())
     }
 
-    fn compute_paused_frame(&self, stack_frame: &StackFrame) -> eyre::Result<PausedFrame> {
+    fn compute_paused_frame(&mut self, stack_frame: &StackFrame) -> eyre::Result<PausedFrame> {
         let responses::Response {
             body: Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })),
             success: true,
@@ -101,22 +103,10 @@ impl DebuggerInternals {
 
         let mut variables = Vec::new();
         for scope in scopes {
-            let req = requests::RequestBody::Variables(requests::Variables {
-                variables_reference: scope.variables_reference,
-            });
-            match self.client.send(req).expect("fetching variables") {
-                responses::Response {
-                    body:
-                        Some(responses::ResponseBody::Variables(responses::VariablesResponse {
-                            variables: scope_variables,
-                        })),
-                    success: true,
-                    ..
-                } => variables.extend(scope_variables.into_iter()),
-                r => {
-                    tracing::warn!(?r, "unhandled response from send variables request")
-                }
-            };
+            variables.extend(
+                self.variables(scope.variables_reference)
+                    .with_context(|| format!("fetching variables for scope {:?}", scope))?,
+            );
         }
         let paused_frame = PausedFrame {
             frame: stack_frame.clone(),
@@ -124,6 +114,30 @@ impl DebuggerInternals {
         };
 
         Ok(paused_frame)
+    }
+
+    pub(crate) fn variables(&mut self, variables_reference: i64) -> eyre::Result<Vec<Variable>> {
+        let req = requests::RequestBody::Variables(requests::Variables {
+            variables_reference,
+        });
+        match self.client.send(req).context("sending variables request") {
+            Ok(responses::Response {
+                body,
+                success: true,
+                ..
+            }) => {
+                if let Some(responses::ResponseBody::Variables(responses::VariablesResponse {
+                    variables: scope_variables,
+                })) = body
+                {
+                    Ok(scope_variables)
+                } else {
+                    tracing::debug!(vref = %variables_reference, "no variables found for reference");
+                    Ok(Vec::new())
+                }
+            }
+            other => eyre::bail!("bad response from variables request: {other:?}"),
+        }
     }
 
     pub(crate) fn emit(&mut self, event: Event) {
