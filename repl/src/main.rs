@@ -137,12 +137,36 @@ impl App {
                     println!("???");
                 }
             }
+            "o" => {
+                tracing::debug!("stepping out");
+                self.debugger.step_out().context("stepping out")?;
+            }
+            "i" => {
+                tracing::debug!("stepping in");
+                self.debugger.step_in().context("stepping in")?;
+            }
+            input if input.starts_with("p ") => {
+                let var_name = input.trim_start_matches("p ").trim();
+                tracing::debug!("printing variable {}", var_name);
+                if let Some(ProgramState { paused_frame, .. }) = &self.program_description {
+                    if let Some(var) = paused_frame.variables.iter().find(|v| v.name == var_name) {
+                        println!(". {} = {}", var.name, var.value);
+                    } else {
+                        println!("Variable '{}' not found in current scope", var_name);
+                    }
+                } else {
+                    println!("???");
+                }
+            }
             "?" => {
                 println!(". Commands:");
                 println!(". q - quit");
                 println!(". w - where");
                 println!(". c - continue");
                 println!(". v - variables");
+                println!(". o - step out");
+                println!(". i - step in");
+                println!(". p <name> - print variable value");
             }
             "" => return Ok(ShouldQuit::False),
             other => println!("Unhandled commmand: '{}'", other),
