@@ -141,6 +141,64 @@ impl App {
 
                 self.add_messages(messages);
             }
+            "l" => {
+                let mut messages = Vec::new();
+                if let Some(program_description) = &self.program_description {
+                    let Some(source) = program_description.paused_frame.frame.source.as_ref()
+                    else {
+                        todo!()
+                    };
+                    eyre::ensure!(source.path.is_some());
+                    let line = program_description.paused_frame.frame.line;
+
+                    let contents = std::fs::read_to_string(source.path.as_ref().unwrap())
+                        .context("reading file")?;
+                    let line_text = contents.split('\n').nth(line - 1).unwrap();
+                    let start = tree_sitter::Point {
+                        row: line - 1,
+                        column: 0,
+                    };
+                    let end = tree_sitter::Point {
+                        row: line - 1,
+                        column: line_text.len(),
+                    };
+
+                    // set up treesitter
+                    let mut parser = tree_sitter::Parser::new();
+                    parser
+                        .set_language(&tree_sitter_python::LANGUAGE.into())
+                        .context("setting parser language")?;
+                    let tree = parser
+                        .parse(contents.as_bytes(), None)
+                        .ok_or(eyre::eyre!("error parsing file"))?;
+                    let root = tree.root_node();
+                    let descendant = root
+                        .descendant_for_point_range(start, end)
+                        .ok_or(eyre::eyre!("getting descendant"))?;
+
+                    // find up until function body
+                    let mut n = descendant;
+
+                    loop {
+                        tracing::debug!(node = ?n, "loop iteration");
+                        if n.kind() == "function_definition" {
+                            let s = n
+                                .utf8_text(contents.as_bytes())
+                                .context("extracting utf8 text from node")?;
+
+                            messages.push(s.to_string());
+                            break;
+                        }
+
+                        let Some(parent) = n.parent() else {
+                            eyre::bail!("no function body found");
+                        };
+                        n = parent;
+                    }
+                }
+
+                self.add_messages(messages);
+            }
             "p" => {
                 eyre::ensure!(command.len() > 1, "no variables given to print");
                 for variable_name in command.iter().skip(1) {
