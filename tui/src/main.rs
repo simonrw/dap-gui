@@ -71,10 +71,14 @@ impl App {
     }
 
     fn run_command(&mut self) -> eyre::Result<()> {
-        // TODO: execute debugger commaprintlnnd
-        let command: Vec<_> = self.input.split_whitespace().collect();
+        // TODO: execute debugger command
+        let command: Vec<_> = self
+            .input
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .collect();
         eyre::ensure!(!command.is_empty(), "no command given");
-        match command[0] {
+        match command[0].as_str() {
             "c" => {
                 tracing::debug!("executing continue command");
                 self.add_message("Continuing execution");
