@@ -103,6 +103,44 @@ impl App {
                 tracing::debug!("executing quit command");
                 self.should_terminate = true;
             }
+            "w" => {
+                let mut messages = Vec::new();
+                if let Some(description) = &self.program_description {
+                    for (i, frame) in description.stack.iter().enumerate() {
+                        if i == 0 {
+                            messages.push(format!(
+                                "-> {}:{}",
+                                frame
+                                    .source
+                                    .as_ref()
+                                    .unwrap()
+                                    .path
+                                    .as_ref()
+                                    .unwrap()
+                                    .display(),
+                                frame.line
+                            ));
+                        } else {
+                            messages.push(format!(
+                                "   {}:{}",
+                                frame
+                                    .source
+                                    .as_ref()
+                                    .unwrap()
+                                    .path
+                                    .as_ref()
+                                    .unwrap()
+                                    .display(),
+                                frame.line
+                            ));
+                        }
+                    }
+                } else {
+                    messages.push("???".to_string());
+                }
+
+                self.add_messages(messages);
+            }
             "p" => {
                 eyre::ensure!(command.len() > 1, "no variables given to print");
                 for variable_name in command.iter().skip(1) {
@@ -135,6 +173,10 @@ impl App {
 
     fn add_message(&mut self, message: impl Into<String>) {
         self.messages.push(message.into());
+    }
+
+    fn add_messages(&mut self, messages: impl IntoIterator<Item = String>) {
+        self.messages.extend(messages);
     }
 
     fn delete_char(&mut self) {
