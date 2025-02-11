@@ -28,3 +28,6 @@ clap = { version = "4.5.28", features = ["derive"] }
 tracing-subscriber = { version = "0.3.19", features = ["json", "env-filter"] }
 dirs = "5.0.1"
 dark-light = "1.1.1"
+
+[profile.release]
+debug = true
