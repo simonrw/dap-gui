@@ -126,20 +126,20 @@ impl App {
             "q" => return Ok(ShouldQuit::True),
             "w" => {
                 if let Some(description) = &self.program_description {
-                    println!(
-                        "{}:{}",
-                        &description
-                            .paused_frame
-                            .frame
-                            .source
-                            .as_ref()
-                            .unwrap()
-                            .path
-                            .as_ref()
-                            .unwrap()
-                            .display(),
-                        description.paused_frame.frame.line
-                    );
+                    for frame in description.stack.iter() {
+                        println!(
+                            "{}:{}",
+                            frame
+                                .source
+                                .as_ref()
+                                .unwrap()
+                                .path
+                                .as_ref()
+                                .unwrap()
+                                .display(),
+                            frame.line
+                        );
+                    }
                 } else {
                     println!("???");
                 }
