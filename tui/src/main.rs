@@ -246,7 +246,7 @@ impl App {
                             .iter()
                             .find(|v| v.name == *variable_name)
                         {
-                            let msg = format!(". {} = {}", var.name, var.value);
+                            let msg = format!("{} = {}", var.name, var.value);
                             self.add_message(DisplayMessage::Plain(msg));
                         } else {
                             let msg =
