@@ -8,9 +8,14 @@ use debugger::{Breakpoint, Debugger, ProgramState};
 use ratatui::{
     layout::{Constraint, Layout, Position},
     style::{Color, Style},
+    text::{Line, Span},
     widgets::{Block, Paragraph},
     DefaultTerminal, Frame,
 };
+use syntect::{
+    easy::HighlightLines, highlighting::ThemeSet, parsing::SyntaxSet, util::LinesWithEndings,
+};
+use syntect_tui::into_span;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Parser)]
@@ -23,13 +28,20 @@ struct Args {
     #[clap(short, long)]
     breakpoints: Vec<Breakpoint>,
 }
+
+#[derive(Debug, Clone)]
+enum DisplayMessage {
+    Plain(String),
+    Block(String),
+}
+
 struct App {
     debugger: Debugger,
     input: String,
     character_index: usize,
     events: Receiver<debugger::Event>,
     should_terminate: bool,
-    messages: Vec<String>,
+    messages: Vec<DisplayMessage>,
     program_description: Option<ProgramState>,
 }
 
@@ -81,22 +93,22 @@ impl App {
         match command[0].as_str() {
             "c" => {
                 tracing::debug!("executing continue command");
-                self.add_message("Continuing execution");
+                self.add_message(DisplayMessage::Plain("Continuing execution".to_string()));
                 self.debugger.r#continue().context("continuing execution")?;
             }
             "n" => {
                 tracing::debug!("executing step_over command");
-                self.add_message("Stepping over");
+                self.add_message(DisplayMessage::Plain("Stepping over".to_string()));
                 self.debugger.step_over().context("stepping over")?;
             }
             "i" => {
                 tracing::debug!("executing step_in command");
-                self.add_message("Stepping in");
+                self.add_message(DisplayMessage::Plain("Stepping in".to_string()));
                 self.debugger.step_in().context("stepping in")?;
             }
             "o" => {
                 tracing::debug!("executing step_out command");
-                self.add_message("Stepping out");
+                self.add_message(DisplayMessage::Plain("Stepping out".to_string()));
                 self.debugger.step_out().context("stepping out")?;
             }
             "q" => {
@@ -139,7 +151,7 @@ impl App {
                     messages.push("???".to_string());
                 }
 
-                self.add_messages(messages);
+                self.add_messages(messages.into_iter().map(DisplayMessage::Plain));
             }
             "l" => {
                 let mut messages = Vec::new();
@@ -216,7 +228,7 @@ impl App {
                     }
                 }
 
-                self.add_messages(messages);
+                self.add_message(DisplayMessage::Block(messages.join("\n")));
             }
             "p" => {
                 eyre::ensure!(command.len() > 1, "no variables given to print");
@@ -229,11 +241,11 @@ impl App {
                             .find(|v| v.name == *variable_name)
                         {
                             let msg = format!(". {} = {}", var.name, var.value);
-                            self.add_message(msg);
+                            self.add_message(DisplayMessage::Plain(msg));
                         } else {
                             let msg =
                                 format!("Variable '{}' not found in current scope", variable_name);
-                            self.add_message(msg);
+                            self.add_message(DisplayMessage::Plain(msg));
                         }
                     } else {
                         println!("???");
@@ -248,11 +260,11 @@ impl App {
         Ok(())
     }
 
-    fn add_message(&mut self, message: impl Into<String>) {
+    fn add_message(&mut self, message: impl Into<DisplayMessage>) {
         self.messages.push(message.into());
     }
 
-    fn add_messages(&mut self, messages: impl IntoIterator<Item = String>) {
+    fn add_messages(&mut self, messages: impl IntoIterator<Item = DisplayMessage>) {
         self.messages.extend(messages);
     }
 
@@ -353,7 +365,7 @@ impl App {
         tracing::debug!("got debugger event");
         match event {
             debugger::Event::Paused(program_description) => {
-                self.add_message(format!(
+                self.add_message(DisplayMessage::Plain(format!(
                     "program paused at {}:{}",
                     &program_description
                         .paused_frame
@@ -366,13 +378,13 @@ impl App {
                         .unwrap()
                         .display(),
                     program_description.paused_frame.frame.line
-                ));
+                )));
                 self.program_description = Some(program_description);
             }
             debugger::Event::ScopeChange { .. } => {}
             debugger::Event::Running => {}
             debugger::Event::Ended => {
-                self.add_message("program ended");
+                self.add_message(DisplayMessage::Plain("program ended".to_string()));
                 self.should_terminate = true;
             }
             _ => {}
@@ -399,11 +411,22 @@ impl App {
         ));
 
         // update messages
-        let messages = self.messages.clone().join("\n");
-        let messages = Paragraph::new(messages.as_str())
+        let mut tui_lines = Vec::new();
+        for message in &self.messages {
+            match message {
+                DisplayMessage::Plain(text) => tui_lines.push(Line::from(text.as_str())),
+                DisplayMessage::Block(text) => {
+                    let lines = syntax_highlight(text)
+                        .into_iter()
+                        .map(|line| line.to_owned());
+                    tui_lines.extend(lines);
+                }
+            }
+        }
+        let paragraph = Paragraph::new(tui_lines)
             .style(Style::default().fg(Color::White))
             .block(Block::bordered().title("Messages"));
-        frame.render_widget(messages, messages_area);
+        frame.render_widget(paragraph, messages_area);
     }
 }
 
@@ -435,4 +458,25 @@ fn main() -> eyre::Result<()> {
     let result = app.run(terminal);
     ratatui::restore();
     result
+}
+
+fn syntax_highlight(text: &str) -> Vec<Line<'_>> {
+    let ps = SyntaxSet::load_defaults_newlines();
+    let ts = ThemeSet::load_defaults();
+    // TODO: detect file language
+    let syntax = ps.find_syntax_by_extension("py").unwrap();
+    let mut h = HighlightLines::new(syntax, &ts.themes["base16-ocean.dark"]);
+
+    let mut out = Vec::new();
+    for line in LinesWithEndings::from(text) {
+        // LinesWithEndings enables use of newlines mode
+        let line_spans: Vec<Span> = h
+            .highlight_line(line, &ps)
+            .unwrap()
+            .into_iter()
+            .filter_map(|segment| into_span(segment).ok())
+            .collect();
+        out.push(Line::from(line_spans).to_owned());
+    }
+    out
 }

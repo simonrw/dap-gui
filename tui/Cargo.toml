@@ -16,3 +16,5 @@ crossterm = "0.28.1"
 crossbeam-channel.workspace = true
 tree-sitter = "0.25.1"
 tree-sitter-python = "0.23.6"
+syntect = "5.2.0"
+syntect-tui = "3.0.5"
