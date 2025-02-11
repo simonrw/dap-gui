@@ -126,19 +126,34 @@ impl App {
             "q" => return Ok(ShouldQuit::True),
             "w" => {
                 if let Some(description) = &self.program_description {
-                    for frame in description.stack.iter() {
-                        println!(
-                            "{}:{}",
-                            frame
-                                .source
-                                .as_ref()
-                                .unwrap()
-                                .path
-                                .as_ref()
-                                .unwrap()
-                                .display(),
-                            frame.line
-                        );
+                    for (i, frame) in description.stack.iter().enumerate() {
+                        if i == 0 {
+                            println!(
+                                "-> {}:{}",
+                                frame
+                                    .source
+                                    .as_ref()
+                                    .unwrap()
+                                    .path
+                                    .as_ref()
+                                    .unwrap()
+                                    .display(),
+                                frame.line
+                            );
+                        } else {
+                            println!(
+                                "   {}:{}",
+                                frame
+                                    .source
+                                    .as_ref()
+                                    .unwrap()
+                                    .path
+                                    .as_ref()
+                                    .unwrap()
+                                    .display(),
+                                frame.line
+                            );
+                        }
                     }
                 } else {
                     println!("???");
