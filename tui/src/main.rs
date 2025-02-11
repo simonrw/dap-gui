@@ -43,6 +43,10 @@ struct App {
     should_terminate: bool,
     messages: Vec<DisplayMessage>,
     program_description: Option<ProgramState>,
+
+    // highlighting
+    syntax_set: SyntaxSet,
+    theme_set: ThemeSet,
 }
 
 impl App {
@@ -56,6 +60,8 @@ impl App {
             should_terminate: false,
             messages: Vec::new(),
             program_description: None,
+            syntax_set: SyntaxSet::load_defaults_newlines(),
+            theme_set: ThemeSet::load_defaults(),
         }
     }
 
@@ -416,7 +422,7 @@ impl App {
             match message {
                 DisplayMessage::Plain(text) => tui_lines.push(Line::from(text.as_str())),
                 DisplayMessage::Block(text) => {
-                    let lines = syntax_highlight(text)
+                    let lines = syntax_highlight(&self.syntax_set, &self.theme_set, text)
                         .into_iter()
                         .map(|line| line.to_owned());
                     tui_lines.extend(lines);
@@ -460,9 +466,9 @@ fn main() -> eyre::Result<()> {
     result
 }
 
-fn syntax_highlight(text: &str) -> Vec<Line<'_>> {
-    let ps = SyntaxSet::load_defaults_newlines();
-    let ts = ThemeSet::load_defaults();
+// TODO: use tree-sitter-highlight
+// https://crates.io/crates/tree-sitter-highlight
+fn syntax_highlight<'a>(ps: &'a SyntaxSet, ts: &'a ThemeSet, text: &'a str) -> Vec<Line<'a>> {
     // TODO: detect file language
     let syntax = ps.find_syntax_by_extension("py").unwrap();
     let mut h = HighlightLines::new(syntax, &ts.themes["base16-ocean.dark"]);
@@ -471,7 +477,7 @@ fn syntax_highlight(text: &str) -> Vec<Line<'_>> {
     for line in LinesWithEndings::from(text) {
         // LinesWithEndings enables use of newlines mode
         let line_spans: Vec<Span> = h
-            .highlight_line(line, &ps)
+            .highlight_line(line, ps)
             .unwrap()
             .into_iter()
             .filter_map(|segment| into_span(segment).ok())
