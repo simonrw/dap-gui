@@ -17,6 +17,7 @@ use syntect::{
 };
 use syntect_tui::into_span;
 use tracing_subscriber::EnvFilter;
+use transport::types::Variable;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -246,8 +247,7 @@ impl App {
                             .iter()
                             .find(|v| v.name == *variable_name)
                         {
-                            let msg = format!("{} = {}", var.name, var.value);
-                            self.add_message(DisplayMessage::Plain(msg));
+                            print_var(&mut self.debugger, var.clone(), &mut self.messages)?;
                         } else {
                             let msg =
                                 format!("Variable '{}' not found in current scope", variable_name);
@@ -494,4 +494,27 @@ fn syntax_highlight<'a>(ps: &'a SyntaxSet, ts: &'a ThemeSet, text: &'a str) -> V
         out.push(Line::from(line_spans).to_owned());
     }
     out
+}
+
+fn print_var(
+    debugger: &mut Debugger,
+    v: Variable,
+    messages: &mut Vec<DisplayMessage>,
+) -> eyre::Result<()> {
+    let span = tracing::debug_span!("print_var", name = %v.name);
+    let _guard = span.enter();
+
+    // TODO: presentation hint
+    if v.variables_reference == 0 {
+        tracing::debug!(name = ?v.name, "got leaf variable");
+        messages.push(DisplayMessage::Plain(format!("{} = {}", v.name, v.value)));
+    } else {
+        tracing::debug!(vref = %v.variables_reference, "recursing into variable");
+        let vs = debugger.variables(v.variables_reference)?;
+        for vv in vs {
+            tracing::debug!(?vv, "recursing");
+            print_var(debugger, vv.clone(), messages)?;
+        }
+    }
+    Ok(())
 }
