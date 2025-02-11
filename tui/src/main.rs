@@ -99,6 +99,10 @@ impl App {
                 self.add_message("Stepping out");
                 self.debugger.step_out().context("stepping out")?;
             }
+            "q" => {
+                tracing::debug!("executing quit command");
+                self.should_terminate = true;
+            }
             "p" => {
                 eyre::ensure!(command.len() > 1, "no variables given to print");
                 for variable_name in command.iter().skip(1) {
