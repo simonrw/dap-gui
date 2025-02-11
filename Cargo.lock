@@ -6067,6 +6067,7 @@ dependencies = [
  "crossbeam-channel",
  "crossterm",
  "debugger",
+ "dirs 5.0.1",
  "ratatui",
  "server",
  "syntect",

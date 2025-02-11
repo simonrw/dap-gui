@@ -443,7 +443,11 @@ impl App {
 
 fn main() -> eyre::Result<()> {
     color_eyre::install()?;
-    let log_file = std::fs::File::create("log.log")?;
+    let log_dir = dirs::data_dir()
+        .ok_or_else(|| eyre::eyre!("Could not find data directory"))?
+        .join("dap-gui");
+    std::fs::create_dir_all(&log_dir)?;
+    let log_file = std::fs::File::create(log_dir.join("debug.log"))?;
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .with_writer(Mutex::new(log_file))
