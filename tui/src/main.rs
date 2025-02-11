@@ -429,9 +429,14 @@ impl App {
                 }
             }
         }
+        let num_lines = tui_lines.len();
         let paragraph = Paragraph::new(tui_lines)
             .style(Style::default().fg(Color::White))
-            .block(Block::bordered().title("Messages"));
+            .block(Block::bordered().title("Messages"))
+            .scroll((
+                num_lines.saturating_sub(messages_area.height as usize - 2) as u16,
+                0,
+            ));
         frame.render_widget(paragraph, messages_area);
     }
 }
