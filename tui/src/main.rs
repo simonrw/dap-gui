@@ -186,7 +186,26 @@ impl App {
                                 .utf8_text(contents.as_bytes())
                                 .context("extracting utf8 text from node")?;
 
-                            messages.push(s.to_string());
+                            let start = n.start_position();
+
+                            // Get the cursor's line number (line - 1 since it's 0-based)
+                            let cursor_line = line - 1;
+
+                            // Convert node text to lines and find which line contains cursor
+                            let node_start_line = start.row;
+                            let node_lines = s.split('\n');
+
+                            // Find the relative line number within the node's text
+                            let relative_line = cursor_line - node_start_line;
+
+                            for (i, line) in node_lines.enumerate() {
+                                if i == relative_line {
+                                    messages.push(format!("-> {}", line));
+                                } else {
+                                    messages.push(format!("   {}", line));
+                                }
+                            }
+
                             break;
                         }
 
