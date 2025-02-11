@@ -174,6 +174,10 @@ impl App {
                     println!("???");
                 }
             }
+            "n" => {
+                tracing::debug!("stepping over");
+                self.debugger.step_over().context("stepping over")?;
+            }
             "o" => {
                 tracing::debug!("stepping out");
                 self.debugger.step_out().context("stepping out")?;
