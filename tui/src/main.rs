@@ -230,11 +230,28 @@ impl App {
         tracing::debug!("got debugger event");
         match event {
             debugger::Event::Paused(program_description) => {
+                self.add_message(format!(
+                    "program paused at {}:{}",
+                    &program_description
+                        .paused_frame
+                        .frame
+                        .source
+                        .as_ref()
+                        .unwrap()
+                        .path
+                        .as_ref()
+                        .unwrap()
+                        .display(),
+                    program_description.paused_frame.frame.line
+                ));
                 self.program_description = Some(program_description);
             }
             debugger::Event::ScopeChange { .. } => {}
             debugger::Event::Running => {}
-            debugger::Event::Ended => self.should_terminate = true,
+            debugger::Event::Ended => {
+                self.add_message("program ended");
+                self.should_terminate = true;
+            }
             _ => {}
         }
         Ok(())
