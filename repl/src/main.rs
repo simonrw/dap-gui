@@ -176,7 +176,7 @@ impl App {
             }
             "n" => {
                 tracing::debug!("stepping over");
-                self.debugger.step_over().context("stepping over")?;
+                self.debugger.step_over().context("stepping out")?;
             }
             "o" => {
                 tracing::debug!("stepping out");

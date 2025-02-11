@@ -4,7 +4,7 @@ use clap::Parser;
 use color_eyre::{eyre, eyre::Context};
 use crossbeam_channel::Receiver;
 use crossterm::event::{self, Event, KeyCode};
-use debugger::{Breakpoint, Debugger};
+use debugger::{Breakpoint, Debugger, ProgramState};
 use ratatui::{
     layout::{Constraint, Layout, Position},
     style::{Color, Style},
@@ -29,6 +29,8 @@ struct App {
     character_index: usize,
     events: Receiver<debugger::Event>,
     should_terminate: bool,
+    messages: Vec<String>,
+    program_description: Option<ProgramState>,
 }
 
 impl App {
@@ -40,6 +42,8 @@ impl App {
             character_index: 0,
             events,
             should_terminate: false,
+            messages: Vec::new(),
+            program_description: None,
         }
     }
 
@@ -67,30 +71,50 @@ impl App {
     }
 
     fn run_command(&mut self) -> eyre::Result<()> {
-        // TODO: execute debugger command
+        // TODO: execute debugger commaprintlnnd
         let command: Vec<_> = self.input.split_whitespace().collect();
         eyre::ensure!(!command.is_empty(), "no command given");
         match command[0] {
             "c" => {
                 tracing::debug!("executing continue command");
+                self.add_message("Continuing execution");
                 self.debugger.r#continue().context("continuing execution")?;
             }
             "n" => {
                 tracing::debug!("executing step_over command");
+                self.add_message("Stepping over");
                 self.debugger.step_over().context("stepping over")?;
             }
             "i" => {
                 tracing::debug!("executing step_in command");
+                self.add_message("Stepping in");
                 self.debugger.step_in().context("stepping in")?;
             }
             "o" => {
                 tracing::debug!("executing step_out command");
+                self.add_message("Stepping out");
                 self.debugger.step_out().context("stepping out")?;
             }
             "p" => {
                 eyre::ensure!(command.len() > 1, "no variables given to print");
                 for variable_name in command.iter().skip(1) {
                     tracing::warn!(name = %*variable_name, "todo: printing variable");
+                    if let Some(ProgramState { paused_frame, .. }) = &self.program_description {
+                        if let Some(var) = paused_frame
+                            .variables
+                            .iter()
+                            .find(|v| v.name == *variable_name)
+                        {
+                            let msg = format!(". {} = {}", var.name, var.value);
+                            self.add_message(msg);
+                        } else {
+                            let msg =
+                                format!("Variable '{}' not found in current scope", variable_name);
+                            self.add_message(msg);
+                        }
+                    } else {
+                        println!("???");
+                    }
                 }
             }
             other => tracing::warn!(%other, "unhandled command"),
@@ -99,6 +123,10 @@ impl App {
         self.input.clear();
         self.reset_cursor();
         Ok(())
+    }
+
+    fn add_message(&mut self, message: impl Into<String>) {
+        self.messages.push(message.into());
     }
 
     fn delete_char(&mut self) {
@@ -197,7 +225,9 @@ impl App {
     fn handle_debugger_event(&mut self, event: debugger::Event) -> eyre::Result<()> {
         tracing::debug!("got debugger event");
         match event {
-            debugger::Event::Paused { .. } => {}
+            debugger::Event::Paused(program_description) => {
+                self.program_description = Some(program_description);
+            }
             debugger::Event::ScopeChange { .. } => {}
             debugger::Event::Running => {}
             debugger::Event::Ended => self.should_terminate = true,
@@ -208,12 +238,8 @@ impl App {
 
     fn draw(&self, frame: &mut Frame) {
         // TODO: coloured bar at the bottom showing debugging state
-        let vertical = Layout::vertical([
-            Constraint::Length(3),
-            Constraint::Min(1),
-            Constraint::Min(10),
-        ]);
-        let [input_area, _code_area, bottom_area] = vertical.areas(frame.area());
+        let vertical = Layout::vertical([Constraint::Length(3), Constraint::Min(10)]);
+        let [input_area, messages_area] = vertical.areas(frame.area());
 
         // input box
         let input = Paragraph::new(self.input.as_str())
@@ -228,20 +254,12 @@ impl App {
             input_area.y + 1,
         ));
 
-        // code area
-        // bottom area
-        let horizontal = Layout::horizontal([
-            Constraint::Ratio(1, 3),
-            Constraint::Ratio(1, 3),
-            Constraint::Ratio(1, 3),
-        ]);
-        let [variables_area, _repl_area, output_area] = horizontal.areas(bottom_area);
-
-        let variables = Paragraph::default().block(Block::bordered().title("Variables"));
-        frame.render_widget(variables, variables_area);
-
-        let output = Paragraph::default().block(Block::bordered().title("Output"));
-        frame.render_widget(output, output_area);
+        // update messages
+        let messages = self.messages.clone().join("\n");
+        let messages = Paragraph::new(messages.as_str())
+            .style(Style::default().fg(Color::White))
+            .block(Block::bordered().title("Messages"));
+        frame.render_widget(messages, messages_area);
     }
 }
 
