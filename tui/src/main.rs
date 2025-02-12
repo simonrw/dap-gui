@@ -17,7 +17,6 @@ use syntect::{
 };
 use syntect_tui::into_span;
 use tracing_subscriber::EnvFilter;
-use transport::types::Variable;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -237,30 +236,7 @@ impl App {
 
                 self.add_message(DisplayMessage::Block(messages.join("\n")));
             }
-            "p" => {
-                let mut variables = Vec::new();
-                self.extract_variables(&mut variables)?;
-                tracing::debug!(?variables, "got variables");
-                // eyre::ensure!(command.len() > 1, "no variables given to print");
-                // for variable_name in command.iter().skip(1) {
-                //     tracing::warn!(name = %*variable_name, "todo: printing variable");
-                //     if let Some(ProgramState { paused_frame, .. }) = &self.program_description {
-                //         if let Some(var) = paused_frame
-                //             .variables
-                //             .iter()
-                //             .find(|v| v.name == *variable_name)
-                //         {
-                //             print_var(&mut self.debugger, var.clone(), &mut self.messages)?;
-                //         } else {
-                //             let msg =
-                //                 format!("Variable '{}' not found in current scope", variable_name);
-                //             self.add_message(DisplayMessage::Plain(msg));
-                //         }
-                //     } else {
-                //         println!("???");
-                //     }
-                // }
-            }
+            "p" => if let Some(ProgramState { .. }) = &self.program_description {},
             other => tracing::warn!(%other, "unhandled command"),
         }
 
@@ -397,43 +373,6 @@ impl App {
                 self.should_terminate = true;
             }
             _ => {}
-        }
-        Ok(())
-    }
-
-    fn extract_variables(&self, variables: &mut Vec<Variable>) -> eyre::Result<()> {
-        let Some(ProgramState { paused_frame, .. }) = &self.program_description else {
-            tracing::warn!("program not paused");
-            return Ok(());
-        };
-
-        for variable in &paused_frame.variables {
-            if variable.variables_reference == 0 {
-                tracing::debug!(name = ?variable.name, "got leaf variable");
-                variables.push(variable.clone());
-            } else {
-                tracing::debug!(vref = %variable.variables_reference, "recursing into variable");
-                self.extract_variable(variable.variables_reference, variables)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn extract_variable(
-        &self,
-        variable_reference: i64,
-        variables: &mut Vec<Variable>,
-    ) -> eyre::Result<()> {
-        let vs = self.debugger.variables(variable_reference)?;
-        for v in vs {
-            if v.variables_reference == 0 {
-                tracing::debug!(name = ?v.name, "got leaf variable");
-                variables.push(v);
-            } else {
-                tracing::debug!(vref = %v.variables_reference, "recursing into variable");
-                self.extract_variable(v.variables_reference, variables)?;
-            }
         }
         Ok(())
     }

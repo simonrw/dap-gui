@@ -79,12 +79,7 @@ impl From<PausedFrame> for PyPausedFrame {
 impl PyPausedFrame {
     #[getter]
     fn variables(&self) -> HashMap<String, PyVariable> {
-        self.0
-            .variables
-            .iter()
-            .cloned()
-            .map(|v| (v.name.clone(), v.into()))
-            .collect()
+        todo!()
     }
 
     #[getter]

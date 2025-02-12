@@ -72,48 +72,18 @@ impl DebuggerInternals {
         let chosen_stack_frame = stack_frames
             .iter()
             .find(|f| f.id == stack_frame_id)
-            .ok_or_else(|| eyre::eyre!("missing stack frame {}", stack_frame_id))?;
+            .ok_or_else(|| eyre::eyre!("missing stack frame {}", stack_frame_id))?
+            .clone();
 
-        let paused_frame = self
-            .compute_paused_frame(chosen_stack_frame)
-            .context("computing paused frame")?;
         self.emit(Event::ScopeChange(ProgramState {
             stack: stack_frames,
             breakpoints: self.breakpoints.values().cloned().collect(),
-            paused_frame,
+            paused_frame: PausedFrame {
+                frame: chosen_stack_frame.clone(),
+            },
         }));
 
         Ok(())
-    }
-
-    fn compute_paused_frame(&mut self, stack_frame: &StackFrame) -> eyre::Result<PausedFrame> {
-        let responses::Response {
-            body: Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })),
-            success: true,
-            ..
-        } = self
-            .client
-            .send(requests::RequestBody::Scopes(requests::Scopes {
-                frame_id: stack_frame.id,
-            }))
-            .expect("requesting scopes")
-        else {
-            unreachable!()
-        };
-
-        let mut variables = Vec::new();
-        for scope in scopes {
-            variables.extend(
-                self.variables(scope.variables_reference)
-                    .with_context(|| format!("fetching variables for scope {:?}", scope))?,
-            );
-        }
-        let paused_frame = PausedFrame {
-            frame: stack_frame.clone(),
-            variables,
-        };
-
-        Ok(paused_frame)
     }
 
     pub(crate) fn variables(&mut self, variables_reference: i64) -> eyre::Result<Vec<Variable>> {
@@ -270,14 +240,11 @@ impl DebuggerInternals {
                     unreachable!()
                 };
 
-                let top_frame = stack_frames.first().expect("no frames found");
-                let paused_frame = self
-                    .compute_paused_frame(top_frame)
-                    .expect("building paused frame construct");
+                let top_frame = stack_frames.first().expect("no frames found").clone();
 
                 self.set_state(DebuggerState::Paused {
                     stack: stack_frames,
-                    paused_frame: Box::new(paused_frame),
+                    paused_frame: Box::new(PausedFrame { frame: top_frame }),
                     breakpoints: self.breakpoints.values().cloned().collect(),
                 });
             }

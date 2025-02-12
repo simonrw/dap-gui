@@ -161,10 +161,11 @@ impl<'s> Renderer<'s> {
     fn render_variables(
         &mut self,
         _ctx: &Context,
-        ui: &mut Ui,
-        paused_frame: &PausedFrame,
-        show_details: bool,
+        _ui: &mut Ui,
+        _paused_frame: &PausedFrame,
+        _show_details: bool,
     ) {
+        /*
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.heading("Variables");
             if show_details {
@@ -189,6 +190,7 @@ impl<'s> Renderer<'s> {
                 }
             }
         });
+        */
     }
     fn render_code_viewer(
         &mut self,

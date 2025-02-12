@@ -7,28 +7,8 @@ use color_eyre::eyre::{self, Context};
 use crossbeam_channel::Receiver;
 use debugger::{Breakpoint, Debugger, ProgramState};
 use tracing_subscriber::filter::EnvFilter;
-use transport::types::Variable;
 
 // TODO: this would be better async
-fn print_var(debugger: &mut Debugger, v: Variable) -> eyre::Result<()> {
-    let span = tracing::debug_span!("print_var", name = %v.name);
-    let _guard = span.enter();
-
-    // TODO: presentation hint
-    if v.variables_reference == 0 {
-        tracing::debug!(name = ?v.name, "got leaf variable");
-        println!(". {} = {}", v.name, v.value);
-    } else {
-        tracing::debug!(vref = %v.variables_reference, "recursing into variable");
-        let vs = debugger.variables(v.variables_reference)?;
-        for vv in vs {
-            tracing::debug!(?vv, "recursing");
-            print_var(debugger, vv.clone())?;
-        }
-    }
-    Ok(())
-}
-
 struct App {
     debugger: Debugger,
     program_description: Option<ProgramState>,
@@ -164,12 +144,9 @@ impl App {
                 self.debugger.r#continue().context("resuming execution")?;
             }
             "v" => {
-                if let Some(ProgramState { paused_frame, .. }) = &self.program_description {
+                if let Some(ProgramState { .. }) = &self.program_description {
                     tracing::debug!("printing variable names in scope");
-                    for var in &paused_frame.variables {
-                        tracing::debug!(?var, "printing variable recursively");
-                        print_var(&mut self.debugger, var.clone()).context("printing variable")?;
-                    }
+                    todo!()
                 } else {
                     println!("???");
                 }
@@ -189,15 +166,7 @@ impl App {
             input if input.starts_with("p ") => {
                 let var_name = input.trim_start_matches("p ").trim();
                 tracing::debug!("printing variable {}", var_name);
-                if let Some(ProgramState { paused_frame, .. }) = &self.program_description {
-                    if let Some(var) = paused_frame.variables.iter().find(|v| v.name == var_name) {
-                        println!(". {} = {}", var.name, var.value);
-                    } else {
-                        println!("Variable '{}' not found in current scope", var_name);
-                    }
-                } else {
-                    println!("???");
-                }
+                todo!()
             }
             "?" => {
                 println!(". Commands:");

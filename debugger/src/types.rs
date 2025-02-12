@@ -57,7 +57,7 @@ impl FromStr for Breakpoint {
 #[derive(Debug, Clone)]
 pub struct PausedFrame {
     pub frame: StackFrame,
-    pub variables: Vec<transport::types::Variable>,
+    // pub variables: Vec<transport::types::Variable>,
 }
 
 pub(crate) use transport::types::StackFrame;
