@@ -15,7 +15,7 @@ transport = { path = "../transport" }
 retry = "2.0.0"
 dirs.workspace = true
 launch_configuration = { path = "../launch_configuration" }
-uuid = { version = "1.13.1", features = ["v4"] }
+uuid = { version = "1.13.2", features = ["v4"] }
 
 [dev-dependencies]
 color-eyre.workspace = true
