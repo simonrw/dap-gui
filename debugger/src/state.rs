@@ -1,8 +1,8 @@
 use std::{path::PathBuf, str::FromStr};
 
 use transport::{
-    requests::{self, DebugpyLaunchArguments},
     DEFAULT_DAP_PORT,
+    requests::{self, DebugpyLaunchArguments},
 };
 
 use crate::types::{self, PausedFrame};

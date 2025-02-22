@@ -86,13 +86,13 @@ mod tests {
         net::{TcpListener, TcpStream},
     };
 
-    use crate::{bindings::get_random_tcp_port, events, responses, Message, Reader};
+    use crate::{Message, Reader, bindings::get_random_tcp_port, events, responses};
 
     use super::HandWrittenReader;
 
     macro_rules! execute_test {
         // multiple bodies for single message
-        ($($body:expr),+ => $match_expr:pat) => {{
+        ($($body:expr_2021),+ => $match_expr:pat) => {{
             let port = get_random_tcp_port().expect("getting random port");
             let server =
                 TcpListener::bind(format!("127.0.0.1:{port}")).expect("binding to address");
@@ -115,7 +115,7 @@ mod tests {
         }};
 
         // multiple messages for single body
-        ($body:expr => $($match_expr:pat),+) => {{
+        ($body:expr_2021 => $($match_expr:pat),+) => {{
             let port = get_random_tcp_port().expect("getting random port");
             let server =
                 TcpListener::bind(format!("127.0.0.1:{port}")).expect("binding to address");

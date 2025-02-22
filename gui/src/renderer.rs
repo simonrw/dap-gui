@@ -5,9 +5,9 @@ use eframe::egui::{self, Context, Key, Ui};
 use transport::types::StackFrame;
 
 use crate::{
+    DebuggerAppState, State, TabState,
     code_view::CodeView,
     ui::{breakpoints::Breakpoints, call_stack::CallStack, control_panel::ControlPanel},
-    DebuggerAppState, State, TabState,
 };
 
 pub(crate) struct Renderer<'a> {

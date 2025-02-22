@@ -196,7 +196,7 @@ impl ProgramState {
                 None => {
                     return Err(PyRuntimeError::new_err(
                         "no function body found".to_string(),
-                    ))
+                    ));
                 }
             }
         }

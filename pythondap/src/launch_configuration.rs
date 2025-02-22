@@ -1,6 +1,6 @@
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
-use launch_configuration::{load_from_path, ChosenLaunchConfiguration, LaunchConfiguration};
+use launch_configuration::{ChosenLaunchConfiguration, LaunchConfiguration, load_from_path};
 
 #[pyclass]
 pub struct PyChosenLaunchConfiguration {

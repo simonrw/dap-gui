@@ -7,10 +7,10 @@ use color_eyre::eyre::{self, Context};
 use dark_light::Mode;
 use debugger::{AttachArguments, Debugger, Event, ProgramState};
 use iced::keyboard::{Key, Modifiers};
-use iced::widget::{button, column, container, row, text, text_editor, Container};
+use iced::widget::{Container, button, column, container, row, text, text_editor};
 use iced::{
-    executor, subscription, Application, Color, Command, Element, Event as WindowEvent, Length,
-    Subscription,
+    Application, Color, Command, Element, Event as WindowEvent, Length, Subscription, executor,
+    subscription,
 };
 use iced_aw::Tabs;
 use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
@@ -213,10 +213,10 @@ impl DebuggerApp {
         match &self.state {
             AppState::Initialising => todo!(),
             AppState::Running { .. } => todo!(),
-            AppState::Paused {
+            &AppState::Paused {
                 ref content,
-                breakpoints,
-                scrollable_id,
+                ref breakpoints,
+                ref scrollable_id,
                 ..
             } => CodeViewer::new(
                 content,
@@ -239,8 +239,8 @@ impl DebuggerApp {
     }
 
     fn view_bottom_panel(&self) -> iced::Element<'_, Message> {
-        if let AppState::Paused { active_tab, .. } = &self.state {
-            Tabs::new(Message::TabSelected)
+        match &self.state {
+            AppState::Paused { active_tab, .. } => Tabs::new(Message::TabSelected)
                 .tab_icon_position(iced_aw::tabs::Position::Top)
                 .push(
                     TabId::Variables,
@@ -253,12 +253,13 @@ impl DebuggerApp {
                     self.view_repl_content(),
                 )
                 .set_active_tab(active_tab)
-                .into()
-        } else {
-            panic!(
-                "programming error: state {:?} should not have a bottom panel",
-                self.state
-            );
+                .into(),
+            _ => {
+                panic!(
+                    "programming error: state {:?} should not have a bottom panel",
+                    self.state
+                );
+            }
         }
     }
 }

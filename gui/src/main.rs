@@ -290,12 +290,14 @@ impl DebuggerApp {
         let background_inner = Arc::clone(&inner);
         let egui_context = cc.egui_ctx.clone();
 
-        thread::spawn(move || loop {
-            if let Ok(event) = events.recv() {
-                if let Err(e) = background_inner.lock().unwrap().handle_event(&event) {
-                    tracing::warn!(error = %e, "handling debugger event");
+        thread::spawn(move || {
+            loop {
+                if let Ok(event) = events.recv() {
+                    if let Err(e) = background_inner.lock().unwrap().handle_event(&event) {
+                        tracing::warn!(error = %e, "handling debugger event");
+                    }
+                    egui_context.request_repaint();
                 }
-                egui_context.request_repaint();
             }
         });
 

@@ -12,18 +12,18 @@ use launch_configuration::LaunchConfiguration;
 use retry::{delay::Exponential, retry};
 use server::Implementation;
 use transport::{
+    DEFAULT_DAP_PORT,
     requests::{self, Disconnect},
     responses,
     types::{BreakpointLocation, StackFrameId, Variable},
-    DEFAULT_DAP_PORT,
 };
 use uuid::Uuid;
 
 use crate::{
+    AttachArguments, Event, Language, LaunchArguments,
     internals::DebuggerInternals,
     state::{self, DebuggerState},
     types::{self, EvaluateResult},
-    AttachArguments, Event, Language, LaunchArguments,
 };
 
 /// How to launch a debugging session
@@ -169,18 +169,20 @@ impl Debugger {
         // background thread reading transport events, and handling the event with our internal state
         let background_internals = Arc::clone(&internals);
         let background_events = events.clone();
-        thread::spawn(move || loop {
-            let event = background_events.recv().unwrap();
-            let lock_id = Uuid::new_v4().to_string();
-            let span = tracing::trace_span!("", %lock_id);
-            let _guard = span.enter();
+        thread::spawn(move || {
+            loop {
+                let event = background_events.recv().unwrap();
+                let lock_id = Uuid::new_v4().to_string();
+                let span = tracing::trace_span!("", %lock_id);
+                let _guard = span.enter();
 
-            tracing::trace!(is_poisoned = %background_internals.is_poisoned(), "trying to unlock background internals");
-            let mut b = background_internals.lock().unwrap();
-            tracing::trace!(?event, "handling event");
-            b.on_event(event);
-            drop(b);
-            tracing::trace!("locked background internals");
+                tracing::trace!(is_poisoned = %background_internals.is_poisoned(), "trying to unlock background internals");
+                let mut b = background_internals.lock().unwrap();
+                tracing::trace!(?event, "handling event");
+                b.on_event(event);
+                drop(b);
+                tracing::trace!("locked background internals");
+            }
         });
 
         Ok(Self {

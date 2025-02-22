@@ -6,11 +6,11 @@ use crossbeam_channel::Receiver;
 use crossterm::event::{self, Event, KeyCode};
 use debugger::{Breakpoint, Debugger, ProgramState};
 use ratatui::{
+    DefaultTerminal, Frame,
     layout::{Constraint, Layout, Position},
     style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, Paragraph},
-    DefaultTerminal, Frame,
 };
 use syntect::{
     easy::HighlightLines, highlighting::ThemeSet, parsing::SyntaxSet, util::LinesWithEndings,
@@ -311,13 +311,15 @@ impl App {
     fn run(mut self, mut terminal: DefaultTerminal) -> eyre::Result<()> {
         // set up background thread polling for keyboard events
         let (tx, rx) = crossbeam_channel::unbounded();
-        std::thread::spawn(move || loop {
-            match event::read() {
-                Ok(event) => {
-                    let _ = tx.send(event);
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "error reading from event stream");
+        std::thread::spawn(move || {
+            loop {
+                match event::read() {
+                    Ok(event) => {
+                        let _ = tx.send(event);
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "error reading from event stream");
+                    }
                 }
             }
         });

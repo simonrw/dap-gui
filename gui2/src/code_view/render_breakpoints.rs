@@ -1,9 +1,8 @@
 use std::collections::HashSet;
 
 use iced::{
-    mouse,
+    Color, Point, mouse,
     widget::canvas::{Frame, Path, Program},
-    Color, Point,
 };
 
 use super::Event;

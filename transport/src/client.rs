@@ -11,7 +11,7 @@ use eyre::{Context, Result};
 
 use crate::request_store::{RequestStore, WaitingRequest};
 use crate::responses::Response;
-use crate::{events, reader, requests, responses, Reader};
+use crate::{Reader, events, reader, requests, responses};
 
 #[allow(dead_code)]
 #[derive(Debug)]

@@ -2,19 +2,19 @@ use eyre::WrapErr;
 use server::Server;
 use std::{collections::HashMap, path::PathBuf};
 use transport::{
+    Client,
     requests::{self, Initialize, PathFormat},
     responses::{self, ResponseBody},
     types::{
         BreakpointLocation, Source, SourceBreakpoint, StackFrame, StackFrameId, ThreadId, Variable,
     },
-    Client,
 };
 
 use crate::{
+    Event,
     debugger::InitialiseArguments,
     state::{DebuggerState, ProgramState},
     types::{Breakpoint, BreakpointId, PausedFrame},
-    Event,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]

@@ -74,7 +74,7 @@ mod tests {
     use super::Breakpoint;
 
     macro_rules! assert_res_eq {
-        ($a:expr, $b:expr) => {{
+        ($a:expr_2021, $b:expr_2021) => {{
             match ($a, $b) {
                 (Ok(_), Ok(_)) => {}
                 (Err(e1), Err(e2)) => {
@@ -103,7 +103,7 @@ mod tests {
     }
 
     macro_rules! breakpoint_from_str_tests {
-        ($($name:ident: $value:expr,)*) => {
+        ($($name:ident: $value:expr_2021,)*) => {
             mod breakpoint_from_str {
                 use super::super::Breakpoint;
                 use std::{path::PathBuf, str::FromStr};

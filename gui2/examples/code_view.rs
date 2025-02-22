@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use dark_light::Mode;
 use gui2::code_view::{CodeViewer, CodeViewerAction};
 use iced::{
-    widget::{column, text_editor::Content},
     Application, Command, Settings,
+    widget::{column, text_editor::Content},
 };
 
 #[derive(Debug, Clone)]

@@ -1,9 +1,10 @@
 use iced::{
-    widget::{
-        canvas::{Frame, Path, Program},
-        row, Canvas,
-    },
     Color, Length, Sandbox, Settings,
+    widget::{
+        Canvas,
+        canvas::{Frame, Path, Program},
+        row,
+    },
 };
 
 #[derive(Debug, Clone)]

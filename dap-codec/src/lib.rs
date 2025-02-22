@@ -90,7 +90,7 @@ mod tests {
     }
 
     macro_rules! create_test {
-        ($name:ident, $extra:expr, $($input:expr => $expected:pat),+) => {
+        ($name:ident, $extra:expr_2021, $($input:expr_2021 => $expected:pat),+) => {
             #[tokio::test]
             async fn $name() {
                 let mut messages = bytes::BytesMut::new();
@@ -115,7 +115,7 @@ mod tests {
             }
         };
 
-        ($name:ident, $($input:expr => $expected:pat),+) => {
+        ($name:ident, $($input:expr_2021 => $expected:pat),+) => {
             create_test!($name, b"", $($input => $expected),+);
         };
     }

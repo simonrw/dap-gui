@@ -1,6 +1,6 @@
 use etherparse::{SlicedPacket, TransportSlice};
 use eyre::WrapErr;
-use pcap_file::pcapng::{blocks::enhanced_packet::EnhancedPacketBlock, PcapNgParser};
+use pcap_file::pcapng::{PcapNgParser, blocks::enhanced_packet::EnhancedPacketBlock};
 use std::{io::BufReader, path::Path};
 use transport::{Message, Reader};
 

@@ -1,14 +1,12 @@
 use std::collections::HashSet;
 
 use iced::{
-    mouse,
+    Element, Length, Point, Size, mouse,
     widget::{
-        component, row, scrollable,
+        Component, component, row, scrollable,
         scrollable::Viewport,
         text_editor::{Action, Content},
-        Component,
     },
-    Element, Length, Point, Size,
 };
 
 mod render_breakpoints;

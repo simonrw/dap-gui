@@ -73,7 +73,7 @@ mod tests {
     use tracing_subscriber::EnvFilter;
     use transport::bindings::get_random_tcp_port;
 
-    use crate::{for_implementation_on_port, Implementation};
+    use crate::{Implementation, for_implementation_on_port};
 
     fn init_test_logger() {
         let in_ci = std::env::var("CI")
