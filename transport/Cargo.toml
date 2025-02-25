@@ -10,7 +10,7 @@ eyre.workspace = true
 crossbeam-channel.workspace = true
 tracing.workspace = true
 bytes = "1.10.0"
-oneshot = { version = "0.1.10", default-features = false, features = ["std"] }
+oneshot = { version = "0.1.11", default-features = false, features = ["std"] }
 serde_json.workspace = true
 serde.workspace = true
 
