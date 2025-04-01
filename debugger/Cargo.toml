@@ -12,7 +12,7 @@ tracing.workspace = true
 server = { path = "../server" }
 serde.workspace = true
 transport = { path = "../transport" }
-retry = "2.0.0"
+retry = "2.1.0"
 dirs.workspace = true
 launch_configuration = { path = "../launch_configuration" }
 uuid = { version = "1.16.0", features = ["v4"] }
