@@ -17,5 +17,5 @@ crossbeam-channel.workspace = true
 tree-sitter = "0.25.3"
 tree-sitter-python = "0.23.6"
 syntect = "5.2.0"
-syntect-tui = "3.0.5"
+syntect-tui = "3.0.6"
 dirs.workspace = true
