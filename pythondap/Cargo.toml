@@ -16,5 +16,5 @@ launch_configuration = { path = "../launch_configuration" }
 crossbeam-channel.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
-tree-sitter = "0.25.3"
+tree-sitter = "0.25.4"
 tree-sitter-python = "0.23.6"
