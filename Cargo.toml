@@ -19,7 +19,7 @@ members = [
 [workspace.dependencies]
 eyre = "0.6.12"
 color-eyre = "0.6.5"
-ctor = "0.6.0"
+ctor = "0.6.1"
 crossbeam-channel = "0.5.15"
 tracing = "0.1.41"
 serde = { version = "1.0.228", features = ["derive"] }
