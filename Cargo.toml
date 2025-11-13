@@ -1,20 +1,7 @@
 [workspace]
 resolver = "2"
 
-members = [
-    "transport",
-    "debugger",
-    "pythondap",
-    "server",
-    "pcaplog",
-    "gui",
-    "state",
-    "launch_configuration",
-    "dap-codec",
-    "gui2",
-    "tui",
-    "repl",
-]
+members = ["crates/*"]
 
 [workspace.dependencies]
 eyre = "0.6.12"
