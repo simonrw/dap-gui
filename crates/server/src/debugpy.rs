@@ -22,7 +22,7 @@ impl Server for DebugpyServer {
         tracing::debug!(port = ?port, "starting server process");
         let cwd = std::env::current_dir().unwrap();
 
-        // TODO: safety
+        // SAFETY: pre_exec only uses async-signal-safe functions
         let mut child = unsafe {
             std::process::Command::new("python")
                 .args([
@@ -36,11 +36,8 @@ impl Server for DebugpyServer {
                 ])
                 .pre_exec(|| {
                     // Prevent interrupt signals in the child from affecting the parent
-                    nix::unistd::setsid()
-                        .map(|pid| {
-                            tracing::debug!(?pid, "set new process session for debugger");
-                        })
-                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                    nix::unistd::setsid()?;
+                    Ok(())
                 })
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
