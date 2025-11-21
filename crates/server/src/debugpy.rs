@@ -22,7 +22,7 @@ impl Server for DebugpyServer {
         tracing::debug!(port = ?port, "starting server process");
         let cwd = std::env::current_dir().unwrap();
 
-        // TODO: safety
+        // SAFETY: pre_exec only uses async-signal-safe functions
         let mut child = unsafe {
             std::process::Command::new("python")
                 .args([
