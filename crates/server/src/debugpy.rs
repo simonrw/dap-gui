@@ -36,11 +36,8 @@ impl Server for DebugpyServer {
                 ])
                 .pre_exec(|| {
                     // Prevent interrupt signals in the child from affecting the parent
-                    nix::unistd::setsid()
-                        .map(|pid| {
-                            tracing::debug!(?pid, "set new process session for debugger");
-                        })
-                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                    nix::unistd::setsid()?;
+                    Ok(())
                 })
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
