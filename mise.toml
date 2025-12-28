@@ -3,6 +3,7 @@ python = "latest"
 uv = "latest"
 "cargo:cargo-nextest" = "latest"
 "go:github.com/go-delve/delve/cmd/dlv" = "latest"
+pre-commit = "latest"
 
 [env]
 _.python.venv = { path = ".venv" }
