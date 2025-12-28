@@ -1,0 +1,9 @@
+[tools]
+python = "latest"
+uv = "latest"
+"cargo:cargo-nextest" = "latest"
+"go:github.com/go-delve/delve/cmd/dlv" = "latest"
+
+[env]
+_.python.venv = { path = ".venv" }
+RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug,pythondap=debug,tui=debug,repl=debug"

@@ -1,6 +1,6 @@
 use eyre::{Result, WrapErr};
 use server::for_implementation_on_port;
-use std::{io::IsTerminal, net::TcpStream, path::PathBuf};
+use std::{io::IsTerminal, net::TcpStream};
 use tracing_subscriber::EnvFilter;
 
 use transport::{
@@ -42,6 +42,8 @@ fn test_loop() -> Result<()> {
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");
 
+    let test_file_path = cwd.join("..").join("..").join("test.py").canonicalize()?;
+
     let (tx, rx) = crossbeam_channel::unbounded();
     let port = get_random_tcp_port().context("getting free port")?;
     let _server = for_implementation_on_port(server::Implementation::Debugpy, port)
@@ -68,7 +70,7 @@ fn test_loop() -> Result<()> {
     // launch
     client
         .execute(requests::RequestBody::Launch(Launch {
-            program: PathBuf::from("./test.py"),
+            program: test_file_path,
             launch_arguments: Some(LaunchArguments::Debugpy(DebugpyLaunchArguments {
                 just_my_code: true,
                 // console: "integratedTerminal".to_string(),

@@ -35,13 +35,20 @@ fn test_remote_attach() -> eyre::Result<()> {
     let cwd = std::env::current_dir().unwrap();
     tracing::warn!(current_dir = ?cwd, "current_dir");
 
+    let attach_script = cwd
+        .join("..")
+        .join("..")
+        .join("attach.py")
+        .canonicalize()
+        .unwrap();
+
     let port = get_random_tcp_port().context("getting free port")?;
 
     // run background process
     let mut child = std::process::Command::new("python")
         .args([
             "-Xfrozen_modules=off",
-            "../attach.py",
+            attach_script.display().to_string().as_str(),
             "-p",
             &format!("{port}"),
         ])
@@ -63,7 +70,7 @@ fn test_remote_attach() -> eyre::Result<()> {
 
     let file_path = std::env::current_dir()
         .unwrap()
-        .join("../attach.py")
+        .join("../../attach.py")
         .canonicalize()
         .context("invalid debug target")?;
 
@@ -128,7 +135,7 @@ fn test_debugger() -> eyre::Result<()> {
 
     let file_path = std::env::current_dir()
         .unwrap()
-        .join("../test.py")
+        .join("../../test.py")
         .canonicalize()
         .context("invalid debug target")?;
 

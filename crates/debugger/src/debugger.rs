@@ -454,7 +454,9 @@ mod tests {
 
     #[test]
     fn error_missing_configuration() {
-        let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap())
+        let manifest_dir = dbg!(std::env::var_os("CARGO_MANIFEST_DIR")).unwrap();
+        let root = PathBuf::from(manifest_dir)
+            .join("..")
             .join("..")
             .join("test.py")
             .canonicalize()
