@@ -130,7 +130,15 @@ impl Debugger {
         let args: InitialiseArguments = initialise_arguments.into();
         let internals_rx = rx.clone();
         let (mut internals, events) = match &args {
-            InitialiseArguments::Launch(state::LaunchArguments { language, .. }) => {
+            InitialiseArguments::Launch(state::LaunchArguments {
+                program, language, ..
+            }) => {
+                eyre::ensure!(
+                    program.is_file(),
+                    "Program {} does not exist",
+                    program.display()
+                );
+
                 // let implementation = language.into();
                 let implementation: Implementation = match language {
                     crate::Language::DebugPy => Implementation::Debugpy,
@@ -450,7 +458,9 @@ impl Drop for Debugger {
 #[cfg(test)]
 mod tests {
     use super::Debugger;
+    use crate::{Language, LaunchArguments};
     use std::path::PathBuf;
+    use transport::bindings::get_random_tcp_port;
 
     #[test]
     fn error_missing_configuration() {
@@ -484,5 +494,39 @@ mod tests {
         let bad_name = "abc";
 
         assert!(Debugger::from_launch_configuration(&config_file_path, bad_name).is_err());
+    }
+
+    #[test]
+    fn error_program_does_not_exist() {
+        let tdir = tempfile::tempdir().unwrap();
+        let non_existent_program = tdir.path().join("nonexistent.py");
+
+        // Verify the file doesn't exist
+        assert!(!non_existent_program.is_file());
+
+        let port = get_random_tcp_port().expect("getting free port");
+        let launch_args = LaunchArguments {
+            program: non_existent_program.clone(),
+            working_directory: None,
+            language: Language::DebugPy,
+        };
+
+        let result = Debugger::on_port(port, launch_args);
+
+        let error = match result {
+            Ok(_) => panic!("Expected error when program does not exist"),
+            Err(e) => e,
+        };
+        let error_msg = error.to_string();
+        assert!(
+            error_msg.contains("does not exist"),
+            "Error message should mention 'does not exist', got: {}",
+            error_msg
+        );
+        assert!(
+            error_msg.contains(non_existent_program.display().to_string().as_str()),
+            "Error message should contain the program path, got: {}",
+            error_msg
+        );
     }
 }
