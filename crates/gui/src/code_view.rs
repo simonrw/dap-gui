@@ -56,17 +56,25 @@ impl egui::Widget for CodeView<'_> {
             for (i, line) in s.lines().enumerate() {
                 if breakpoint_positions.contains(&(i + 1)) {
                     // marker
-                    layout_job.append("•", 0.0, TextFormat {
-                        color: Color32::from_rgb(255, 0, 0),
-                        ..Default::default()
-                    });
+                    layout_job.append(
+                        "•",
+                        0.0,
+                        TextFormat {
+                            color: Color32::from_rgb(255, 0, 0),
+                            ..Default::default()
+                        },
+                    );
                 };
                 if self.highlight_line && i == (self.current_line - 1) {
                     // highlighted line
-                    layout_job.append(line, indent, TextFormat {
-                        background: Color32::from_gray(128),
-                        ..Default::default()
-                    });
+                    layout_job.append(
+                        line,
+                        indent,
+                        TextFormat {
+                            background: Color32::from_gray(128),
+                            ..Default::default()
+                        },
+                    );
                 } else {
                     layout_job.append(line, indent, TextFormat::default());
                 }
