@@ -4,6 +4,7 @@ uv = "latest"
 "cargo:cargo-nextest" = "latest"
 "go:github.com/go-delve/delve/cmd/dlv" = "latest"
 pre-commit = "latest"
+"pipx:maturin" = "latest"
 
 [env]
 _.python.venv = { path = ".venv" }

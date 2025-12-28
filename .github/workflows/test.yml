@@ -165,12 +165,12 @@ jobs:
       - name: Install pythondap package
         uses: PyO3/maturin-action@v1
         with:
-          command: develop --manifest-path pythondap/Cargo.toml --pip-path .venv/bin/pip
+          command: develop --manifest-path crates/pythondap/Cargo.toml --pip-path .venv/bin/pip
           args: --release
       - name: Run pythondap python tests
         run: |
           source .venv/bin/activate
-          python -m pytest pythondap/tests
+          python -m pytest crates/pythondap/tests
 
 
   # TODO
