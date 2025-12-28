@@ -123,6 +123,6 @@ mod tests {
         empty_string: ("", Err(eyre::eyre!("breakpoint specification '' has no colon"))),
         invalid_structure: ("test", Err(eyre::eyre!("breakpoint specification 'test' has no colon"))),
         invalid_line_number: ("test.py:foo", Err(eyre::eyre!("invalid line number"))),
-        success: ("../test.py:16", Ok(Breakpoint { path: PathBuf::from("../test.py"), line: 16, name: None })),
+        success: ("../../test.py:16", Ok(Breakpoint { path: PathBuf::from("../../test.py"), line: 16, name: None })),
     }
 }

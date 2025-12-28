@@ -1,7 +1,7 @@
 use std::{
     io::{BufRead, BufReader},
-    // TODO: windows?
     os::unix::process::CommandExt,
+    path::Path,
     process::{Child, Stdio},
     sync::mpsc,
     thread,
@@ -15,6 +15,41 @@ pub struct DebugpyServer {
     child: Child,
 }
 
+fn interpreter_has_debugpy(path: &Path) -> bool {
+    use std::process::Command;
+
+    let output = Command::new(path)
+        .args(["-m", "debugpy.adapter", "--help"])
+        .stderr(Stdio::null())
+        .stdout(Stdio::null())
+        .status();
+
+    matches!(output, Ok(status) if status.success())
+}
+
+// Pick the best interpreter from available ones considering both python and python3
+fn best_interpreter() -> eyre::Result<std::path::PathBuf> {
+    let mut candidates = Vec::new();
+    for exe_name in ["python", "python3"] {
+        let Ok(options) = which::which_all(exe_name) else {
+            continue;
+        };
+
+        candidates.extend(options);
+    }
+
+    for candidate in &candidates {
+        if interpreter_has_debugpy(candidate) {
+            return Ok(candidate.clone());
+        }
+    }
+
+    Err(eyre::eyre!(
+        "No valid Python installation found, tried: {:?}",
+        candidates
+    ))
+}
+
 impl Server for DebugpyServer {
     fn on_port(port: impl Into<u16>) -> eyre::Result<Self> {
         let port = port.into();
@@ -22,9 +57,12 @@ impl Server for DebugpyServer {
         tracing::debug!(port = ?port, "starting server process");
         let cwd = std::env::current_dir().unwrap();
 
+        let python = best_interpreter().context("finding best interpreter")?;
+        let python_str = python.display().to_string();
+
         // TODO: safety
         let mut child = unsafe {
-            std::process::Command::new("python")
+            std::process::Command::new(&python_str)
                 .args([
                     "-m",
                     "debugpy.adapter",
