@@ -1,3 +1,6 @@
+[settings]
+python.uv_venv_auto = true
+
 [tools]
 python = "latest"
 uv = "latest"
@@ -7,5 +10,5 @@ pre-commit = "latest"
 "pipx:maturin" = "latest"
 
 [env]
-_.python.venv = { path = ".venv" }
+_.python.venv = { path = ".venv", create = true }
 RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug,pythondap=debug,tui=debug,repl=debug"
