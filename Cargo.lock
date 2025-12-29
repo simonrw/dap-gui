@@ -2531,6 +2531,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "gui-poc"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+]
+
+[[package]]
 name = "gui2"
 version = "0.1.0"
 dependencies = [
