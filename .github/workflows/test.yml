@@ -99,8 +99,7 @@ jobs:
       fail-fast: false
       matrix:
         os: 
-          - macos-latest  # arm64
-          - macos-13  # x86_64
+          - macos-latest
           # - windows-latest  TODO .venv/bin/python does not exist on windows
     steps:
       - uses: actions/checkout@v4
@@ -142,8 +141,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - macos-latest  # arm64
-          - macos-13  # x86_64
+          - macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
