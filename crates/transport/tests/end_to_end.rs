@@ -86,7 +86,7 @@ fn test_loop() -> Result<()> {
 
     // wait for initialized event
     let _initialized_event = wait_for_event("initialized", &rx, |e| {
-        matches!(e, events::Event::Initialized { .. })
+        matches!(e, events::Event::Initialized)
     });
 
     // set function breakpoints
