@@ -167,9 +167,10 @@ Minimum Supported Rust Version: **1.72.0**
 - Release builds include debug symbols (`debug = true` in `Cargo.toml`)
 - Workspace uses `resolver = "2"`
 
-## Testing Notes
+## Notes
 
 - Tests require a Python virtual environment with `debugpy` installed
 - End-to-end tests run actual debug sessions, so they need debugpy and delve available
 - Use `cargo nextest` (not plain `cargo test`) for test execution
 - Set `RUST_LOG` environment variable for tracing output during tests
+- Always format code after writing with `cargo fmt`
