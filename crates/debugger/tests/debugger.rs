@@ -89,7 +89,7 @@ fn test_remote_attach() -> eyre::Result<()> {
     debugger.start().context("launching debugee")?;
 
     wait_for_event("running event", &drx, |e| {
-        matches!(e, debugger::Event::Running { .. })
+        matches!(e, debugger::Event::Running)
     });
 
     let debugger::Event::Paused(ProgramState { paused_frame, .. }) =
@@ -163,7 +163,7 @@ fn test_debugger() -> eyre::Result<()> {
     debugger.start().context("launching debugee")?;
 
     wait_for_event("running event", &drx, |e| {
-        matches!(e, debugger::Event::Running { .. })
+        matches!(e, debugger::Event::Running)
     });
 
     let debugger::Event::Paused(ProgramState { paused_frame, .. }) =

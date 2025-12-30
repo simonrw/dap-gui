@@ -257,7 +257,7 @@ impl Debugger {
 
         tracing::debug!("waiting for debugee to run");
         self.internal_debugger
-            .wait_for_event(|evt| matches!(evt, Event::Running { .. }));
+            .wait_for_event(|evt| matches!(evt, Event::Running));
 
         // wait for stopped or terminated event
         tracing::trace!("waiting for paused or ended event");

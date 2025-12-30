@@ -199,6 +199,7 @@ impl DebuggerInternals {
         }
     }
 
+    #[allow(dead_code)]
     fn get_stack_frames(&self) -> eyre::Result<Vec<StackFrame>> {
         todo!()
     }
@@ -309,6 +310,7 @@ impl DebuggerInternals {
         Ok(id)
     }
 
+    #[allow(dead_code)]
     #[tracing::instrument(skip(self), level = "debug")]
     pub(crate) fn remove_breakpoint(&mut self, id: BreakpointId) {
         tracing::debug!("removing breakpoint");

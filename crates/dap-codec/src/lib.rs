@@ -3,6 +3,7 @@ use dap::base_message::{BaseMessage, Sendable};
 use tokio_util::codec::Decoder;
 
 #[derive(thiserror::Error, Debug)]
+#[allow(dead_code)]
 enum CodecError {
     #[error("invalid utf8")]
     InvalidUtf8(#[from] std::str::Utf8Error),

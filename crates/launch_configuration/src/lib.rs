@@ -41,6 +41,7 @@ enum ConfigFormat {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct Folder {
     // path: String,
 }
