@@ -1,4 +1,5 @@
 use std::io::{self, BufRead};
+use std::time::Duration;
 
 use eyre::WrapErr;
 
@@ -70,6 +71,10 @@ where
                 }
                 Err(e) => {
                     if e.kind() == io::ErrorKind::WouldBlock {
+                        // Read timeout expired with no data available.
+                        // Sleep briefly to prevent potential CPU spinning in edge cases
+                        // where the timeout might not be properly enforced.
+                        std::thread::sleep(Duration::from_millis(10));
                         continue;
                     }
                     return Err(eyre::eyre!("error reading from buffer: {e:?}"));
