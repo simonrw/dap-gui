@@ -221,30 +221,51 @@ impl DebuggerInternals {
             }) => {
                 self.current_thread_id = Some(thread_id);
                 // determine where we are in the source code
-                let responses::Response {
-                    body:
-                        Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
-                            stack_frames,
-                        })),
-                    success: true,
-                    ..
-                } = self
-                    .client
-                    .send(requests::RequestBody::StackTrace(requests::StackTrace {
+                let response = match self.client.send(requests::RequestBody::StackTrace(
+                    requests::StackTrace {
                         thread_id,
                         levels: Some(1),
                         ..Default::default()
-                    }))
-                    .unwrap()
-                else {
-                    unreachable!()
+                    },
+                )) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        tracing::error!(error = %e, "failed to get initial stack trace");
+                        return;
+                    }
                 };
 
-                if stack_frames.len() != 1 {
-                    panic!("unexpected number of stack frames: {}", stack_frames.len());
+                let stack_frames = match response {
+                    responses::Response {
+                        body:
+                            Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+                                stack_frames,
+                            })),
+                        success: true,
+                        ..
+                    } => stack_frames,
+                    resp => {
+                        tracing::error!(?resp, "unexpected response to initial StackTrace request");
+                        return;
+                    }
+                };
+
+                if stack_frames.is_empty() {
+                    tracing::error!("no stack frames received in stopped event");
+                    return;
                 }
 
-                let source = stack_frames[0].source.as_ref().unwrap();
+                if stack_frames.len() != 1 {
+                    tracing::warn!(
+                        count = stack_frames.len(),
+                        "unexpected number of stack frames, using first frame"
+                    );
+                }
+
+                let Some(source) = stack_frames[0].source.as_ref() else {
+                    tracing::error!("stack frame has no source information");
+                    return;
+                };
                 let line = stack_frames[0].line;
 
                 let current_source = FileSource {
@@ -253,28 +274,46 @@ impl DebuggerInternals {
                 };
                 self.current_source = Some(current_source.clone());
 
-                let responses::Response {
-                    body:
-                        Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
-                            stack_frames,
-                        })),
-                    success: true,
-                    ..
-                } = self
-                    .client
-                    .send(requests::RequestBody::StackTrace(requests::StackTrace {
+                let response = match self.client.send(requests::RequestBody::StackTrace(
+                    requests::StackTrace {
                         thread_id,
                         ..Default::default()
-                    }))
-                    .unwrap()
-                else {
-                    unreachable!()
+                    },
+                )) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        tracing::error!(error = %e, "failed to get full stack trace");
+                        return;
+                    }
                 };
 
-                let top_frame = stack_frames.first().expect("no frames found");
-                let paused_frame = self
-                    .compute_paused_frame(top_frame)
-                    .expect("building paused frame construct");
+                let stack_frames = match response {
+                    responses::Response {
+                        body:
+                            Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+                                stack_frames,
+                            })),
+                        success: true,
+                        ..
+                    } => stack_frames,
+                    resp => {
+                        tracing::error!(?resp, "unexpected response to full StackTrace request");
+                        return;
+                    }
+                };
+
+                let Some(top_frame) = stack_frames.first() else {
+                    tracing::error!("no frames found in full stack trace");
+                    return;
+                };
+
+                let paused_frame = match self.compute_paused_frame(top_frame) {
+                    Ok(frame) => frame,
+                    Err(e) => {
+                        tracing::error!(error = %e, "failed to compute paused frame");
+                        return;
+                    }
+                };
 
                 self.set_state(DebuggerState::Paused {
                     stack: stack_frames,
