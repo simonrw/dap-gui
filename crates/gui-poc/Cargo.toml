@@ -8,4 +8,4 @@ name = "gui-poc"
 path = "src/main.rs"
 
 [dependencies]
-eframe = "0.27.2"
+eframe = "0.33.3"
