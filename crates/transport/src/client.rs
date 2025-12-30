@@ -232,7 +232,23 @@ impl ClientInternals {
         .wrap_err("writing message to output buffer")?;
         self.output.flush().wrap_err("flushing output buffer")?;
 
-        let res = rx.recv().expect("sender dropped");
+        // Wait for response with timeout to prevent indefinite blocking
+        let timeout = Duration::from_secs(30);
+        let start = std::time::Instant::now();
+        let res = loop {
+            match rx.try_recv() {
+                Ok(response) => break response,
+                Err(oneshot::TryRecvError::Empty) => {
+                    if start.elapsed() >= timeout {
+                        eyre::bail!("Request timeout after {:?}", timeout);
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(oneshot::TryRecvError::Disconnected) => {
+                    eyre::bail!("Response sender disconnected");
+                }
+            }
+        };
         Ok(res)
     }
 
