@@ -1,4 +1,5 @@
 use eframe::egui;
+use egui_extras::syntax_highlighting::{self, CodeTheme};
 
 #[derive(PartialEq, Clone, Copy)]
 enum BottomPanelTab {
@@ -329,6 +330,9 @@ impl eframe::App for App {
 
                 use egui::Color32;
 
+                // Get syntax highlighting theme
+                let theme = CodeTheme::from_memory(ctx, &ctx.style());
+
                 for (i, line) in code_lines.iter().enumerate() {
                     let line_num = i + 40; // Start at line 40
 
@@ -347,17 +351,29 @@ impl eframe::App for App {
                             ui.label("  ");
                         }
 
-                        // Current line highlight
+                        // Current line marker
                         if line_num == self.state.current_line {
                             ui.label(egui::RichText::new("→").color(Color32::YELLOW));
-                            ui.label(
-                                egui::RichText::new(*line)
-                                    .monospace()
-                                    .background_color(Color32::from_rgb(50, 50, 0)),
-                            );
-                        } else {
-                            ui.label(egui::RichText::new(*line).monospace());
                         }
+
+                        // Syntax highlighted code
+                        let mut layout_job = syntax_highlighting::highlight(
+                            ctx,
+                            &ctx.style(),
+                            &theme,
+                            line,
+                            "py", // Python language
+                        );
+
+                        // Apply background highlight for current line
+                        if line_num == self.state.current_line {
+                            let bg_color = Color32::from_rgb(50, 50, 0);
+                            for section in &mut layout_job.sections {
+                                section.format.background = bg_color;
+                            }
+                        }
+
+                        ui.label(layout_job);
                     });
                 }
             });
