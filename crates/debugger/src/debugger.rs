@@ -179,18 +179,36 @@ impl Debugger {
         let background_events = events.clone();
         thread::spawn(move || {
             loop {
-                let event = background_events.recv().unwrap();
+                // Gracefully handle channel close instead of panicking
+                let event = match background_events.recv() {
+                    Ok(event) => event,
+                    Err(_) => {
+                        tracing::debug!("event channel closed, terminating background thread");
+                        break;
+                    }
+                };
+
                 let lock_id = Uuid::new_v4().to_string();
                 let span = tracing::trace_span!("", %lock_id);
                 let _guard = span.enter();
 
                 tracing::trace!(is_poisoned = %background_internals.is_poisoned(), "trying to unlock background internals");
-                let mut b = background_internals.lock().unwrap();
-                tracing::trace!(?event, "handling event");
-                b.on_event(event);
-                drop(b);
-                tracing::trace!("locked background internals");
+
+                // Gracefully handle mutex poisoning instead of panicking
+                match background_internals.lock() {
+                    Ok(mut b) => {
+                        tracing::trace!(?event, "handling event");
+                        b.on_event(event);
+                        drop(b);
+                        tracing::trace!("locked background internals");
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "mutex poisoned, terminating background thread");
+                        break;
+                    }
+                }
             }
+            tracing::debug!("background thread terminated");
         });
 
         Ok(Self {
