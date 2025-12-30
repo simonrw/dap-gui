@@ -1,14 +1,14 @@
-use std::io::{BufReader, Write};
+use std::io::Write;
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
-use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex, MutexGuard};
 // TODO: use internal error type
 use eyre::{Context, Result};
 
+use crate::io::{DapTransport, TcpTransport};
 use crate::request_store::{RequestStore, WaitingRequest};
 use crate::responses::Response;
 use crate::{Reader, events, reader, requests, responses};
@@ -30,9 +30,8 @@ pub enum Message {
 }
 
 pub struct ClientInternals {
-    // writer
-    // TODO: trait implementor
-    output: TcpStream,
+    // writer - now generic over any Write implementation
+    output: Box<dyn Write + Send>,
 
     // common
     sequence_number: Arc<AtomicI64>,
@@ -49,24 +48,50 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(
-        stream: TcpStream,
+    /// Create a new DAP client with a custom transport
+    ///
+    /// This is the generic constructor that accepts any type implementing
+    /// [`DapTransport`]. Use this when you want to use alternative transports
+    /// like in-memory channels for testing.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use transport::{Client, io::TcpTransport};
+    ///
+    /// let transport = TcpTransport::connect("127.0.0.1:5678")?;
+    /// let (tx, rx) = crossbeam_channel::unbounded();
+    /// let client = Client::with_transport(transport, tx)?;
+    /// # Ok::<(), eyre::Error>(())
+    /// ```
+    ///
+    /// ```
+    /// use transport::{Client, io::InMemoryTransport};
+    ///
+    /// let (client_transport, server_transport) = InMemoryTransport::pair();
+    /// let (tx, rx) = crossbeam_channel::unbounded();
+    /// let client = Client::with_transport(client_transport, tx)?;
+    /// # Ok::<(), eyre::Error>(())
+    /// ```
+    pub fn with_transport<T>(
+        transport: T,
         responses: crossbeam_channel::Sender<events::Event>,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        T: DapTransport,
+    {
         // internal state
         let sequence_number = Arc::new(AtomicI64::new(0));
 
-        // Background poller to send responses and events
-        let input_stream = stream.try_clone().unwrap();
-        input_stream
-            .set_read_timeout(Some(Duration::from_secs(1)))
-            .unwrap();
+        // Split transport into reader and writer
+        let (input, output) = transport.split()?;
+
         let store = RequestStore::default();
         let store_clone = Arc::clone(&store);
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
+        // Background poller to send responses and events
         thread::spawn(move || {
-            let input = BufReader::new(input_stream);
             let mut reader = reader::get(input);
 
             // poll loop
@@ -112,7 +137,7 @@ impl Client {
         });
 
         let internal = ClientInternals {
-            output: stream,
+            output: Box::new(output),
             sequence_number,
             store,
             exit: Some(shutdown_tx),
@@ -121,6 +146,31 @@ impl Client {
         Ok(Self {
             internals: Arc::new(Mutex::new(internal)),
         })
+    }
+
+    /// Create a new DAP client from a TCP stream
+    ///
+    /// This is a convenience constructor for the common case of connecting
+    /// to a debug adapter over TCP. For more control or alternative transports,
+    /// use [`Client::with_transport`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use std::net::TcpStream;
+    /// use transport::Client;
+    ///
+    /// let stream = TcpStream::connect("127.0.0.1:5678")?;
+    /// let (tx, rx) = crossbeam_channel::unbounded();
+    /// let client = Client::new(stream, tx)?;
+    /// # Ok::<(), eyre::Error>(())
+    /// ```
+    pub fn new(
+        stream: TcpStream,
+        responses: crossbeam_channel::Sender<events::Event>,
+    ) -> Result<Self> {
+        let transport = TcpTransport::new(stream)?;
+        Self::with_transport(transport, responses)
     }
 
     #[tracing::instrument(skip(self, body), level = "debug")]

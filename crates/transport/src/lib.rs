@@ -4,6 +4,7 @@
 pub mod bindings;
 mod client;
 pub mod events;
+pub mod io;
 pub mod reader;
 mod request_store;
 pub mod requests;
@@ -13,6 +14,7 @@ pub mod types;
 pub use client::Client;
 pub use client::Message;
 pub use client::Received;
+pub use io::{DapTransport, InMemoryTransport, TcpTransport};
 pub use reader::Reader;
 
 /// The default port the DAP protocol listens on
