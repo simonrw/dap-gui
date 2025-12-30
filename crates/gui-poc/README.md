@@ -18,12 +18,32 @@ This POC demonstrates:
   - Current line highlighting with yellow arrow marker
   - Automatic dark/light theme adaptation
 
+### Vim-Like Modal Editing
+
+The code viewer supports vim-inspired keyboard navigation for evaluating expressions:
+
+**Normal Mode** (default):
+- `v` - Enter node selection mode
+- `F5` - Continue/Pause execution
+- `F10` - Step over
+
+**Node Selection Mode**:
+- `h` - Navigate to previous sibling AST node
+- `l` - Navigate to next sibling AST node
+- `k` - Navigate to parent AST node
+- `j` - Navigate to first child AST node
+- `e` or `Enter` - Evaluate selected expression
+- `Escape` - Exit to normal mode
+
+The navigation uses **tree-sitter** to parse Python code and identify evaluatable expressions (identifiers, function calls, assignments, etc.). This allows precise selection of meaningful code units rather than just text.
+
 ### Interactions
 - Click control buttons to simulate debugger actions
 - Select stack frames from the call stack
 - Toggle breakpoints on/off
 - Switch between tabs in the bottom panel
 - View mock variables, breakpoints, and console output
+- Use vim-style keyboard navigation to select and evaluate expressions
 
 ## Mock Data
 
@@ -44,6 +64,15 @@ The code viewer uses **egui_extras** with the `syntect` feature for professional
 - Automatically adapts colors to dark/light mode
 - Optimized with memoization for repeated highlighting
 - Current implementation hardcoded for Python (`"py"`)
+
+### AST-Based Navigation
+
+The code viewer uses **tree-sitter** for intelligent code navigation:
+- Parses Python code into an Abstract Syntax Tree (AST)
+- Identifies evaluatable expressions (identifiers, calls, assignments, etc.)
+- Enables hierarchical navigation (parent/child/sibling relationships)
+- Highlights selected nodes with a distinctive background color
+- Filters out non-evaluatable nodes (e.g., `foo` in `foo()` is not separately selectable)
 
 ### Architecture Note
 

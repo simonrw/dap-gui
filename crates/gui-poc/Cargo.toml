@@ -10,3 +10,5 @@ path = "src/main.rs"
 [dependencies]
 eframe = "0.33.3"
 egui_extras = { version = "0.33.3", features = ["syntect"] }
+tree-sitter = "0.24"
+tree-sitter-python = "0.23"
