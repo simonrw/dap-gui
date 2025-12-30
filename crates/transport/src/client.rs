@@ -235,6 +235,7 @@ impl ClientInternals {
         // Wait for response with timeout to prevent indefinite blocking
         let timeout = Duration::from_secs(30);
         let start = std::time::Instant::now();
+        let mut attempts = 0;
         let res = loop {
             match rx.try_recv() {
                 Ok(response) => break response,
@@ -242,7 +243,14 @@ impl ClientInternals {
                     if start.elapsed() >= timeout {
                         eyre::bail!("Request timeout after {:?}", timeout);
                     }
-                    std::thread::sleep(Duration::from_millis(10));
+                    attempts += 1;
+                    // Use yield for the first many attempts to avoid latency,
+                    // then switch to sleeping to avoid busy-waiting
+                    if attempts < 1000 {
+                        std::thread::yield_now();
+                    } else {
+                        std::thread::sleep(Duration::from_millis(1));
+                    }
                 }
                 Err(oneshot::TryRecvError::Disconnected) => {
                     eyre::bail!("Response sender disconnected");
