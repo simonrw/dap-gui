@@ -436,7 +436,10 @@ impl Debugger {
         F: FnOnce(&mut DebuggerInternals) -> eyre::Result<T>,
     {
         tracing::trace!(poisoned = %self.internals.is_poisoned(), "trying to lock internals");
-        let mut internals = self.internals.lock().unwrap();
+        let mut internals = self
+            .internals
+            .lock()
+            .map_err(|e| eyre::eyre!("debugger mutex poisoned: {}", e))?;
         tracing::trace!("executing operation");
         let res = f(&mut internals);
         drop(internals);
