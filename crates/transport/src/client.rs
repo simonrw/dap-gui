@@ -156,9 +156,10 @@ where
 impl ClientInternals {
     #[tracing::instrument(skip(self), level = "trace", fields(request))]
     pub fn send(&mut self, body: requests::RequestBody) -> Result<Response> {
-        self.sequence_number.fetch_add(1, Ordering::SeqCst);
+        // Use fetch_add return value to ensure atomicity
+        let seq = self.sequence_number.fetch_add(1, Ordering::SeqCst) + 1;
         let message = requests::Request {
-            seq: self.sequence_number.load(Ordering::SeqCst),
+            seq,
             r#type: "request".to_string(),
             body: body.clone(),
         };
@@ -188,9 +189,10 @@ impl ClientInternals {
     /// Execute a call on the client but do not wait for a response
     #[tracing::instrument(skip(self), level = "trace", fields(request))]
     pub fn execute(&mut self, body: requests::RequestBody) -> Result<()> {
-        self.sequence_number.fetch_add(1, Ordering::SeqCst);
+        // Use fetch_add return value to ensure atomicity
+        let seq = self.sequence_number.fetch_add(1, Ordering::SeqCst) + 1;
         let message = requests::Request {
-            seq: self.sequence_number.load(Ordering::SeqCst),
+            seq,
             r#type: "request".to_string(),
             body: body.clone(),
         };
