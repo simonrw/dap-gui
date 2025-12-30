@@ -40,41 +40,7 @@ impl SelectedNode {
     }
 }
 
-/// Check if a node type is evaluatable (can be meaningfully evaluated by the debugger)
-fn is_evaluatable(kind: &str) -> bool {
-    matches!(
-        kind,
-        "identifier"
-            | "call"
-            | "attribute"
-            | "subscript"
-            | "binary_operator"
-            | "unary_operator"
-            | "comparison_operator"
-            | "boolean_operator"
-            | "list"
-            | "dictionary"
-            | "tuple"
-            | "string"
-            | "integer"
-            | "float"
-            | "true"
-            | "false"
-            | "none"
-            | "assignment"
-            | "augmented_assignment"
-            | "expression_statement"
-            | "parenthesized_expression"
-            | "list_comprehension"
-            | "dictionary_comprehension"
-            | "set_comprehension"
-            | "generator_expression"
-            | "conditional_expression"
-            | "lambda"
-    )
-}
-
-/// Find the first evaluatable node on a given line
+/// Find the first node on a given line
 pub fn find_first_evaluatable_on_line(
     tree: &Tree,
     source: &str,
@@ -102,7 +68,7 @@ fn find_first_evaluatable_on_line_recursive(
     }
 
     // This node spans the target line
-    // First, try to find evaluatable nodes in children (prefer more specific)
+    // First, try to find nodes in children (prefer more specific)
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         if let Some(found) = find_first_evaluatable_on_line_recursive(child, source, line) {
@@ -110,8 +76,8 @@ fn find_first_evaluatable_on_line_recursive(
         }
     }
 
-    // If no child is evaluatable on this line, check if this node is evaluatable
-    if is_evaluatable(node.kind()) && start_line == line {
+    // If no child found on this line, return this node if it starts on the line
+    if start_line == line {
         return Some(SelectedNode::from_node(node, source));
     }
 
@@ -135,7 +101,7 @@ fn find_node_by_range(root: Node, start_byte: usize, end_byte: usize) -> Option<
     None
 }
 
-/// Get the parent evaluatable node
+/// Get the parent node
 pub fn get_parent_node(tree: &Tree, source: &str, current: &SelectedNode) -> Option<SelectedNode> {
     let root = tree.root_node();
     let node = find_node_by_range(root, current.start_byte, current.end_byte)?;
@@ -147,7 +113,7 @@ pub fn get_parent_node(tree: &Tree, source: &str, current: &SelectedNode) -> Opt
             || p.end_byte() != current.end_byte
             || p.kind() != current.kind;
 
-        if is_evaluatable(p.kind()) && is_different {
+        if is_different {
             return Some(SelectedNode::from_node(p, source));
         }
         parent = p.parent();
@@ -155,7 +121,7 @@ pub fn get_parent_node(tree: &Tree, source: &str, current: &SelectedNode) -> Opt
     None
 }
 
-/// Get the first evaluatable child node
+/// Get the first child node
 pub fn get_first_child_node(
     tree: &Tree,
     source: &str,
@@ -170,100 +136,48 @@ pub fn get_first_child_node(
 fn find_first_evaluatable_child(node: Node, source: &str) -> Option<SelectedNode> {
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        if is_evaluatable(child.kind()) {
-            return Some(SelectedNode::from_node(child, source));
-        }
-        // Recurse into non-evaluatable children to find evaluatable descendants
-        if let Some(found) = find_first_evaluatable_child(child, source) {
-            return Some(found);
-        }
+        return Some(SelectedNode::from_node(child, source));
     }
     None
 }
 
-/// Get the next sibling evaluatable node
+/// Get the next sibling node
 pub fn get_next_sibling(tree: &Tree, source: &str, current: &SelectedNode) -> Option<SelectedNode> {
     let root = tree.root_node();
     let node = find_node_by_range(root, current.start_byte, current.end_byte)?;
 
-    // First try direct siblings
-    let mut sibling = node.next_sibling();
-    while let Some(s) = sibling {
-        if is_evaluatable(s.kind()) {
-            return Some(SelectedNode::from_node(s, source));
-        }
-        // Check if there's an evaluatable child in the sibling
-        if let Some(found) = find_first_evaluatable_child(s, source) {
-            return Some(found);
-        }
-        sibling = s.next_sibling();
+    // Try direct next sibling
+    if let Some(sibling) = node.next_sibling() {
+        return Some(SelectedNode::from_node(sibling, source));
     }
 
     // If no next sibling, try parent's next sibling (uncle)
     if let Some(parent) = node.parent() {
-        let mut uncle = parent.next_sibling();
-        while let Some(u) = uncle {
-            if is_evaluatable(u.kind()) {
-                return Some(SelectedNode::from_node(u, source));
-            }
-            if let Some(found) = find_first_evaluatable_child(u, source) {
-                return Some(found);
-            }
-            uncle = u.next_sibling();
+        if let Some(uncle) = parent.next_sibling() {
+            return Some(SelectedNode::from_node(uncle, source));
         }
     }
 
     None
 }
 
-/// Get the previous sibling evaluatable node
+/// Get the previous sibling node
 pub fn get_prev_sibling(tree: &Tree, source: &str, current: &SelectedNode) -> Option<SelectedNode> {
     let root = tree.root_node();
     let node = find_node_by_range(root, current.start_byte, current.end_byte)?;
 
-    // First try direct siblings
-    let mut sibling = node.prev_sibling();
-    while let Some(s) = sibling {
-        if is_evaluatable(s.kind()) {
-            return Some(SelectedNode::from_node(s, source));
-        }
-        // Check if there's an evaluatable child in the sibling (prefer last one)
-        if let Some(found) = find_last_evaluatable_child(s, source) {
-            return Some(found);
-        }
-        sibling = s.prev_sibling();
+    // Try direct prev sibling
+    if let Some(sibling) = node.prev_sibling() {
+        return Some(SelectedNode::from_node(sibling, source));
     }
 
     // If no prev sibling, try parent's prev sibling
     if let Some(parent) = node.parent() {
-        let mut uncle = parent.prev_sibling();
-        while let Some(u) = uncle {
-            if is_evaluatable(u.kind()) {
-                return Some(SelectedNode::from_node(u, source));
-            }
-            if let Some(found) = find_last_evaluatable_child(u, source) {
-                return Some(found);
-            }
-            uncle = u.prev_sibling();
+        if let Some(uncle) = parent.prev_sibling() {
+            return Some(SelectedNode::from_node(uncle, source));
         }
     }
 
-    None
-}
-
-fn find_last_evaluatable_child(node: Node, source: &str) -> Option<SelectedNode> {
-    let mut cursor = node.walk();
-    let children: Vec<_> = node.children(&mut cursor).collect();
-
-    for child in children.into_iter().rev() {
-        // Recurse first (prefer deepest last child)
-        if let Some(found) = find_last_evaluatable_child(child, source) {
-            return Some(found);
-        }
-        if is_evaluatable(child.kind()) {
-            return Some(SelectedNode::from_node(child, source));
-        }
-    }
     None
 }
 
@@ -278,12 +192,12 @@ mod tests {
     }
 
     #[test]
-    fn test_find_evaluatable_on_line() {
+    fn test_find_node_on_line() {
         let mut parser = create_parser();
         let source = "a = foo()\nb = bar()";
         let tree = parser.parse(source, None).unwrap();
 
-        // Line 0 should find 'a' or 'foo()' or the assignment
+        // Line 0 should find a node
         let node = find_first_evaluatable_on_line(&tree, source, 0);
         assert!(node.is_some());
         let n = node.unwrap();
