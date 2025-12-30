@@ -29,6 +29,7 @@ go.work
 # Added by cargo
 
 /target
+**/target
 
 # debug file to prove the spiked client works
 out.txt
