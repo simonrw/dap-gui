@@ -448,10 +448,11 @@ impl Debugger {
 impl Drop for Debugger {
     fn drop(&mut self) {
         tracing::debug!("dropping debugger");
-        self.execute(requests::RequestBody::Disconnect(Disconnect {
+        if let Err(e) = self.execute(requests::RequestBody::Disconnect(Disconnect {
             terminate_debugee: true,
-        }))
-        .unwrap();
+        })) {
+            tracing::warn!(error = %e, "failed to disconnect debugger during drop");
+        }
     }
 }
 
