@@ -6330,6 +6330,7 @@ dependencies = [
  "ctor",
  "eyre",
  "oneshot",
+ "retry",
  "serde",
  "serde_json",
  "server",
