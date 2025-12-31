@@ -330,11 +330,12 @@ pub trait SyncTransport {
 /// # Example
 ///
 /// ```no_run
-/// use transport::TransportConnection;
+/// use transport::{TransportConnection, SyncTransport, Message, requests};
 ///
 /// let mut conn = TransportConnection::connect("127.0.0.1:5678")?;
 ///
 /// // Send a request
+/// let request_body = requests::RequestBody::Threads;
 /// let seq = conn.send_request(request_body)?;
 ///
 /// // Poll for messages
