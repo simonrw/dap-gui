@@ -7,6 +7,6 @@ mod types;
 pub mod utils;
 
 pub use debugger::{Debugger, InitialiseArguments};
-pub use internals::FileSource;
+pub use internals::{FileSource, FollowUpRequest, StackTraceContext};
 pub use state::{AttachArguments, Event, Language, LaunchArguments, ProgramState};
 pub use types::{Breakpoint, EvaluateResult, PausedFrame};
