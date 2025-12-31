@@ -17,6 +17,59 @@ use crate::{
     types::{Breakpoint, BreakpointId, PausedFrame},
 };
 
+/// Represents a follow-up request that needs to be made to the debug adapter
+/// in response to an event. This allows event processing to be non-blocking.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FollowUpRequest {
+    /// Get stack trace for a thread
+    StackTrace {
+        thread_id: ThreadId,
+        levels: Option<i64>,
+        /// Context to identify which stage of processing this is for
+        context: StackTraceContext,
+    },
+    /// Get scopes for a stack frame
+    Scopes { frame_id: StackFrameId },
+    /// Get variables for a scope
+    Variables { variables_reference: i64 },
+}
+
+/// Context for why a StackTrace request was made
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StackTraceContext {
+    /// Initial stack trace to get current location (just top frame)
+    InitialLocation,
+    /// Full stack trace after getting location
+    FullStack,
+}
+
+impl FollowUpRequest {
+    /// Convert this follow-up request into a DAP request body
+    pub fn to_request_body(&self) -> requests::RequestBody {
+        match self {
+            FollowUpRequest::StackTrace {
+                thread_id,
+                levels,
+                context: _,
+            } => requests::RequestBody::StackTrace(requests::StackTrace {
+                thread_id: *thread_id,
+                levels: levels.map(|l| l as usize),
+                ..Default::default()
+            }),
+            FollowUpRequest::Scopes { frame_id } => {
+                requests::RequestBody::Scopes(requests::Scopes {
+                    frame_id: *frame_id,
+                })
+            }
+            FollowUpRequest::Variables {
+                variables_reference,
+            } => requests::RequestBody::Variables(requests::Variables {
+                variables_reference: *variables_reference,
+            }),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FileSource {
     pub line: usize,
@@ -441,5 +494,199 @@ impl DebuggerInternals {
         tracing::debug!("setting debugger state");
         let event = Event::from(&new_state);
         self.emit(event);
+    }
+
+    /// Non-blocking event processing that returns follow-up requests to make.
+    ///
+    /// This is the async-ready version of `on_event()` that doesn't make blocking
+    /// calls to the transport layer. Instead, it returns a list of follow-up requests
+    /// that should be made, which will later be processed by `on_follow_up_response()`.
+    #[tracing::instrument(skip(self), level = "trace")]
+    pub(crate) fn on_event_nonblocking(
+        &mut self,
+        event: transport::events::Event,
+    ) -> Vec<FollowUpRequest> {
+        tracing::debug!("handling event non-blocking");
+
+        match event {
+            transport::events::Event::Initialized => {
+                self.set_state(DebuggerState::Initialised);
+                Vec::new()
+            }
+            transport::events::Event::Stopped(transport::events::StoppedEventBody {
+                thread_id,
+                ..
+            }) => {
+                self.current_thread_id = Some(thread_id);
+                // Request initial stack trace to get current location
+                vec![FollowUpRequest::StackTrace {
+                    thread_id,
+                    levels: Some(1),
+                    context: StackTraceContext::InitialLocation,
+                }]
+            }
+            transport::events::Event::Continued(_) => {
+                self.current_thread_id = None;
+                self.current_source = None;
+                self.set_state(DebuggerState::Running);
+                Vec::new()
+            }
+            transport::events::Event::Exited(_) | transport::events::Event::Terminated => {
+                self.set_state(DebuggerState::Ended);
+                Vec::new()
+            }
+            _ => {
+                tracing::debug!(?event, "unknown event");
+                Vec::new()
+            }
+        }
+    }
+
+    /// Process the response to a follow-up request, potentially generating more follow-up requests.
+    ///
+    /// This is called when a response arrives for a request that was returned from
+    /// `on_event_nonblocking()` or a previous call to this method.
+    #[tracing::instrument(skip(self), level = "trace")]
+    pub(crate) fn on_follow_up_response(
+        &mut self,
+        request: FollowUpRequest,
+        response: responses::Response,
+    ) -> Vec<FollowUpRequest> {
+        tracing::debug!("handling follow-up response");
+
+        match request {
+            FollowUpRequest::StackTrace {
+                thread_id, context, ..
+            } => self.handle_stack_trace_response(thread_id, context, response),
+            FollowUpRequest::Scopes { frame_id } => self.handle_scopes_response(frame_id, response),
+            FollowUpRequest::Variables {
+                variables_reference,
+            } => self.handle_variables_response(variables_reference, response),
+        }
+    }
+
+    fn handle_stack_trace_response(
+        &mut self,
+        thread_id: ThreadId,
+        context: StackTraceContext,
+        response: responses::Response,
+    ) -> Vec<FollowUpRequest> {
+        let stack_frames = match response {
+            responses::Response {
+                body:
+                    Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+                        stack_frames,
+                    })),
+                success: true,
+                ..
+            } => stack_frames,
+            resp => {
+                tracing::error!(?resp, ?context, "unexpected response to StackTrace request");
+                return Vec::new();
+            }
+        };
+
+        match context {
+            StackTraceContext::InitialLocation => {
+                // Process initial stack trace (just top frame to get location)
+                if stack_frames.is_empty() {
+                    tracing::error!("no stack frames received in stopped event");
+                    return Vec::new();
+                }
+
+                if stack_frames.len() != 1 {
+                    tracing::warn!(
+                        count = stack_frames.len(),
+                        "unexpected number of stack frames, using first frame"
+                    );
+                }
+
+                let Some(source) = stack_frames[0].source.as_ref() else {
+                    tracing::error!("stack frame has no source information");
+                    return Vec::new();
+                };
+
+                let line = stack_frames[0].line;
+                let current_source = FileSource {
+                    line,
+                    file_path: source.path.clone(),
+                };
+                self.current_source = Some(current_source);
+
+                // Now request full stack trace
+                vec![FollowUpRequest::StackTrace {
+                    thread_id,
+                    levels: None,
+                    context: StackTraceContext::FullStack,
+                }]
+            }
+            StackTraceContext::FullStack => {
+                // Process full stack trace and request scopes for top frame
+                let Some(top_frame) = stack_frames.first() else {
+                    tracing::error!("no frames found in full stack trace");
+                    return Vec::new();
+                };
+
+                // Store the stack frames temporarily
+                // We'll emit the full Paused event once we have the variables
+                let frame_id = top_frame.id;
+
+                // Request scopes for the top frame
+                vec![FollowUpRequest::Scopes { frame_id }]
+            }
+        }
+    }
+
+    fn handle_scopes_response(
+        &mut self,
+        _frame_id: StackFrameId,
+        response: responses::Response,
+    ) -> Vec<FollowUpRequest> {
+        let scopes = match response {
+            responses::Response {
+                body: Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })),
+                success: true,
+                ..
+            } => scopes,
+            resp => {
+                tracing::error!(?resp, "unexpected response to Scopes request");
+                return Vec::new();
+            }
+        };
+
+        // Request variables for each scope
+        scopes
+            .into_iter()
+            .map(|scope| FollowUpRequest::Variables {
+                variables_reference: scope.variables_reference,
+            })
+            .collect()
+    }
+
+    fn handle_variables_response(
+        &mut self,
+        _variables_reference: i64,
+        response: responses::Response,
+    ) -> Vec<FollowUpRequest> {
+        match response {
+            responses::Response {
+                body:
+                    Some(responses::ResponseBody::Variables(responses::VariablesResponse {
+                        variables: _scope_variables,
+                    })),
+                success: true,
+                ..
+            } => {
+                // Variables received - we would accumulate these and emit Paused event
+                // once all variables are collected. For now, this is a simplified version.
+                // The full implementation will need to track state across multiple variable requests.
+                tracing::debug!("variables received");
+                Vec::new()
+            }
+            other => {
+                tracing::error!(?other, "unexpected response to Variables request");
+                Vec::new()
+            }
+        }
     }
 }
