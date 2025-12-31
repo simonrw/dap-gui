@@ -11,9 +11,7 @@ pub mod requests;
 pub mod responses;
 pub mod types;
 
-pub use client::Client;
-pub use client::Message;
-pub use client::Received;
+pub use client::{Client, Message, Received, SyncTransport, TransportConnection};
 pub use io::{DapTransport, InMemoryTransport, TcpTransport};
 pub use reader::Reader;
 

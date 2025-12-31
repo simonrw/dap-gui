@@ -1,9 +1,10 @@
-use std::io::Write;
-use std::net::TcpStream;
+use std::io::{BufRead, Write};
+use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
 use std::time::Duration;
 
+use retry::{delay::Exponential, retry};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex, MutexGuard};
 // TODO: use internal error type
@@ -12,6 +13,7 @@ use eyre::{Context, Result};
 use crate::io::{DapTransport, TcpTransport};
 use crate::request_store::{RequestStore, WaitingRequest};
 use crate::responses::Response;
+use crate::types::Seq;
 use crate::{Reader, events, reader, requests, responses};
 
 #[allow(dead_code)]
@@ -292,6 +294,182 @@ impl Drop for ClientInternals {
         tracing::debug!("shutting down client");
         // Shutdown the background thread
         let _ = self.exit.take().unwrap().send(());
+    }
+}
+
+/// Trait for synchronous DAP message transport operations
+///
+/// This trait provides a simpler, synchronous interface for DAP message transport
+/// without background threading. It's designed to be async-ready and can be easily
+/// converted to an async trait in the future.
+pub trait SyncTransport {
+    /// Blocking read of the next message from the debug adapter
+    ///
+    /// Returns `None` if the connection has been closed.
+    /// May return `WouldBlock` error if configured with a timeout.
+    fn receive_message(&mut self) -> Result<Option<Message>>;
+
+    /// Send a request and return its sequence number
+    ///
+    /// The caller is responsible for tracking the sequence number and matching
+    /// responses. Does not wait for a response.
+    fn send_request(&mut self, body: requests::RequestBody) -> Result<Seq>;
+
+    /// Send a request without expecting a response (fire-and-forget)
+    ///
+    /// Used for commands like Continue, Step, etc. where the response isn't needed.
+    fn send_execute(&mut self, body: requests::RequestBody) -> Result<()>;
+}
+
+/// Synchronous transport client without background threading
+///
+/// This is a simpler alternative to `Client` that doesn't spawn background threads.
+/// It provides synchronous methods for reading and writing DAP messages, making it
+/// suitable for use in custom event loops or async contexts.
+///
+/// # Example
+///
+/// ```no_run
+/// use transport::TransportConnection;
+///
+/// let mut conn = TransportConnection::connect("127.0.0.1:5678")?;
+///
+/// // Send a request
+/// let seq = conn.send_request(request_body)?;
+///
+/// // Poll for messages
+/// loop {
+///     match conn.receive_message()? {
+///         Some(Message::Response(resp)) if resp.request_seq == seq => {
+///             // Handle our response
+///             break;
+///         }
+///         Some(Message::Event(evt)) => {
+///             // Handle event
+///         }
+///         Some(_) => {
+///             // Other message
+///         }
+///         None => {
+///             // Connection closed
+///             break;
+///         }
+///     }
+/// }
+/// # Ok::<(), eyre::Error>(())
+/// ```
+pub struct TransportConnection {
+    reader: reader::hand_written_reader::HandWrittenReader<Box<dyn BufRead + Send>>,
+    writer: Box<dyn Write + Send>,
+    sequence_number: AtomicI64,
+}
+
+impl TransportConnection {
+    /// Create a new transport connection from a DAP transport
+    ///
+    /// This is the generic constructor that accepts any type implementing
+    /// [`DapTransport`].
+    pub fn with_transport<T>(transport: T) -> Result<Self>
+    where
+        T: DapTransport,
+    {
+        let (input, output) = transport.split()?;
+        let reader = reader::hand_written_reader::HandWrittenReader::new(
+            Box::new(input) as Box<dyn BufRead + Send>
+        );
+
+        Ok(Self {
+            reader,
+            writer: Box::new(output),
+            sequence_number: AtomicI64::new(0),
+        })
+    }
+
+    /// Connect to a DAP server over TCP with automatic retry
+    ///
+    /// This method handles connection retry logic automatically using exponential
+    /// backoff (200ms, 400ms, 800ms, 1600ms, 3200ms). This is useful when connecting
+    /// to debug adapters that may take time to start up.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use transport::TransportConnection;
+    ///
+    /// let conn = TransportConnection::connect("127.0.0.1:5678")?;
+    /// # Ok::<(), eyre::Error>(())
+    /// ```
+    pub fn connect<A>(addr: A) -> Result<Self>
+    where
+        A: ToSocketAddrs + Clone,
+    {
+        let stream = retry(Exponential::from_millis(200).take(5), || {
+            tracing::debug!("trying to make connection");
+            match TcpStream::connect(addr.clone()) {
+                Ok(stream) => {
+                    tracing::debug!("connection made");
+                    Ok(stream)
+                }
+                Err(e) => {
+                    tracing::debug!(error = %e, "error making connection");
+                    Err(e)
+                }
+            }
+        })
+        .wrap_err("failed to connect to DAP server")?;
+
+        let transport = TcpTransport::new(stream)?;
+        Self::with_transport(transport)
+    }
+}
+
+impl SyncTransport for TransportConnection {
+    fn receive_message(&mut self) -> Result<Option<Message>> {
+        self.reader.poll_message()
+    }
+
+    fn send_request(&mut self, body: requests::RequestBody) -> Result<Seq> {
+        let seq = self.sequence_number.fetch_add(1, Ordering::SeqCst) + 1;
+        let message = requests::Request {
+            seq,
+            r#type: "request".to_string(),
+            body,
+        };
+        let json = serde_json::to_string(&message).wrap_err("encoding json body")?;
+
+        write!(
+            self.writer,
+            "Content-Length: {}\r\n\r\n{}",
+            json.len(),
+            json
+        )
+        .wrap_err("writing message to output buffer")?;
+
+        self.writer.flush().wrap_err("flushing output buffer")?;
+
+        Ok(seq)
+    }
+
+    fn send_execute(&mut self, body: requests::RequestBody) -> Result<()> {
+        let seq = self.sequence_number.fetch_add(1, Ordering::SeqCst) + 1;
+        let message = requests::Request {
+            seq,
+            r#type: "request".to_string(),
+            body,
+        };
+        let json = serde_json::to_string(&message).wrap_err("encoding json body")?;
+
+        write!(
+            self.writer,
+            "Content-Length: {}\r\n\r\n{}",
+            json.len(),
+            json
+        )
+        .wrap_err("writing message to output buffer")?;
+
+        self.writer.flush().wrap_err("flushing output buffer")?;
+
+        Ok(())
     }
 }
 
