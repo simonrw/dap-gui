@@ -1,10 +1,13 @@
 use std::{borrow::Cow, path::Path};
 
 pub fn normalise_path(path: &Path) -> Cow<'_, Path> {
-    if path.starts_with("~") {
-        let stub: String = path.display().to_string().chars().skip(2).collect();
-        Cow::Owned(dirs::home_dir().unwrap().join(stub))
-    } else {
-        Cow::Borrowed(path)
+    // Try to expand tilde prefix to home directory
+    if let Ok(stripped) = path.strip_prefix("~") {
+        if let Some(home) = dirs::home_dir() {
+            return Cow::Owned(home.join(stripped));
+        }
+        // If home directory cannot be determined, log and return path as-is
+        tracing::warn!("cannot determine home directory, using path as-is");
     }
+    Cow::Borrowed(path)
 }
