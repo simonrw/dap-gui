@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document outlines a comprehensive plan to migrate the `transport` and `debugger` crates from sync-based concurrency (using threads and channels) to async-based concurrency. The migration will provide better support for cancellation, timeouts, and integration with modern Rust async ecosystems, while maintaining compatibility with both egui and iced UI frameworks.
+This document outlines a comprehensive plan to migrate the `transport` and `debugger` crates from sync-based concurrency (using threads and channels) to async-based concurrency using **tokio**. The migration will provide better support for cancellation, timeouts, and integration with modern Rust async ecosystems, while maintaining compatibility with both egui and iced UI frameworks.
 
 ## Current Architecture Analysis
 
@@ -42,11 +42,11 @@ This document outlines a comprehensive plan to migrate the `transport` and `debu
 
 ### Design Principles
 
-1. **Runtime Agnostic**: Use `async-std` or `tokio` depending on project preference, but abstract over runtime where possible
-2. **Structured Concurrency**: Use async tasks instead of raw threads, with proper cancellation support
+1. **Tokio-First**: Use tokio as the async runtime throughout, leveraging its mature ecosystem and excellent tooling
+2. **Structured Concurrency**: Use async tasks instead of raw threads, with proper cancellation support via `tokio_util::CancellationToken`
 3. **Zero-Cost Abstractions**: Maintain performance while gaining async benefits
 4. **UI Framework Compatibility**: Ensure seamless integration with both egui and iced
-5. **Graceful Degradation**: Provide sync adapters for contexts that can't use async
+5. **Native Async Primitives**: Use tokio's sync primitives (`tokio::sync::Mutex`, `RwLock`, `broadcast`, etc.) throughout
 
 ### Async Transport Crate Design
 
@@ -60,15 +60,15 @@ pub struct AsyncClient {
 }
 
 struct AsyncClientInternals {
-    // Writer is still sync, protected by async mutex
-    output: async_lock::Mutex<Box<dyn Write + Send>>,
+    // Writer is still sync, protected by tokio async mutex
+    output: tokio::sync::Mutex<Box<dyn Write + Send>>,
 
     // Shared state for tracking requests
     sequence_number: AtomicI64,
-    store: Arc<async_lock::RwLock<HashMap<Seq, WaitingRequest>>>,
+    store: Arc<tokio::sync::RwLock<HashMap<Seq, WaitingRequest>>>,
 
-    // Event publisher (supports both sync and async)
-    event_tx: async_broadcast::Sender<events::Event>,
+    // Event publisher using tokio broadcast
+    event_tx: tokio::sync::broadcast::Sender<events::Event>,
 
     // Shutdown mechanism
     shutdown: Arc<tokio::sync::Notify>,
@@ -76,7 +76,6 @@ struct AsyncClientInternals {
 
 pub struct WaitingRequest {
     body: RequestBody,
-    // Use async oneshot instead
     tx: tokio::sync::oneshot::Sender<Response>,
 }
 ```
@@ -89,7 +88,7 @@ Replace the blocking thread with an async task:
 impl AsyncClient {
     pub async fn with_transport<T>(
         transport: T,
-        event_tx: async_broadcast::Sender<events::Event>,
+        event_tx: tokio::sync::broadcast::Sender<events::Event>,
     ) -> Result<Self>
     where
         T: AsyncDapTransport,
@@ -97,9 +96,9 @@ impl AsyncClient {
         let (mut reader, writer) = transport.split().await?;
 
         let internals = Arc::new(AsyncClientInternals {
-            output: async_lock::Mutex::new(Box::new(writer)),
+            output: tokio::sync::Mutex::new(Box::new(writer)),
             sequence_number: AtomicI64::new(0),
-            store: Arc::new(async_lock::RwLock::new(HashMap::new())),
+            store: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             event_tx,
             shutdown: Arc::new(tokio::sync::Notify::new()),
         });
@@ -132,7 +131,8 @@ impl AsyncClient {
                 msg_result = Self::read_message(&mut reader) => {
                     match msg_result {
                         Ok(Some(Message::Event(evt))) => {
-                            let _ = internals.event_tx.broadcast(evt).await;
+                            // tokio broadcast returns Result with send count
+                            let _ = internals.event_tx.send(evt);
                         }
                         Ok(Some(Message::Response(resp))) => {
                             // Match response to waiting request
@@ -296,14 +296,14 @@ impl AsyncClient {
 
 ```rust
 pub struct AsyncDebugger {
-    internals: Arc<async_lock::RwLock<DebuggerInternals>>,
-    event_rx: async_broadcast::Receiver<Event>,
-    event_tx: async_broadcast::Sender<Event>,
+    internals: Arc<tokio::sync::RwLock<DebuggerInternals>>,
+    event_rx: tokio::sync::broadcast::Receiver<Event>,
+    event_tx: tokio::sync::broadcast::Sender<Event>,
 }
 
 struct DebuggerInternals {
     client: AsyncClient,
-    publisher: async_broadcast::Sender<Event>,
+    publisher: tokio::sync::broadcast::Sender<Event>,
     current_thread_id: Option<ThreadId>,
     breakpoints: HashMap<BreakpointId, Breakpoint>,
     current_breakpoint_id: BreakpointId,
@@ -322,21 +322,21 @@ impl AsyncDebugger {
         port: u16,
         initialise_arguments: impl Into<InitialiseArguments>,
     ) -> eyre::Result<Self> {
-        let (event_tx, event_rx) = async_broadcast::broadcast(100);
-        let _ = event_tx.broadcast(Event::Uninitialised).await;
+        let (event_tx, event_rx) = tokio::sync::broadcast::channel(100);
+        let _ = event_tx.send(Event::Uninitialised);
 
         let args: InitialiseArguments = initialise_arguments.into();
 
         // Create transport and client
         let transport = AsyncTcpTransport::connect(format!("127.0.0.1:{port}")).await?;
-        let (transport_tx, mut transport_rx) = async_broadcast::broadcast(100);
+        let (transport_tx, mut transport_rx) = tokio::sync::broadcast::channel(100);
         let client = AsyncClient::with_transport(transport, transport_tx).await?;
 
         // Initialize internals
         let mut internals = DebuggerInternals::new(client, event_tx.clone(), server);
         internals.initialise(args).await?;
 
-        let internals = Arc::new(async_lock::RwLock::new(internals));
+        let internals = Arc::new(tokio::sync::RwLock::new(internals));
 
         // Spawn event handling task
         let event_internals = Arc::clone(&internals);
@@ -349,13 +349,13 @@ impl AsyncDebugger {
 
         Ok(Self {
             internals,
-            event_rx: event_rx.clone(),
+            event_rx: event_rx.resubscribe(),
             event_tx,
         })
     }
 
-    pub fn subscribe(&self) -> async_broadcast::Receiver<Event> {
-        self.event_rx.clone()
+    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<Event> {
+        self.event_tx.subscribe()
     }
 }
 ```
@@ -451,14 +451,14 @@ Egui is immediate-mode and not inherently async-aware. We need a bridge pattern:
 **Pattern 1: Channel-Based Bridge (Recommended)**
 
 ```rust
-use async_broadcast::{Sender, Receiver};
+use tokio::sync::{broadcast, mpsc};
 
 struct DebuggerBridge {
     // Command channel: UI -> Debugger
-    command_tx: Sender<DebuggerCommand>,
+    command_tx: mpsc::UnboundedSender<DebuggerCommand>,
 
-    // Event channel: Debugger -> UI
-    event_rx: Receiver<Event>,
+    // Event channel: Debugger -> UI (using broadcast for multiple subscribers)
+    event_rx: broadcast::Receiver<Event>,
 
     // Current state (updated each frame)
     current_state: Arc<Mutex<State>>,
@@ -475,14 +475,14 @@ enum DebuggerCommand {
 
 impl DebuggerBridge {
     pub fn new(debugger: AsyncDebugger, runtime: tokio::runtime::Handle) -> Self {
-        let (command_tx, mut command_rx) = async_broadcast::broadcast(10);
+        let (command_tx, mut command_rx) = mpsc::unbounded_channel();
         let event_rx = debugger.subscribe();
         let current_state = Arc::new(Mutex::new(State::Initialising));
 
         let state = Arc::clone(&current_state);
         runtime.spawn(async move {
             // Handle commands
-            while let Ok(cmd) = command_rx.recv().await {
+            while let Some(cmd) = command_rx.recv().await {
                 match cmd {
                     DebuggerCommand::Continue => {
                         let _ = debugger.continue_execution().await;
@@ -496,7 +496,7 @@ impl DebuggerBridge {
         });
 
         let state = Arc::clone(&current_state);
-        let mut events = event_rx.clone();
+        let mut events = event_rx.resubscribe();
         runtime.spawn(async move {
             // Update state from events
             while let Ok(event) = events.recv().await {
@@ -513,8 +513,8 @@ impl DebuggerBridge {
     }
 
     pub fn send_command(&self, cmd: DebuggerCommand) {
-        // Non-blocking send
-        let _ = self.command_tx.try_broadcast(cmd);
+        // Non-blocking send (mpsc unbounded never fails unless closed)
+        let _ = self.command_tx.send(cmd);
     }
 
     pub fn current_state(&self) -> State {
@@ -661,11 +661,10 @@ impl Application for DebuggerApp {
 
 ### Phase 1: Preparation (Low Risk)
 
-1. **Add async dependencies**
-   - Add `tokio` (or `async-std`) with `full` features
-   - Add `async-lock` for async-aware synchronization
-   - Add `async-broadcast` for event channels
-   - Add `tokio-util` for cancellation support
+1. **Add tokio dependencies**
+   - Add `tokio` with features: `["full", "tracing"]`
+   - Add `tokio-util` for `CancellationToken` support
+   - Add `async-trait` for trait methods (until native async traits stabilize)
 
 2. **Create async transport trait alongside existing sync trait**
    - Keep existing `DapTransport` trait
@@ -677,7 +676,7 @@ impl Application for DebuggerApp {
    [features]
    default = ["sync"]
    sync = []
-   async = ["tokio", "async-lock", "async-broadcast"]
+   async = ["tokio", "tokio-util", "async-trait"]
    ```
 
 ### Phase 2: Async Transport (Medium Risk)
@@ -740,23 +739,18 @@ impl Application for DebuggerApp {
    - Provide migration timeline
    - Eventually remove sync code (breaking change)
 
-## Runtime Considerations
+## Tokio Runtime Management
 
-### Tokio vs async-std
+All async code will use the tokio runtime. Key considerations:
 
-**Recommendation: Tokio**
+### Why Tokio
 
-Reasons:
-1. Better ecosystem support (more crates use tokio)
-2. More mature timeout and cancellation primitives
-3. Better debugging tools (tokio-console)
-4. More active development
+1. **Ecosystem**: Most popular async runtime with excellent crate support
+2. **Primitives**: Mature timeout, cancellation, and sync primitives
+3. **Tooling**: `tokio-console` for debugging, `tracing` integration
+4. **Features**: Native support for broadcast channels, async RwLock, etc.
 
-**Trade-off:**
-- Slightly heavier runtime
-- More opinionated API
-
-### Runtime Management
+### Runtime Setup
 
 **Egui Pattern:**
 ```rust
@@ -907,15 +901,16 @@ async fn debug_session() -> Result<()> {
 
 ## Conclusion
 
-Migrating to async will provide significant benefits:
-- Native timeout and cancellation support
-- Better resource utilization
-- More composable APIs
-- Easier integration with async ecosystems
+Migrating to async with **tokio** will provide significant benefits:
+- Native timeout and cancellation support via `tokio::time::timeout` and `tokio_util::CancellationToken`
+- Better resource utilization (async tasks vs OS threads)
+- More composable APIs with `tokio::join!` and `tokio::select!`
+- Excellent ecosystem integration (most async crates support tokio)
+- Superior debugging tools (`tokio-console`, tracing integration)
 
-The migration can be done incrementally with low risk by keeping sync APIs alongside async during transition. Both egui and iced can work with async debugger - egui needs a bridge pattern while iced has native async support.
+The migration can be done incrementally with low risk by keeping sync APIs alongside async during transition. Both egui and iced can work with the async debugger - egui needs a bridge pattern while iced has native async support.
 
-**Recommendation:** Proceed with migration using tokio runtime, implementing async alongside sync initially, then deprecating sync after stabilization period.
+**Recommendation:** Proceed with migration using **tokio as the exclusive async runtime**, implementing async alongside sync initially, then deprecating sync after stabilization period.
 
 ## References
 
