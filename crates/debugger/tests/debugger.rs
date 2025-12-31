@@ -1,12 +1,102 @@
 use debugger::{Debugger, PausedFrame, ProgramState};
 use eyre::WrapErr;
-use std::{io::IsTerminal, thread, time::Duration};
+use std::{collections::VecDeque, io::IsTerminal, process::Child, thread, time::Duration};
 use tracing_subscriber::EnvFilter;
 
 use transport::{
     bindings::get_random_tcp_port,
     types::{Source, StackFrame},
 };
+
+/// Test harness that wraps a debugger and manages event buffering
+struct DebuggerTestHarness {
+    debugger: Debugger,
+    event_rx: crossbeam_channel::Receiver<debugger::Event>,
+    event_buffer: VecDeque<debugger::Event>,
+}
+
+impl DebuggerTestHarness {
+    fn new(debugger: Debugger) -> Self {
+        let event_rx = debugger.events();
+        Self {
+            debugger,
+            event_rx,
+            event_buffer: VecDeque::new(),
+        }
+    }
+
+    fn debugger(&self) -> &Debugger {
+        &self.debugger
+    }
+
+    /// Wait for an event matching the predicate, buffering non-matching events
+    #[tracing::instrument(skip(self, pred))]
+    fn wait_for_event<F>(&mut self, message: &str, pred: F) -> debugger::Event
+    where
+        F: Fn(&debugger::Event) -> bool,
+    {
+        tracing::debug!("waiting for {message} event");
+        let mut n = 0;
+
+        loop {
+            // First check if any buffered events match
+            if let Some(pos) = self.event_buffer.iter().position(&pred) {
+                let evt = self.event_buffer.remove(pos).unwrap();
+                tracing::debug!(event = ?evt, "received expected event from buffer");
+                return evt;
+            }
+
+            // Then receive new event from channel
+            let evt = match self.event_rx.recv_timeout(Duration::from_secs(10)) {
+                Ok(evt) => evt,
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                    panic!("timeout waiting for {message} event after 10 seconds");
+                }
+                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                    panic!("channel disconnected while waiting for {message} event");
+                }
+            };
+
+            if n >= 100 {
+                panic!("did not receive {message} event after 100 iterations");
+            }
+
+            if pred(&evt) {
+                tracing::debug!(event = ?evt, "received expected event");
+                return evt;
+            } else {
+                tracing::trace!(event = ?evt, "non-matching event, buffering for later");
+                self.event_buffer.push_back(evt);
+            }
+            n += 1;
+        }
+    }
+}
+
+/// RAII guard to ensure child process is killed when dropped
+struct ChildGuard(Child);
+
+impl Drop for ChildGuard {
+    fn drop(&mut self) {
+        tracing::debug!("killing child process");
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+impl std::ops::Deref for ChildGuard {
+    type Target = Child;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for ChildGuard {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 // test suite "constructor"
 #[ctor::ctor]
@@ -44,19 +134,38 @@ fn test_remote_attach() -> eyre::Result<()> {
 
     let port = get_random_tcp_port().context("getting free port")?;
 
-    // run background process
-    let mut child = std::process::Command::new("python")
+    // run background process with stdout/stderr captured for debugging
+    let child = std::process::Command::new("python")
         .args([
             "-Xfrozen_modules=off",
             attach_script.display().to_string().as_str(),
             "-p",
             &format!("{port}"),
         ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
         .spawn()
         .context("running python process")?;
 
-    // TODO
+    // Wrap in guard to ensure cleanup
+    let mut child = ChildGuard(child);
+
+    // Give Python process time to start and bind to port
     thread::sleep(Duration::from_secs(1));
+
+    // Check if child process is still alive
+    if let Some(status) = child.try_wait().context("checking child status")? {
+        let stderr = child.stderr.take().map(|mut s| {
+            let mut buf = String::new();
+            std::io::Read::read_to_string(&mut s, &mut buf).ok();
+            buf
+        });
+        eyre::bail!(
+            "Python process exited early with status: {:?}\nstderr: {:?}",
+            status,
+            stderr
+        );
+    }
 
     let launch_args = debugger::AttachArguments {
         working_directory: cwd.clone(),
@@ -66,7 +175,7 @@ fn test_remote_attach() -> eyre::Result<()> {
     };
 
     let debugger = Debugger::on_port(port, launch_args).context("creating debugger")?;
-    let drx = debugger.events();
+    let mut harness = DebuggerTestHarness::new(debugger);
 
     let file_path = std::env::current_dir()
         .unwrap()
@@ -74,26 +183,25 @@ fn test_remote_attach() -> eyre::Result<()> {
         .canonicalize()
         .context("invalid debug target")?;
 
-    wait_for_event("initialised event", &drx, |e| {
+    harness.wait_for_event("initialised event", |e| {
         matches!(e, debugger::Event::Initialised)
     });
 
     let breakpoint_line = 9;
-    debugger
+    harness
+        .debugger()
         .add_breakpoint(&debugger::Breakpoint {
             path: file_path.clone(),
             line: breakpoint_line,
             ..Default::default()
         })
         .context("adding breakpoint")?;
-    debugger.start().context("launching debugee")?;
+    harness.debugger().start().context("launching debugee")?;
 
-    wait_for_event("running event", &drx, |e| {
-        matches!(e, debugger::Event::Running)
-    });
+    harness.wait_for_event("running event", |e| matches!(e, debugger::Event::Running));
 
-    let debugger::Event::Paused(ProgramState { paused_frame, .. }) =
-        wait_for_event("paused event", &drx, |e| {
+    let debugger::Event::Paused(ProgramState { paused_frame, .. }) = harness
+        .wait_for_event("paused event", |e| {
             matches!(e, debugger::Event::Paused { .. })
         })
     else {
@@ -115,14 +223,29 @@ fn test_remote_attach() -> eyre::Result<()> {
         } if file_path == file_path && breakpoint_line == breakpoint_line
     ));
 
-    debugger.r#continue().context("resuming debugee")?;
+    harness
+        .debugger()
+        .r#continue()
+        .context("resuming debugee")?;
 
-    wait_for_event("terminated debuggee", &drx, |e| {
+    harness.wait_for_event("terminated debuggee", |e| {
         matches!(e, debugger::Event::Ended)
     });
 
+    // Wait for child process to exit
     let status = child.wait().context("waiting for child")?;
-    assert_eq!(status.code().unwrap(), 0);
+    if !status.success() {
+        let stderr = child.stderr.take().map(|mut s| {
+            let mut buf = String::new();
+            std::io::Read::read_to_string(&mut s, &mut buf).ok();
+            buf
+        });
+        eyre::bail!(
+            "Python process failed with status: {:?}\nstderr: {:?}",
+            status,
+            stderr
+        );
+    }
 
     Ok(())
 }
@@ -146,28 +269,27 @@ fn test_debugger() -> eyre::Result<()> {
         language: debugger::Language::DebugPy,
     };
     let debugger = Debugger::on_port(port, launch_args).context("creating debugger")?;
-    let drx = debugger.events();
+    let mut harness = DebuggerTestHarness::new(debugger);
 
-    wait_for_event("initialised event", &drx, |e| {
+    harness.wait_for_event("initialised event", |e| {
         matches!(e, debugger::Event::Initialised)
     });
 
     let breakpoint_line = 4;
-    debugger
+    harness
+        .debugger()
         .add_breakpoint(&debugger::Breakpoint {
             path: file_path.clone(),
             line: breakpoint_line,
             ..Default::default()
         })
         .context("adding breakpoint")?;
-    debugger.start().context("launching debugee")?;
+    harness.debugger().start().context("launching debugee")?;
 
-    wait_for_event("running event", &drx, |e| {
-        matches!(e, debugger::Event::Running)
-    });
+    harness.wait_for_event("running event", |e| matches!(e, debugger::Event::Running));
 
-    let debugger::Event::Paused(ProgramState { paused_frame, .. }) =
-        wait_for_event("paused event", &drx, |e| {
+    let debugger::Event::Paused(ProgramState { paused_frame, .. }) = harness
+        .wait_for_event("paused event", |e| {
             matches!(e, debugger::Event::Paused { .. })
         })
     else {
@@ -189,38 +311,14 @@ fn test_debugger() -> eyre::Result<()> {
         } if file_path == file_path && breakpoint_line == breakpoint_line
     ));
 
-    debugger.r#continue().context("resuming debugee")?;
+    harness
+        .debugger()
+        .r#continue()
+        .context("resuming debugee")?;
 
-    wait_for_event("terminated debuggee", &drx, |e| {
+    harness.wait_for_event("terminated debuggee", |e| {
         matches!(e, debugger::Event::Ended)
     });
 
     Ok(())
-}
-
-#[tracing::instrument(skip(rx, pred))]
-fn wait_for_event<F>(
-    message: &str,
-    rx: &crossbeam_channel::Receiver<debugger::Event>,
-    pred: F,
-) -> debugger::Event
-where
-    F: Fn(&debugger::Event) -> bool,
-{
-    tracing::debug!("waiting for {message} event");
-    let mut n = 0;
-    loop {
-        let evt = rx.recv().unwrap();
-        if n >= 100 {
-            panic!("did not receive event");
-        }
-
-        if pred(&evt) {
-            tracing::debug!(event = ?evt, "received expected event");
-            return evt;
-        } else {
-            tracing::trace!(event = ?evt, "non-matching event");
-        }
-        n += 1;
-    }
 }
