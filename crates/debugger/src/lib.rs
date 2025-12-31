@@ -1,4 +1,5 @@
 //! High level Debugger implementation
+mod commands;
 mod debugger;
 mod internals;
 mod persistence;
