@@ -342,7 +342,7 @@ fn main() -> eyre::Result<()> {
             };
             cc.egui_ctx.set_style(style);
             let app = DebuggerApp::new(args, cc).expect("creating main application");
-            Box::new(app)
+            Ok(Box::new(app))
         }),
     )
     .map_err(|e| eyre::eyre!("running gui mainloop: {e}"))

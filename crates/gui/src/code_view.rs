@@ -50,10 +50,10 @@ impl egui::Widget for CodeView<'_> {
     fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
         let breakpoint_positions = self.breakpoint_positions();
         // closure that defines the layout drop
-        let mut layouter = |ui: &egui::Ui, s: &str, _wrap_width: f32| {
+        let mut layouter = |ui: &egui::Ui, s: &dyn egui::TextBuffer, _wrap_width: f32| {
             let mut layout_job = LayoutJob::default();
             let indent = 16.0;
-            for (i, line) in s.lines().enumerate() {
+            for (i, line) in s.as_str().lines().enumerate() {
                 if breakpoint_positions.contains(&(i + 1)) {
                     // marker
                     layout_job.append(
@@ -81,7 +81,7 @@ impl egui::Widget for CodeView<'_> {
                 layout_job.append("\n", indent, TextFormat::default());
             }
 
-            ui.fonts(|f| f.layout_job(layout_job))
+            ui.fonts_mut(|f| f.layout_job(layout_job))
         };
         let response = egui::ScrollArea::vertical().show(ui, |ui| {
             ui.add(TextEdit::multiline(&mut self.content).layouter(&mut layouter))

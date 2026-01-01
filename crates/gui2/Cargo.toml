@@ -7,7 +7,7 @@ edition = "2024"
 
 [dependencies]
 futures = "0.3.31"
-iced = { version = "0.12.1", features = [
+iced = { version = "0.14.0", features = [
     "highlighter",
     "tokio",
     "debug",
@@ -15,7 +15,7 @@ iced = { version = "0.12.1", features = [
     "lazy",
 ] }
 dark-light.workspace = true
-iced_aw = "0.9"
+iced_aw = "0.13.0"
 tracing.workspace = true
 tracing-subscriber.workspace = true
 clap.workspace = true

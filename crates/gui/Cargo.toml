@@ -6,7 +6,7 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-eframe = "0.27.2"
+eframe = "0.33.3"
 crossbeam-channel.workspace = true
 eyre.workspace = true
 tracing.workspace = true
