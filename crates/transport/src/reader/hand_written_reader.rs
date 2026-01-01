@@ -62,6 +62,7 @@ where
                                 .map_err(|e| eyre::eyre!("failed to read: {:?}", e))?;
                             let content =
                                 std::str::from_utf8(content.as_slice()).context("invalid utf8")?;
+                            tracing::debug!(content, "received raw message");
                             let message = serde_json::from_str(content).with_context(|| {
                                 format!("could not construct message from: {content}")
                             })?;

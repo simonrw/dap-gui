@@ -386,6 +386,20 @@ impl TransportConnection {
         })
     }
 
+    /// Split the connection into separate reader and writer components
+    ///
+    /// This allows the reader and writer to be used independently, avoiding mutex contention.
+    /// The sequence number is shared between them via Arc.
+    pub fn split_connection(
+        self,
+    ) -> (
+        reader::hand_written_reader::HandWrittenReader<Box<dyn BufRead + Send>>,
+        Box<dyn Write + Send>,
+        Arc<AtomicI64>,
+    ) {
+        (self.reader, self.writer, Arc::new(self.sequence_number))
+    }
+
     /// Connect to a DAP server over TCP with automatic retry
     ///
     /// This method handles connection retry logic automatically using exponential
@@ -437,6 +451,7 @@ impl SyncTransport for TransportConnection {
             body,
         };
         let json = serde_json::to_string(&message).wrap_err("encoding json body")?;
+        tracing::debug!(seq, content = %json, "sending request");
 
         write!(
             self.writer,

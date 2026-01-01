@@ -11,6 +11,7 @@ crossbeam-channel.workspace = true
 tracing.workspace = true
 server = { path = "../server" }
 serde.workspace = true
+serde_json.workspace = true
 transport = { path = "../transport" }
 retry = "2.1.0"
 dirs.workspace = true

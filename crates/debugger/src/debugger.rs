@@ -12,7 +12,7 @@ use launch_configuration::LaunchConfiguration;
 use retry::{delay::Exponential, retry};
 use server::Implementation;
 use transport::{
-    DEFAULT_DAP_PORT,
+    DEFAULT_DAP_PORT, Message, Reader, TransportConnection,
     requests::{self, Disconnect},
     responses,
     types::{BreakpointLocation, StackFrameId, Variable},
@@ -149,25 +149,120 @@ impl Debugger {
 
                 let s = server::for_implementation_on_port(implementation, port)
                     .context("creating background server process")?;
-                let stream = reliable_tcp_stream(format!("127.0.0.1:{port}"))
+
+                let connection = TransportConnection::connect(format!("127.0.0.1:{port}"))
                     .context("connecting to server")?;
 
-                let (ttx, trx) = crossbeam_channel::unbounded();
-                let client =
-                    transport::Client::new(stream, ttx).context("creating transport client")?;
+                // Split the connection into reader and writer to avoid mutex contention
+                let (mut reader, writer, sequence_number) = connection.split_connection();
 
-                let internals = DebuggerInternals::new(client, tx, Some(s));
+                let (ttx, trx) = crossbeam_channel::unbounded();
+                let (message_tx, message_rx) = crossbeam_channel::unbounded();
+
+                // Wrap writer in Arc<Mutex<>> for shared access
+                let writer_arc = Arc::new(Mutex::new(writer));
+
+                // Spawn polling thread with direct ownership of the reader (no mutex needed)
+                thread::spawn(move || {
+                    loop {
+                        match reader.poll_message() {
+                            Ok(Some(message)) => {
+                                tracing::debug!(?message, "received message in polling thread");
+                                // Forward events to event channel
+                                if let Message::Event(ref event) = message {
+                                    if ttx.send(event.clone()).is_err() {
+                                        tracing::debug!(
+                                            "event channel closed, terminating polling thread"
+                                        );
+                                        break;
+                                    }
+                                }
+                                // Forward ALL messages to the message channel
+                                if message_tx.send(message).is_err() {
+                                    tracing::debug!(
+                                        "message channel closed, terminating polling thread"
+                                    );
+                                    break;
+                                }
+                            }
+                            Ok(None) => {
+                                tracing::debug!("connection closed, terminating polling thread");
+                                break;
+                            }
+                            Err(e) => {
+                                tracing::error!(error = %e, "error receiving message in polling thread, terminating");
+                                break;
+                            }
+                        }
+                    }
+                    tracing::debug!("polling thread terminated");
+                });
+
+                let internals = DebuggerInternals::from_split_connection(
+                    writer_arc,
+                    sequence_number,
+                    tx,
+                    message_rx,
+                    Some(s),
+                );
                 (internals, trx)
             }
             InitialiseArguments::Attach(_) => {
-                let stream = reliable_tcp_stream(format!("127.0.0.1:{port}"))
+                let connection = TransportConnection::connect(format!("127.0.0.1:{port}"))
                     .context("connecting to server")?;
 
-                let (ttx, trx) = crossbeam_channel::unbounded();
-                let client =
-                    transport::Client::new(stream, ttx).context("creating transport client")?;
+                // Split the connection into reader and writer to avoid mutex contention
+                let (mut reader, writer, sequence_number) = connection.split_connection();
 
-                let internals = DebuggerInternals::new(client, tx, None);
+                let (ttx, trx) = crossbeam_channel::unbounded();
+                let (message_tx, message_rx) = crossbeam_channel::unbounded();
+
+                // Wrap writer in Arc<Mutex<>> for shared access
+                let writer_arc = Arc::new(Mutex::new(writer));
+
+                // Spawn polling thread with direct ownership of the reader (no mutex needed)
+                thread::spawn(move || {
+                    loop {
+                        match reader.poll_message() {
+                            Ok(Some(message)) => {
+                                tracing::debug!(?message, "received message in polling thread");
+                                // Forward events to event channel
+                                if let Message::Event(ref event) = message {
+                                    if ttx.send(event.clone()).is_err() {
+                                        tracing::debug!(
+                                            "event channel closed, terminating polling thread"
+                                        );
+                                        break;
+                                    }
+                                }
+                                // Forward ALL messages to the message channel
+                                if message_tx.send(message).is_err() {
+                                    tracing::debug!(
+                                        "message channel closed, terminating polling thread"
+                                    );
+                                    break;
+                                }
+                            }
+                            Ok(None) => {
+                                tracing::debug!("connection closed, terminating polling thread");
+                                break;
+                            }
+                            Err(e) => {
+                                tracing::error!(error = %e, "error receiving message in polling thread, terminating");
+                                break;
+                            }
+                        }
+                    }
+                    tracing::debug!("polling thread terminated");
+                });
+
+                let internals = DebuggerInternals::from_split_connection(
+                    writer_arc,
+                    sequence_number,
+                    tx,
+                    message_rx,
+                    None,
+                );
                 (internals, trx)
             }
         };
@@ -238,8 +333,8 @@ impl Debugger {
                             Command::SendRequest { body, response_tx } => {
                                 tracing::trace!(?body, "handling send request command");
                                 match background_internals.lock() {
-                                    Ok(internals) => {
-                                        match internals.client.send(body) {
+                                    Ok(mut internals) => {
+                                        match internals.send(body) {
                                             Ok(response) => {
                                                 let _ = response_tx.send(Ok(response));
                                             }
@@ -257,8 +352,8 @@ impl Debugger {
                             Command::SendExecute { body, response_tx } => {
                                 tracing::trace!(?body, "handling send execute command");
                                 match background_internals.lock() {
-                                    Ok(internals) => {
-                                        match internals.client.execute(body) {
+                                    Ok(mut internals) => {
+                                        match internals.execute(body) {
                                             Ok(()) => {
                                                 let _ = response_tx.send(Ok(()));
                                             }
@@ -286,7 +381,7 @@ impl Debugger {
                     match background_internals.lock() {
                         Ok(mut internals) => {
                             let body = follow_up.to_request_body();
-                            match internals.client.send(body) {
+                            match internals.send(body) {
                                 Ok(response) => {
                                     let more_follow_ups =
                                         internals.on_follow_up_response(follow_up, response);
