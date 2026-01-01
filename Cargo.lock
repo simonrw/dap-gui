@@ -1501,6 +1501,7 @@ dependencies = [
  "dirs 6.0.0",
  "eyre",
  "launch_configuration",
+ "oneshot",
  "retry",
  "serde",
  "serde_json",

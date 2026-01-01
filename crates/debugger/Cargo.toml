@@ -16,6 +16,7 @@ retry = "2.1.0"
 dirs.workspace = true
 launch_configuration = { path = "../launch_configuration" }
 uuid = { version = "1.18.1", features = ["v4"] }
+oneshot.workspace = true
 
 [dev-dependencies]
 color-eyre.workspace = true
