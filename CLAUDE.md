@@ -172,5 +172,9 @@ Minimum Supported Rust Version: **1.72.0**
 - Tests require a Python virtual environment with `debugpy` installed
 - End-to-end tests run actual debug sessions, so they need debugpy and delve available
 - Use `cargo nextest` (not plain `cargo test`) for test execution
+- *ALWAYS* perform the following steps before pushing a commit to GitHub:
+    - format the code with `cargo fmt`
+    - make sure the code compiles with `cargo check --all-features --all-targets` (don't worry about warnings)
+    - run the tests with `cargo nextest run  --exclude pythondap --workspace --locked --all-features --all-targets` and `cargo test --doc`
 - Set `RUST_LOG` environment variable for tracing output during tests
 - Always format code after writing with `cargo fmt`
