@@ -1,6 +1,5 @@
-use color_eyre::eyre::{self, Context};
-use gui2::DebuggerApp;
-use iced::Application;
+use color_eyre::eyre;
+use gui2::debugger_app;
 
 #[cfg(feature = "sentry")]
 macro_rules! setup_sentry {
@@ -26,5 +25,10 @@ fn main() -> eyre::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
     let _ = color_eyre::install();
 
-    DebuggerApp::run(iced::Settings::default()).wrap_err("running main application")
+    // iced::run(app.update, app.view)?;
+    iced::application(debugger_app::boot, debugger_app::update, debugger_app::view)
+        .subscription(debugger_app::subscription)
+        .title("DAP GUI")
+        .run()?;
+    Ok(())
 }

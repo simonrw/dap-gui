@@ -258,6 +258,7 @@ impl DebuggerInternals {
     }
 
     #[tracing::instrument(skip(self), level = "trace")]
+    #[allow(dead_code)]
     pub(crate) fn on_event(&mut self, event: transport::events::Event) {
         tracing::debug!("handling event");
 
