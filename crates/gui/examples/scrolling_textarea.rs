@@ -79,7 +79,7 @@ fn main() {
                 contents: include_str!("./scrolling_textarea.rs").to_string(),
                 ..Default::default()
             };
-            Box::new(app)
+            Ok(Box::new(app))
         }),
     )
     .unwrap();

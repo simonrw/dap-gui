@@ -2,6 +2,7 @@ use std::ops::Range;
 
 use iced::{advanced, highlighter::Highlighter as IcedHighlighter};
 
+#[allow(dead_code)]
 pub(crate) struct Highlighter {
     inner: IcedHighlighter,
 }

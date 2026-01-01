@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use iced::{
-    Color, Point, mouse,
-    widget::canvas::{Frame, Path, Program},
+    Color, Point, Renderer, mouse,
+    widget::canvas::{Frame, Geometry, Path, Program},
 };
 
 use super::Event;
@@ -19,11 +19,11 @@ impl Program<Event> for RenderBreakpoints<'_> {
     fn draw(
         &self,
         _state: &Self::State,
-        renderer: &iced::Renderer,
+        renderer: &Renderer,
         _theme: &iced::Theme,
         bounds: iced::Rectangle,
         _cursor: iced::advanced::mouse::Cursor,
-    ) -> Vec<<iced::Renderer as iced::widget::canvas::Renderer>::Geometry> {
+    ) -> Vec<Geometry> {
         tracing::trace!("program draw");
         let mut geometry = Vec::with_capacity(self.breakpoints.len());
 
@@ -55,21 +55,20 @@ impl Program<Event> for RenderBreakpoints<'_> {
     fn update(
         &self,
         _state: &mut Self::State,
-        event: iced::widget::canvas::Event,
+        event: &iced::Event,
         _bounds: iced::Rectangle,
         _cursor: iced::advanced::mouse::Cursor,
-    ) -> (iced::widget::canvas::event::Status, Option<Event>) {
+    ) -> Option<iced::widget::Action<Event>> {
         tracing::trace!("program event");
+        use iced::Event as IcedEvent;
         match event {
-            iced::widget::canvas::Event::Mouse(mouse::Event::ButtonReleased(button)) => (
-                iced::widget::canvas::event::Status::Captured,
-                Some(Event::CanvasClicked(button)),
-            ),
-            iced::widget::canvas::Event::Mouse(mouse::Event::CursorMoved { position }) => (
-                iced::widget::canvas::event::Status::Captured,
-                Some(Event::MouseMoved(position)),
-            ),
-            _ => (iced::widget::canvas::event::Status::Ignored, None),
+            IcedEvent::Mouse(mouse::Event::ButtonReleased(button)) => {
+                Some(iced::widget::Action::publish(Event::CanvasClicked(*button)))
+            }
+            IcedEvent::Mouse(mouse::Event::CursorMoved { position }) => {
+                Some(iced::widget::Action::publish(Event::MouseMoved(*position)))
+            }
+            _ => None,
         }
     }
 }

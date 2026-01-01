@@ -35,7 +35,7 @@ pub enum CodeViewerAction {
 pub struct CodeViewer<'a, Message> {
     content: &'a Content,
     breakpoints: &'a HashSet<usize>,
-    scrollable_id: iced::widget::scrollable::Id,
+    scrollable_id: iced::widget::Id,
     on_change: Box<dyn Fn(CodeViewerAction) -> Message + 'static>,
 }
 
@@ -43,7 +43,7 @@ impl<'a, Message> CodeViewer<'a, Message> {
     pub fn new(
         content: &'a Content,
         breakpoints: &'a HashSet<usize>,
-        scrollable_id: iced::widget::scrollable::Id,
+        scrollable_id: iced::widget::Id,
         start_line: usize,
         on_change: impl Fn(CodeViewerAction) -> Message + 'static,
     ) -> Self {
@@ -203,7 +203,7 @@ mod tests {
     fn add_breakpoints() {
         let content = Content::new();
         let breakpoints = HashSet::new();
-        let scrollable_id = iced::widget::scrollable::Id::unique();
+        let scrollable_id = iced::widget::Id::unique();
 
         enum TestMessage {
             Event(CodeViewerAction),

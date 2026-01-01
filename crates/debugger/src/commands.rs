@@ -5,7 +5,7 @@
 //! operations that need to be performed by the background thread in coordination with
 //! event processing.
 
-use transport::{requests, responses, types::Seq};
+use transport::{requests, responses};
 
 /// Commands sent from the main thread to the background thread
 ///
@@ -34,6 +34,7 @@ pub(crate) enum Command {
     },
 
     /// Gracefully shutdown the background thread
+    #[allow(dead_code)]
     Shutdown,
 }
 
@@ -42,6 +43,7 @@ pub(crate) enum Command {
 /// This enum tracks what the background thread is currently doing. It's useful
 /// for debugging and understanding the thread's lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) enum BackgroundThreadState {
     /// Waiting for work (events or commands)
     Idle,
