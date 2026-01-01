@@ -621,18 +621,28 @@ impl DebuggerInternals {
                 }]
             }
             StackTraceContext::FullStack => {
-                // Process full stack trace and request scopes for top frame
+                // Process full stack trace and emit Paused event
                 let Some(top_frame) = stack_frames.first() else {
                     tracing::error!("no frames found in full stack trace");
                     return Vec::new();
                 };
 
-                // Store the stack frames temporarily
-                // We'll emit the full Paused event once we have the variables
-                let frame_id = top_frame.id;
+                let paused_frame = match self.compute_paused_frame(top_frame) {
+                    Ok(frame) => frame,
+                    Err(e) => {
+                        tracing::error!(error = %e, "failed to compute paused frame");
+                        return Vec::new();
+                    }
+                };
 
-                // Request scopes for the top frame
-                vec![FollowUpRequest::Scopes { frame_id }]
+                self.set_state(DebuggerState::Paused {
+                    stack: stack_frames,
+                    paused_frame: Box::new(paused_frame),
+                    breakpoints: self.breakpoints.values().cloned().collect(),
+                });
+
+                // No more follow-up requests needed
+                Vec::new()
             }
         }
     }

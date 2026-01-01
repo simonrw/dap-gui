@@ -21,6 +21,7 @@ use uuid::Uuid;
 
 use crate::{
     AttachArguments, Event, Language, LaunchArguments,
+    commands::Command,
     internals::DebuggerInternals,
     state::{self, DebuggerState},
     types::{self, EvaluateResult},
@@ -110,6 +111,7 @@ where
 pub struct Debugger {
     internals: Arc<Mutex<DebuggerInternals>>,
     rx: crossbeam_channel::Receiver<Event>,
+    command_tx: crossbeam_channel::Sender<Command>,
 }
 
 impl Debugger {
@@ -174,37 +176,132 @@ impl Debugger {
 
         let internals = Arc::new(Mutex::new(internals));
 
-        // background thread reading transport events, and handling the event with our internal state
+        // Create command channel for main thread -> background thread communication
+        let (command_tx, command_rx) = crossbeam_channel::unbounded();
+
+        // background thread reading transport events and commands
         let background_internals = Arc::clone(&internals);
         let background_events = events.clone();
         thread::spawn(move || {
+            use crate::internals::FollowUpRequest;
+
+            let mut follow_up_queue: Vec<FollowUpRequest> = Vec::new();
+
             loop {
-                // Gracefully handle channel close instead of panicking
-                let event = match background_events.recv() {
-                    Ok(event) => event,
-                    Err(_) => {
-                        tracing::debug!("event channel closed, terminating background thread");
-                        break;
+                crossbeam_channel::select! {
+                    recv(background_events) -> msg => {
+                        let event = match msg {
+                            Ok(event) => event,
+                            Err(_) => {
+                                tracing::debug!("event channel closed, terminating background thread");
+                                break;
+                            }
+                        };
+
+                        let lock_id = Uuid::new_v4().to_string();
+                        let span = tracing::trace_span!("event", %lock_id);
+                        let _guard = span.enter();
+
+                        tracing::trace!(is_poisoned = %background_internals.is_poisoned(), "trying to unlock background internals");
+
+                        match background_internals.lock() {
+                            Ok(mut internals) => {
+                                tracing::trace!(?event, "handling event");
+
+                                // Use non-blocking event processing
+                                let follow_ups = internals.on_event_nonblocking(event);
+                                follow_up_queue.extend(follow_ups);
+
+                                drop(internals);
+                                tracing::trace!("unlocked background internals");
+                            }
+                            Err(e) => {
+                                tracing::error!(error = %e, "mutex poisoned, terminating background thread");
+                                break;
+                            }
+                        }
                     }
-                };
+                    recv(command_rx) -> msg => {
+                        let command = match msg {
+                            Ok(command) => command,
+                            Err(_) => {
+                                tracing::debug!("command channel closed, terminating background thread");
+                                break;
+                            }
+                        };
 
-                let lock_id = Uuid::new_v4().to_string();
-                let span = tracing::trace_span!("", %lock_id);
-                let _guard = span.enter();
+                        let lock_id = Uuid::new_v4().to_string();
+                        let span = tracing::trace_span!("command", %lock_id);
+                        let _guard = span.enter();
 
-                tracing::trace!(is_poisoned = %background_internals.is_poisoned(), "trying to unlock background internals");
-
-                // Gracefully handle mutex poisoning instead of panicking
-                match background_internals.lock() {
-                    Ok(mut b) => {
-                        tracing::trace!(?event, "handling event");
-                        b.on_event(event);
-                        drop(b);
-                        tracing::trace!("locked background internals");
+                        match command {
+                            Command::SendRequest { body, response_tx } => {
+                                tracing::trace!(?body, "handling send request command");
+                                match background_internals.lock() {
+                                    Ok(internals) => {
+                                        match internals.client.send(body) {
+                                            Ok(response) => {
+                                                let _ = response_tx.send(Ok(response));
+                                            }
+                                            Err(e) => {
+                                                let _ = response_tx.send(Err(e));
+                                            }
+                                        }
+                                        drop(internals);
+                                    }
+                                    Err(e) => {
+                                        let _ = response_tx.send(Err(eyre::eyre!("mutex poisoned: {}", e)));
+                                    }
+                                }
+                            }
+                            Command::SendExecute { body, response_tx } => {
+                                tracing::trace!(?body, "handling send execute command");
+                                match background_internals.lock() {
+                                    Ok(internals) => {
+                                        match internals.client.execute(body) {
+                                            Ok(()) => {
+                                                let _ = response_tx.send(Ok(()));
+                                            }
+                                            Err(e) => {
+                                                let _ = response_tx.send(Err(e));
+                                            }
+                                        }
+                                        drop(internals);
+                                    }
+                                    Err(e) => {
+                                        let _ = response_tx.send(Err(eyre::eyre!("mutex poisoned: {}", e)));
+                                    }
+                                }
+                            }
+                            Command::Shutdown => {
+                                tracing::debug!("received shutdown command");
+                                break;
+                            }
+                        }
                     }
-                    Err(e) => {
-                        tracing::error!(error = %e, "mutex poisoned, terminating background thread");
-                        break;
+                }
+
+                // Process follow-up requests
+                while let Some(follow_up) = follow_up_queue.pop() {
+                    match background_internals.lock() {
+                        Ok(mut internals) => {
+                            let body = follow_up.to_request_body();
+                            match internals.client.send(body) {
+                                Ok(response) => {
+                                    let more_follow_ups =
+                                        internals.on_follow_up_response(follow_up, response);
+                                    follow_up_queue.extend(more_follow_ups);
+                                }
+                                Err(e) => {
+                                    tracing::error!(error = %e, "failed to send follow-up request");
+                                }
+                            }
+                            drop(internals);
+                        }
+                        Err(e) => {
+                            tracing::error!(error = %e, "mutex poisoned while processing follow-up");
+                            break;
+                        }
                     }
                 }
             }
@@ -214,6 +311,7 @@ impl Debugger {
         Ok(Self {
             internals,
             rx: internals_rx,
+            command_tx,
         })
     }
 
@@ -280,12 +378,8 @@ impl Debugger {
 
     /// Launch a debugging session
     pub fn start(&self) -> eyre::Result<()> {
-        self.with_internals(|internals| {
-            internals
-                .client
-                .send(requests::RequestBody::ConfigurationDone)
-        })
-        .context("completing configuration")?;
+        self.send_request(requests::RequestBody::ConfigurationDone)
+            .context("completing configuration")?;
 
         self.with_internals(|internals| {
             internals.set_state(DebuggerState::Running);
@@ -306,9 +400,7 @@ impl Debugger {
             frame_id: Some(frame_id),
             context: Some("repl".to_string()),
         });
-        let res = self
-            .with_internals(|internals| internals.client.send(req))
-            .context("sending evaluate request")?;
+        let res = self.send_request(req).context("sending evaluate request")?;
         match res {
             responses::Response {
                 body:
@@ -339,81 +431,87 @@ impl Debugger {
     /// Resume execution of the debugee
     #[tracing::instrument(skip(self))]
     pub fn r#continue(&self) -> eyre::Result<()> {
-        self.with_internals(|internals| {
-            match internals.current_thread_id {
-                Some(thread_id) => {
-                    internals
-                        .client
-                        .execute(requests::RequestBody::Continue(requests::Continue {
-                            thread_id,
-                            single_thread: false,
-                        }))
-                        .context("sending continue request")?;
-                }
-                None => eyre::bail!("logic error: no current thread id"),
-            }
-            Ok(())
-        })
+        let thread_id = self.with_internals(|internals| {
+            internals
+                .current_thread_id
+                .ok_or_else(|| eyre::eyre!("logic error: no current thread id"))
+        })?;
+
+        self.send_execute(requests::RequestBody::Continue(requests::Continue {
+            thread_id,
+            single_thread: false,
+        }))
+        .context("sending continue request")
     }
 
     /// Step over a statement
     pub fn step_over(&self) -> eyre::Result<()> {
-        self.with_internals(|internals| {
-            match internals.current_thread_id {
-                Some(thread_id) => {
-                    internals
-                        .client
-                        .execute(requests::RequestBody::Next(requests::Next { thread_id }))
-                        .context("sending step_over request")?;
-                }
-                None => eyre::bail!("logic error: no current thread id"),
-            }
-            Ok(())
-        })
+        let thread_id = self.with_internals(|internals| {
+            internals
+                .current_thread_id
+                .ok_or_else(|| eyre::eyre!("logic error: no current thread id"))
+        })?;
+
+        self.send_execute(requests::RequestBody::Next(requests::Next { thread_id }))
+            .context("sending step_over request")
     }
 
     /// Step into a statement
     pub fn step_in(&self) -> eyre::Result<()> {
-        self.with_internals(|internals| {
-            match internals.current_thread_id {
-                Some(thread_id) => {
-                    internals
-                        .client
-                        .execute(requests::RequestBody::StepIn(requests::StepIn {
-                            thread_id,
-                        }))
-                        .context("sending step_in` request")?;
-                }
-                None => eyre::bail!("logic error: no current thread id"),
-            }
-            Ok(())
-        })
+        let thread_id = self.with_internals(|internals| {
+            internals
+                .current_thread_id
+                .ok_or_else(|| eyre::eyre!("logic error: no current thread id"))
+        })?;
+
+        self.send_execute(requests::RequestBody::StepIn(requests::StepIn {
+            thread_id,
+        }))
+        .context("sending step_in request")
     }
 
     /// Step out of a statement
     pub fn step_out(&self) -> eyre::Result<()> {
-        self.with_internals(|internals| {
-            match internals.current_thread_id {
-                Some(thread_id) => {
-                    internals
-                        .client
-                        .execute(requests::RequestBody::StepOut(requests::StepOut {
-                            thread_id,
-                        }))
-                        .context("sending `step_out` request")?;
-                }
-                None => eyre::bail!("logic error: no current thread id"),
-            }
-            Ok(())
-        })
+        let thread_id = self.with_internals(|internals| {
+            internals
+                .current_thread_id
+                .ok_or_else(|| eyre::eyre!("logic error: no current thread id"))
+        })?;
+
+        self.send_execute(requests::RequestBody::StepOut(requests::StepOut {
+            thread_id,
+        }))
+        .context("sending step_out request")
     }
 
     pub fn variables(&self, variables_reference: i64) -> eyre::Result<Vec<Variable>> {
         self.with_internals(|internals| internals.variables(variables_reference))
     }
 
+    /// Send a request and wait for a response via the command channel
+    fn send_request(&self, body: requests::RequestBody) -> eyre::Result<responses::Response> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(Command::SendRequest { body, response_tx })
+            .map_err(|_| eyre::eyre!("command channel closed"))?;
+        response_rx
+            .recv()
+            .map_err(|_| eyre::eyre!("response channel closed"))?
+    }
+
+    /// Send a request without waiting for a response (fire-and-forget) via the command channel
+    fn send_execute(&self, body: requests::RequestBody) -> eyre::Result<()> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.command_tx
+            .send(Command::SendExecute { body, response_tx })
+            .map_err(|_| eyre::eyre!("command channel closed"))?;
+        response_rx
+            .recv()
+            .map_err(|_| eyre::eyre!("response channel closed"))?
+    }
+
     fn execute(&self, body: requests::RequestBody) -> eyre::Result<()> {
-        self.with_internals(|internals| internals.client.execute(body))
+        self.send_execute(body)
     }
 
     /// Pause the debugging session waiting for a specific event, where the predicate returns true
