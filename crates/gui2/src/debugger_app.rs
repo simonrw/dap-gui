@@ -4,8 +4,9 @@ use clap::Parser;
 use color_eyre::eyre::{self, Context};
 use debugger::{AttachArguments, Debugger, Event, ProgramState};
 use iced::{
-    Color, Element, Length, Subscription, Task,
+    Color, Element, Length, Point, Subscription, Task,
     keyboard::{Key, Modifiers},
+    mouse,
     widget::{Container, button, column, container, row, text, text_editor},
 };
 use iced_aw::Tabs;
@@ -14,7 +15,7 @@ use state::StateManager;
 
 use crate::{
     args::Args,
-    code_view::{CodeViewer, CodeViewerAction},
+    code_view::{self, CodeViewerAction},
     message::{Message, TabId},
     state::{AppState, Phase},
 };
@@ -158,6 +159,8 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                         breakpoints: bps.iter().map(|bp| bp.line).collect(),
                         scrollable_id: iced::widget::Id::unique(),
                         stack,
+                        mouse_position: Point::default(),
+                        scroll_position: 0.0,
                     }
                 }
                 Event::ScopeChange { .. } => todo!(),
@@ -173,6 +176,8 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             breakpoints,
             content,
             scrollable_id,
+            mouse_position,
+            scroll_position,
             ..
         } => match message {
             Message::TabSelected(selected) => *active_tab = selected,
@@ -187,6 +192,26 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             Message::CodeViewer(CodeViewerAction::ScrollCommand { offset }) => {
                 return iced::widget::operation::scroll_to(scrollable_id.clone(), offset);
             }
+            Message::CodeViewer(CodeViewerAction::MouseMoved(point)) => {
+                *mouse_position = point;
+            }
+            Message::CodeViewer(CodeViewerAction::Scrolled(viewport)) => {
+                let offset = viewport.absolute_offset();
+                *scroll_position = offset.y;
+            }
+            Message::CodeViewer(CodeViewerAction::CanvasClicked(mouse::Button::Left)) => {
+                use crate::code_view::{GUTTER_WIDTH, LINE_HEIGHT};
+                if mouse_position.x < GUTTER_WIDTH {
+                    let line_no =
+                        ((mouse_position.y + *scroll_position) / LINE_HEIGHT).floor() as usize;
+                    if breakpoints.contains(&line_no) {
+                        breakpoints.remove(&line_no);
+                    } else {
+                        breakpoints.insert(line_no);
+                    }
+                }
+            }
+            Message::CodeViewer(CodeViewerAction::CanvasClicked(_)) => {}
             Message::DebuggerMessage(event) => {
                 tracing::debug!(?event, "received event from debugger");
             }
@@ -233,15 +258,17 @@ pub fn view(state: &AppState) -> impl Into<Element<'_, Message>> {
                     content,
                     breakpoints,
                     scrollable_id,
+                    mouse_position,
+                    scroll_position,
                     ..
-                } => CodeViewer::new(
+                } => code_view::code_viewer(
                     content,
                     breakpoints,
+                    *mouse_position,
+                    *scroll_position,
                     scrollable_id.clone(),
-                    0,
                     Message::CodeViewer,
-                )
-                .into(),
+                ),
                 _ => text("").into(),
             };
 

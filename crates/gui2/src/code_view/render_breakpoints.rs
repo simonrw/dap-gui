@@ -5,14 +5,14 @@ use iced::{
     widget::canvas::{Frame, Geometry, Path, Program},
 };
 
-use super::Event;
+use super::CodeViewerAction;
 
 pub(crate) struct RenderBreakpoints<'b> {
     pub(crate) breakpoints: &'b HashSet<usize>,
     pub(crate) gutter_highlight: Option<usize>,
 }
 
-impl Program<Event> for RenderBreakpoints<'_> {
+impl Program<CodeViewerAction> for RenderBreakpoints<'_> {
     type State = ();
 
     #[tracing::instrument(skip(self, renderer, _theme, bounds, _cursor))]
@@ -58,16 +58,16 @@ impl Program<Event> for RenderBreakpoints<'_> {
         event: &iced::Event,
         _bounds: iced::Rectangle,
         _cursor: iced::advanced::mouse::Cursor,
-    ) -> Option<iced::widget::Action<Event>> {
+    ) -> Option<iced::widget::Action<CodeViewerAction>> {
         tracing::trace!("program event");
         use iced::Event as IcedEvent;
         match event {
-            IcedEvent::Mouse(mouse::Event::ButtonReleased(button)) => {
-                Some(iced::widget::Action::publish(Event::CanvasClicked(*button)))
-            }
-            IcedEvent::Mouse(mouse::Event::CursorMoved { position }) => {
-                Some(iced::widget::Action::publish(Event::MouseMoved(*position)))
-            }
+            IcedEvent::Mouse(mouse::Event::ButtonReleased(button)) => Some(
+                iced::widget::Action::publish(CodeViewerAction::CanvasClicked(*button)),
+            ),
+            IcedEvent::Mouse(mouse::Event::CursorMoved { position }) => Some(
+                iced::widget::Action::publish(CodeViewerAction::MouseMoved(*position)),
+            ),
             _ => None,
         }
     }

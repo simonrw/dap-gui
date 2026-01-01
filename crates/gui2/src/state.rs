@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use debugger::Debugger;
-use iced::widget::text_editor;
+use iced::{Point, widget::text_editor};
 use transport::types::StackFrame;
 
 use crate::{args::Args, message::TabId};
@@ -19,6 +19,8 @@ pub enum Phase {
         breakpoints: HashSet<usize>,
         scrollable_id: iced::widget::Id,
         stack: Vec<StackFrame>,
+        mouse_position: Point,
+        scroll_position: f32,
     },
     #[allow(dead_code)]
     Terminated,
