@@ -178,3 +178,7 @@ Minimum Supported Rust Version: **1.72.0**
     - run the tests with `cargo nextest run  --exclude pythondap --workspace --locked --all-features --all-targets` and `cargo test --doc`
 - Set `RUST_LOG` environment variable for tracing output during tests
 - Always format code after writing with `cargo fmt`
+
+# Code Generation Rules
+- IMPORTANT: Under NO circumstances should you ever use emoji characters in your responses or in any code you generate.
+- Never use emojis in documentation, comments, or commit messages.
