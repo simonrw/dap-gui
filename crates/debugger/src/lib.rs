@@ -2,6 +2,7 @@
 mod commands;
 mod debugger;
 mod internals;
+mod pending_requests;
 mod persistence;
 pub(crate) mod state;
 mod types;
