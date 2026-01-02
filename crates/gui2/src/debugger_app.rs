@@ -70,6 +70,13 @@ fn maybe_boot() -> eyre::Result<AppState> {
             connect,
             path_mappings,
             ..
+        })
+        | LaunchConfiguration::Python(Debugpy {
+            request,
+            cwd,
+            connect,
+            path_mappings,
+            ..
         }) => {
             if let Some(dir) = cwd {
                 debug_root_dir = debugger::utils::normalise_path(&dir).into_owned();
