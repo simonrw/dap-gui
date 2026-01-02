@@ -1,8 +1,16 @@
 use eyre::WrapErr;
 use server::Server;
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    io::Write,
+    path::PathBuf,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicI64, Ordering},
+    },
+};
 use transport::{
-    Client,
+    TransportConnection,
     requests::{self, Initialize, PathFormat},
     responses::{self, ResponseBody},
     types::{
@@ -77,8 +85,10 @@ pub struct FileSource {
 }
 
 pub(crate) struct DebuggerInternals {
-    pub(crate) client: Client,
+    pub(crate) writer: Arc<Mutex<Box<dyn Write + Send>>>,
+    pub(crate) sequence_number: Arc<AtomicI64>,
     pub(crate) publisher: crossbeam_channel::Sender<Event>,
+    pub(crate) message_rx: crossbeam_channel::Receiver<transport::Message>,
 
     // debugger specific details
     pub(crate) current_thread_id: Option<ThreadId>,
@@ -92,11 +102,138 @@ pub(crate) struct DebuggerInternals {
 
 impl DebuggerInternals {
     pub(crate) fn new(
-        client: Client,
+        connection: TransportConnection,
         publisher: crossbeam_channel::Sender<Event>,
+        message_rx: crossbeam_channel::Receiver<transport::Message>,
         server: Option<Box<dyn Server + Send>>,
     ) -> Self {
-        Self::with_breakpoints(client, publisher, HashMap::new(), server)
+        Self::with_breakpoints(
+            Arc::new(Mutex::new(connection)),
+            publisher,
+            message_rx,
+            HashMap::new(),
+            server,
+        )
+    }
+
+    pub(crate) fn from_connection_arc(
+        connection: Arc<Mutex<TransportConnection>>,
+        publisher: crossbeam_channel::Sender<Event>,
+        message_rx: crossbeam_channel::Receiver<transport::Message>,
+        server: Option<Box<dyn Server + Send>>,
+    ) -> Self {
+        Self::with_breakpoints(connection, publisher, message_rx, HashMap::new(), server)
+    }
+
+    pub(crate) fn from_split_connection(
+        writer: Arc<Mutex<Box<dyn Write + Send>>>,
+        sequence_number: Arc<AtomicI64>,
+        publisher: crossbeam_channel::Sender<Event>,
+        message_rx: crossbeam_channel::Receiver<transport::Message>,
+        server: Option<Box<dyn Server + Send>>,
+    ) -> Self {
+        Self::with_split_breakpoints(
+            writer,
+            sequence_number,
+            publisher,
+            message_rx,
+            HashMap::new(),
+            server,
+        )
+    }
+
+    /// Send a request and wait for the response
+    ///
+    /// This provides a blocking interface similar to the old Client.send()
+    pub(crate) fn send(
+        &mut self,
+        body: requests::RequestBody,
+    ) -> eyre::Result<responses::Response> {
+        tracing::debug!(?body, "internals.send called");
+
+        // Get sequence number and create request
+        let seq = self.sequence_number.fetch_add(1, Ordering::SeqCst) + 1;
+        let message = requests::Request {
+            seq,
+            r#type: "request".to_string(),
+            body,
+        };
+        let json = serde_json::to_string(&message).wrap_err("encoding json body")?;
+        tracing::debug!(seq, content = %json, "sending request");
+
+        // Lock writer and send request
+        {
+            let mut writer = self
+                .writer
+                .lock()
+                .map_err(|e| eyre::eyre!("writer mutex poisoned: {}", e))?;
+
+            write!(
+                writer.as_mut(),
+                "Content-Length: {}\r\n\r\n{}",
+                json.len(),
+                json
+            )
+            .wrap_err("writing message to output buffer")?;
+
+            writer.flush().wrap_err("flushing output buffer")?;
+        } // Release the lock immediately
+
+        // Wait for the matching response from the message channel
+        loop {
+            match self.message_rx.recv() {
+                Ok(transport::Message::Response(response)) if response.request_seq == seq => {
+                    return Ok(response);
+                }
+                Ok(transport::Message::Event(event)) => {
+                    // Forward events to the event publisher
+                    tracing::debug!(?event, "received event while waiting for response");
+                    // Note: events are already being forwarded by the polling thread
+                }
+                Ok(transport::Message::Response(_)) => {
+                    // Different response, keep waiting
+                    continue;
+                }
+                Ok(transport::Message::Request(_)) => {
+                    // Requests are not expected from the debug adapter
+                    tracing::warn!("unexpected request from debug adapter");
+                    continue;
+                }
+                Err(_) => {
+                    eyre::bail!("message channel closed while waiting for response");
+                }
+            }
+        }
+    }
+
+    /// Send a request without waiting for a response (fire-and-forget)
+    pub(crate) fn execute(&mut self, body: requests::RequestBody) -> eyre::Result<()> {
+        // Get sequence number and create request
+        let seq = self.sequence_number.fetch_add(1, Ordering::SeqCst) + 1;
+        let message = requests::Request {
+            seq,
+            r#type: "request".to_string(),
+            body,
+        };
+        let json = serde_json::to_string(&message).wrap_err("encoding json body")?;
+
+        // Lock writer and send request
+        let mut writer = self
+            .writer
+            .lock()
+            .map_err(|e| eyre::eyre!("writer mutex poisoned: {}", e))?;
+
+        write!(
+            writer.as_mut(),
+            "Content-Length: {}\r\n\r\n{}",
+            json.len(),
+            json
+        )
+        .wrap_err("writing message to output buffer")?;
+
+        writer.flush().wrap_err("flushing output buffer")?;
+
+        Ok(())
     }
 
     pub(crate) fn change_scope(&mut self, stack_frame_id: StackFrameId) -> eyre::Result<()> {
@@ -112,7 +249,6 @@ impl DebuggerInternals {
             success: true,
             ..
         } = self
-            .client
             .send(requests::RequestBody::StackTrace(requests::StackTrace {
                 thread_id: current_thread_id,
                 ..Default::default()
@@ -145,7 +281,6 @@ impl DebuggerInternals {
             success: true,
             ..
         } = self
-            .client
             .send(requests::RequestBody::Scopes(requests::Scopes {
                 frame_id: stack_frame.id,
             }))
@@ -173,7 +308,7 @@ impl DebuggerInternals {
         let req = requests::RequestBody::Variables(requests::Variables {
             variables_reference,
         });
-        match self.client.send(req).context("sending variables request") {
+        match self.send(req).context("sending variables request") {
             Ok(responses::Response {
                 body,
                 success: true,
@@ -213,17 +348,17 @@ impl DebuggerInternals {
 
         // TODO: deal with capabilities from the response
         tracing::debug!(request = ?req, "sending initialize event");
-        let _ = self.client.send(req).context("sending initialize event")?;
+        let _ = self.send(req).context("sending initialize event")?;
 
         match arguments {
             InitialiseArguments::Launch(launch_arguments) => {
                 // send launch event
                 let req = launch_arguments.to_request();
-                self.client.execute(req).context("sending launch request")?;
+                self.execute(req).context("sending launch request")?;
             }
             InitialiseArguments::Attach(attach_arguments) => {
                 let req = attach_arguments.to_request();
-                self.client.execute(req).context("sending attach request")?;
+                self.execute(req).context("sending attach request")?;
             }
         }
 
@@ -232,9 +367,22 @@ impl DebuggerInternals {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub(crate) fn with_breakpoints(
-        client: Client,
+        _connection: Arc<Mutex<TransportConnection>>,
+        _publisher: crossbeam_channel::Sender<Event>,
+        _message_rx: crossbeam_channel::Receiver<transport::Message>,
+        _existing_breakpoints: impl Into<HashMap<BreakpointId, Breakpoint>>,
+        _server: Option<Box<dyn Server + Send>>,
+    ) -> Self {
+        unimplemented!("Use with_split_breakpoints instead")
+    }
+
+    pub(crate) fn with_split_breakpoints(
+        writer: Arc<Mutex<Box<dyn Write + Send>>>,
+        sequence_number: Arc<AtomicI64>,
         publisher: crossbeam_channel::Sender<Event>,
+        message_rx: crossbeam_channel::Receiver<transport::Message>,
         existing_breakpoints: impl Into<HashMap<BreakpointId, Breakpoint>>,
         server: Option<Box<dyn Server + Send>>,
     ) -> Self {
@@ -242,8 +390,10 @@ impl DebuggerInternals {
         let current_breakpoint_id = *breakpoints.keys().max().unwrap_or(&0);
 
         Self {
-            client,
+            writer,
+            sequence_number,
             publisher,
+            message_rx,
             current_thread_id: None,
             breakpoints,
             current_breakpoint_id,
@@ -275,19 +425,18 @@ impl DebuggerInternals {
             }) => {
                 self.current_thread_id = Some(thread_id);
                 // determine where we are in the source code
-                let response = match self.client.send(requests::RequestBody::StackTrace(
-                    requests::StackTrace {
+                let response =
+                    match self.send(requests::RequestBody::StackTrace(requests::StackTrace {
                         thread_id,
                         levels: Some(1),
                         ..Default::default()
-                    },
-                )) {
-                    Ok(r) => r,
-                    Err(e) => {
-                        tracing::error!(error = %e, "failed to get initial stack trace");
-                        return;
-                    }
-                };
+                    })) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            tracing::error!(error = %e, "failed to get initial stack trace");
+                            return;
+                        }
+                    };
 
                 let stack_frames = match response {
                     responses::Response {
@@ -328,18 +477,17 @@ impl DebuggerInternals {
                 };
                 self.current_source = Some(current_source.clone());
 
-                let response = match self.client.send(requests::RequestBody::StackTrace(
-                    requests::StackTrace {
+                let response =
+                    match self.send(requests::RequestBody::StackTrace(requests::StackTrace {
                         thread_id,
                         ..Default::default()
-                    },
-                )) {
-                    Ok(r) => r,
-                    Err(e) => {
-                        tracing::error!(error = %e, "failed to get full stack trace");
-                        return;
-                    }
-                };
+                    })) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            tracing::error!(error = %e, "failed to get full stack trace");
+                            return;
+                        }
+                    };
 
                 let stack_frames = match response {
                     responses::Response {
@@ -444,7 +592,6 @@ impl DebuggerInternals {
 
             tracing::debug!("sending broadcast breakpoints message");
             let _ = self
-                .client
                 .send(req)
                 .context("broadcasting breakpoints to debugee")?;
             tracing::debug!("broadcast breakpoints message sent");
@@ -462,7 +609,7 @@ impl DebuggerInternals {
     }
 
     pub(crate) fn get_breakpoint_locations(
-        &self,
+        &mut self,
         file: impl Into<PathBuf>,
     ) -> eyre::Result<Vec<BreakpointLocation>> {
         let req = requests::RequestBody::BreakpointLocations(requests::BreakpointLocations {
@@ -474,7 +621,6 @@ impl DebuggerInternals {
         });
 
         let res = self
-            .client
             .send(req)
             .context("sending BreakpointLocations request")?;
 
