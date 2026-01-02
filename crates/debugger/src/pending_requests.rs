@@ -12,12 +12,14 @@ use transport::{responses, types::Seq};
 ///
 /// This structure maintains a map of sequence numbers to response channels.
 /// When a response arrives, it can be matched to the waiting request.
+#[allow(dead_code)] // Used in PR 2b
 pub(crate) struct PendingRequests {
     pending: HashMap<Seq, oneshot::Sender<responses::Response>>,
 }
 
 impl PendingRequests {
     /// Create a new pending requests tracker
+    #[allow(dead_code)] // Used in PR 2b
     pub(crate) fn new() -> Self {
         Self {
             pending: HashMap::new(),
@@ -27,6 +29,7 @@ impl PendingRequests {
     /// Add a pending request
     ///
     /// Returns the response receiver that will receive the response when it arrives
+    #[allow(dead_code)] // Used in PR 2b
     pub(crate) fn add(&mut self, seq: Seq) -> oneshot::Receiver<responses::Response> {
         let (tx, rx) = oneshot::channel();
         self.pending.insert(seq, tx);
@@ -37,6 +40,7 @@ impl PendingRequests {
     ///
     /// If this response matches a pending request, sends it to the waiter and returns true.
     /// Otherwise returns false.
+    #[allow(dead_code)] // Used in PR 2b
     pub(crate) fn handle_response(&mut self, response: responses::Response) -> bool {
         if let Some(tx) = self.pending.remove(&response.request_seq) {
             let _ = tx.send(response);

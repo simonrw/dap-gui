@@ -101,6 +101,7 @@ pub(crate) struct DebuggerInternals {
 }
 
 impl DebuggerInternals {
+    #[allow(dead_code)] // Legacy constructor
     pub(crate) fn new(
         connection: TransportConnection,
         publisher: crossbeam_channel::Sender<Event>,
@@ -116,6 +117,7 @@ impl DebuggerInternals {
         )
     }
 
+    #[allow(dead_code)] // Legacy constructor
     pub(crate) fn from_connection_arc(
         connection: Arc<Mutex<TransportConnection>>,
         publisher: crossbeam_channel::Sender<Event>,
@@ -146,6 +148,7 @@ impl DebuggerInternals {
     ///
     /// This is used when the background thread owns the reader directly
     /// and doesn't need the message_rx channel.
+    #[allow(dead_code)] // Used in PR 2b
     pub(crate) fn from_split_connection_no_channel(
         writer: Arc<Mutex<Box<dyn Write + Send>>>,
         sequence_number: Arc<AtomicI64>,
@@ -164,14 +167,13 @@ impl DebuggerInternals {
         )
     }
 
-    /// Send a request and wait for the response
+    /// Send a request and return the sequence number
     ///
-    /// This provides a blocking interface similar to the old Client.send()
-    pub(crate) fn send(
-        &mut self,
-        body: requests::RequestBody,
-    ) -> eyre::Result<responses::Response> {
-        tracing::debug!(?body, "internals.send called");
+    /// This sends the request but doesn't wait for a response. The caller
+    /// is responsible for tracking the sequence number and matching responses.
+    #[allow(dead_code)] // Used in PR 2b
+    pub(crate) fn send_request(&mut self, body: requests::RequestBody) -> eyre::Result<i64> {
+        tracing::debug!(?body, "internals.send_request called");
 
         // Get sequence number and create request
         let seq = self.sequence_number.fetch_add(1, Ordering::SeqCst) + 1;
@@ -200,6 +202,22 @@ impl DebuggerInternals {
 
             writer.flush().wrap_err("flushing output buffer")?;
         } // Release the lock immediately
+
+        Ok(seq)
+    }
+
+    /// Send a request and wait for the response (legacy method)
+    ///
+    /// This provides a blocking interface similar to the old Client.send()
+    /// This method is deprecated and should be replaced with send_request()
+    /// combined with response tracking in the background thread.
+    pub(crate) fn send(
+        &mut self,
+        body: requests::RequestBody,
+    ) -> eyre::Result<responses::Response> {
+        tracing::debug!(?body, "internals.send called");
+
+        let seq = self.send_request(body)?;
 
         // Wait for the matching response from the message channel
         loop {
