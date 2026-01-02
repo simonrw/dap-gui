@@ -133,7 +133,7 @@ impl Debugger {
 
         let args: InitialiseArguments = initialise_arguments.into();
         let internals_rx = rx.clone();
-        let (mut internals, reader) = match &args {
+        let (internals, reader, message_tx) = match &args {
             InitialiseArguments::Launch(state::LaunchArguments {
                 program, language, ..
             }) => {
@@ -157,18 +157,22 @@ impl Debugger {
                 // Split the connection into reader and writer to avoid mutex contention
                 let (reader, writer, sequence_number) = connection.split_connection();
 
+                // Create message channel for backward compatibility with send()
+                let (message_tx, message_rx) = crossbeam_channel::unbounded();
+
                 // Wrap writer in Arc<Mutex<>> for shared access
                 let writer_arc = Arc::new(Mutex::new(writer));
 
-                // No more polling thread - background thread will own the reader
+                // Background thread will own the reader and send messages to message_rx
 
-                let internals = DebuggerInternals::from_split_connection_no_channel(
+                let internals = DebuggerInternals::from_split_connection(
                     writer_arc,
                     sequence_number,
                     tx,
+                    message_rx.clone(),
                     Some(s),
                 );
-                (internals, reader)
+                (internals, reader, message_tx)
             }
             InitialiseArguments::Attach(_) => {
                 let connection = TransportConnection::connect(format!("127.0.0.1:{port}"))
@@ -177,23 +181,26 @@ impl Debugger {
                 // Split the connection into reader and writer to avoid mutex contention
                 let (reader, writer, sequence_number) = connection.split_connection();
 
+                // Create message channel for backward compatibility with send()
+                let (message_tx, message_rx) = crossbeam_channel::unbounded();
+
                 // Wrap writer in Arc<Mutex<>> for shared access
                 let writer_arc = Arc::new(Mutex::new(writer));
 
-                // No more polling thread - background thread will own the reader
+                // Background thread will own the reader and send messages to message_rx
 
-                let internals = DebuggerInternals::from_split_connection_no_channel(
+                let internals = DebuggerInternals::from_split_connection(
                     writer_arc,
                     sequence_number,
                     tx,
+                    message_rx.clone(),
                     None,
                 );
-                (internals, reader)
+                (internals, reader, message_tx)
             }
         };
 
-        internals.initialise(args).context("initialising")?;
-
+        // Wrap internals in Arc<Mutex<>> before starting the background thread
         let internals = Arc::new(Mutex::new(internals));
 
         // Create command channel for main thread -> background thread communication
@@ -213,38 +220,53 @@ impl Debugger {
             loop {
                 // Poll transport for messages (blocking with short timeout)
                 match reader.poll_message() {
-                    Ok(Some(Message::Event(event))) => {
-                        tracing::debug!(?event, "received event from transport");
+                    Ok(Some(message)) => {
+                        tracing::debug!(?message, "received message from transport");
 
-                        let lock_id = Uuid::new_v4().to_string();
-                        let span = tracing::trace_span!("event", %lock_id);
-                        let _guard = span.enter();
+                        // Send message to message channel for backward compatibility with send()
+                        if message_tx.send(message.clone()).is_err() {
+                            tracing::debug!(
+                                "message channel closed, terminating background thread"
+                            );
+                            break;
+                        }
 
-                        match background_internals.lock() {
-                            Ok(mut internals) => {
-                                // Process event and get follow-up requests
-                                let follow_ups = internals.on_event_nonblocking(event);
-                                follow_up_queue.extend(follow_ups);
-                                drop(internals);
+                        // Process the message
+                        match message {
+                            Message::Event(event) => {
+                                let lock_id = Uuid::new_v4().to_string();
+                                let span = tracing::trace_span!("event", %lock_id);
+                                let _guard = span.enter();
+
+                                match background_internals.lock() {
+                                    Ok(mut internals) => {
+                                        // Process event and get follow-up requests
+                                        let follow_ups = internals.on_event_nonblocking(event);
+                                        follow_up_queue.extend(follow_ups);
+                                        drop(internals);
+                                    }
+                                    Err(e) => {
+                                        tracing::error!(error = %e, "mutex poisoned, terminating background thread");
+                                        break;
+                                    }
+                                }
                             }
-                            Err(e) => {
-                                tracing::error!(error = %e, "mutex poisoned, terminating background thread");
-                                break;
+                            Message::Response(response) => {
+                                tracing::debug!(
+                                    seq = response.request_seq,
+                                    "received response from transport"
+                                );
+                                // Match response to pending request
+                                if !pending_requests.handle_response(response) {
+                                    tracing::warn!(
+                                        "received response with no matching pending request"
+                                    );
+                                }
+                            }
+                            Message::Request(_) => {
+                                tracing::warn!("unexpected request from debug adapter");
                             }
                         }
-                    }
-                    Ok(Some(Message::Response(response))) => {
-                        tracing::debug!(
-                            seq = response.request_seq,
-                            "received response from transport"
-                        );
-                        // Match response to pending request
-                        if !pending_requests.handle_response(response) {
-                            tracing::warn!("received response with no matching pending request");
-                        }
-                    }
-                    Ok(Some(Message::Request(_))) => {
-                        tracing::warn!("unexpected request from debug adapter");
                     }
                     Ok(None) => {
                         tracing::debug!("connection closed, terminating background thread");
@@ -371,6 +393,13 @@ impl Debugger {
             }
             tracing::debug!("background thread terminated");
         });
+
+        // Initialize the debugger now that the background thread is running
+        internals
+            .lock()
+            .map_err(|e| eyre::eyre!("mutex poisoned: {}", e))?
+            .initialise(args)
+            .context("initialising")?;
 
         Ok(Self {
             internals,
