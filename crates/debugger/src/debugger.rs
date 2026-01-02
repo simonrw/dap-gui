@@ -1,5 +1,5 @@
 use std::{
-    io,
+    io::{self, BufRead},
     net::{TcpStream, ToSocketAddrs},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -107,6 +107,51 @@ where
     })
 }
 
+/// Spawn a polling thread that reads messages from a reader and forwards them to channels
+///
+/// This helper function eliminates code duplication between Launch and Attach initialization paths.
+/// The polling thread:
+/// - Continuously reads messages from the reader
+/// - Forwards events to the event channel
+/// - Forwards all messages to the message channel for request/response matching
+/// - Terminates when the connection closes or an error occurs
+fn spawn_polling_thread(
+    mut reader: transport::reader::hand_written_reader::HandWrittenReader<Box<dyn BufRead + Send>>,
+    event_tx: crossbeam_channel::Sender<transport::events::Event>,
+    message_tx: crossbeam_channel::Sender<transport::Message>,
+) {
+    thread::spawn(move || {
+        loop {
+            match reader.poll_message() {
+                Ok(Some(message)) => {
+                    tracing::debug!(?message, "received message in polling thread");
+                    // Forward events to event channel
+                    if let Message::Event(ref event) = message {
+                        if event_tx.send(event.clone()).is_err() {
+                            tracing::debug!("event channel closed, terminating polling thread");
+                            break;
+                        }
+                    }
+                    // Forward ALL messages to the message channel
+                    if message_tx.send(message).is_err() {
+                        tracing::debug!("message channel closed, terminating polling thread");
+                        break;
+                    }
+                }
+                Ok(None) => {
+                    tracing::debug!("connection closed, terminating polling thread");
+                    break;
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "error receiving message in polling thread, terminating");
+                    break;
+                }
+            }
+        }
+        tracing::debug!("polling thread terminated");
+    });
+}
+
 /// Represents a debugging session
 pub struct Debugger {
     internals: Arc<Mutex<DebuggerInternals>>,
@@ -163,40 +208,7 @@ impl Debugger {
                 let writer_arc = Arc::new(Mutex::new(writer));
 
                 // Spawn polling thread with direct ownership of the reader (no mutex needed)
-                thread::spawn(move || {
-                    loop {
-                        match reader.poll_message() {
-                            Ok(Some(message)) => {
-                                tracing::debug!(?message, "received message in polling thread");
-                                // Forward events to event channel
-                                if let Message::Event(ref event) = message {
-                                    if ttx.send(event.clone()).is_err() {
-                                        tracing::debug!(
-                                            "event channel closed, terminating polling thread"
-                                        );
-                                        break;
-                                    }
-                                }
-                                // Forward ALL messages to the message channel
-                                if message_tx.send(message).is_err() {
-                                    tracing::debug!(
-                                        "message channel closed, terminating polling thread"
-                                    );
-                                    break;
-                                }
-                            }
-                            Ok(None) => {
-                                tracing::debug!("connection closed, terminating polling thread");
-                                break;
-                            }
-                            Err(e) => {
-                                tracing::error!(error = %e, "error receiving message in polling thread, terminating");
-                                break;
-                            }
-                        }
-                    }
-                    tracing::debug!("polling thread terminated");
-                });
+                spawn_polling_thread(reader, ttx, message_tx);
 
                 let internals = DebuggerInternals::from_split_connection(
                     writer_arc,
@@ -221,40 +233,7 @@ impl Debugger {
                 let writer_arc = Arc::new(Mutex::new(writer));
 
                 // Spawn polling thread with direct ownership of the reader (no mutex needed)
-                thread::spawn(move || {
-                    loop {
-                        match reader.poll_message() {
-                            Ok(Some(message)) => {
-                                tracing::debug!(?message, "received message in polling thread");
-                                // Forward events to event channel
-                                if let Message::Event(ref event) = message {
-                                    if ttx.send(event.clone()).is_err() {
-                                        tracing::debug!(
-                                            "event channel closed, terminating polling thread"
-                                        );
-                                        break;
-                                    }
-                                }
-                                // Forward ALL messages to the message channel
-                                if message_tx.send(message).is_err() {
-                                    tracing::debug!(
-                                        "message channel closed, terminating polling thread"
-                                    );
-                                    break;
-                                }
-                            }
-                            Ok(None) => {
-                                tracing::debug!("connection closed, terminating polling thread");
-                                break;
-                            }
-                            Err(e) => {
-                                tracing::error!(error = %e, "error receiving message in polling thread, terminating");
-                                break;
-                            }
-                        }
-                    }
-                    tracing::debug!("polling thread terminated");
-                });
+                spawn_polling_thread(reader, ttx, message_tx);
 
                 let internals = DebuggerInternals::from_split_connection(
                     writer_arc,
