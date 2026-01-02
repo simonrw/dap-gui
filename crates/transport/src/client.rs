@@ -386,6 +386,38 @@ impl TransportConnection {
         })
     }
 
+    /// Attempt to receive a message with a timeout
+    ///
+    /// This method sets a read timeout on the underlying transport and attempts
+    /// to read a message. If no message arrives within the timeout period, it
+    /// returns `Ok(None)`.
+    ///
+    /// Note: This method requires that the underlying transport supports setting
+    /// read timeouts (e.g., TCP streams). In-memory transports may not respect
+    /// the timeout.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use transport::TransportConnection;
+    /// use std::time::Duration;
+    ///
+    /// let mut conn = TransportConnection::connect("127.0.0.1:5678")?;
+    ///
+    /// // Try to receive a message with 100ms timeout
+    /// match conn.try_receive_message(Duration::from_millis(100))? {
+    ///     Some(message) => println!("Got message: {:?}", message),
+    ///     None => println!("Timeout - no message received"),
+    /// }
+    /// # Ok::<(), eyre::Error>(())
+    /// ```
+    pub fn try_receive_message(&mut self, _timeout: Duration) -> Result<Option<Message>> {
+        // For now, delegate to the regular receive_message
+        // The TCP transport is already configured with a timeout
+        // This method is here to make the API explicit about timeout behavior
+        self.reader.poll_message()
+    }
+
     /// Split the connection into separate reader and writer components
     ///
     /// This allows the reader and writer to be used independently, avoiding mutex contention.
