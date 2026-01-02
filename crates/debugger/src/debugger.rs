@@ -84,10 +84,12 @@ impl From<LaunchConfiguration> for InitialiseArguments {
     }
 }
 
+#[allow(dead_code)] // Legacy code
 fn retry_scale() -> impl Iterator<Item = Duration> {
     Exponential::from_millis(200).take(5)
 }
 
+#[allow(dead_code)] // Legacy code
 fn reliable_tcp_stream<A>(addr: A) -> Result<TcpStream, retry::Error<io::Error>>
 where
     A: ToSocketAddrs + Clone,
