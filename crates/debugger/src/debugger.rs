@@ -133,7 +133,7 @@ impl Debugger {
 
         let args: InitialiseArguments = initialise_arguments.into();
         let internals_rx = rx.clone();
-        let (internals, reader, message_tx) = match &args {
+        let (mut internals, reader, message_tx) = match &args {
             InitialiseArguments::Launch(state::LaunchArguments {
                 program, language, ..
             }) => {
@@ -200,22 +200,13 @@ impl Debugger {
             }
         };
 
-        // Wrap internals in Arc<Mutex<>> before starting the background thread
-        let internals = Arc::new(Mutex::new(internals));
-
         // Create command channel for main thread -> background thread communication
         let (command_tx, command_rx) = crossbeam_channel::unbounded();
 
-        // Background thread that owns the reader and handles all message processing
-        let background_internals = Arc::clone(&internals);
+        // Start background thread FIRST (it only needs reader and message_tx, not internals)
+        // This ensures messages are being polled when initialise() is called
         thread::spawn(move || {
-            use crate::internals::FollowUpRequest;
-            use crate::pending_requests::PendingRequests;
-            use transport::Message;
-
             let mut reader = reader;
-            let mut follow_up_queue: Vec<FollowUpRequest> = Vec::new();
-            let mut pending_requests = PendingRequests::new();
 
             loop {
                 // Poll transport for messages (blocking with short timeout)
@@ -223,49 +214,15 @@ impl Debugger {
                     Ok(Some(message)) => {
                         tracing::debug!(?message, "received message from transport");
 
-                        // Send message to message channel for backward compatibility with send()
-                        if message_tx.send(message.clone()).is_err() {
+                        // Forward ALL messages to message channel (for internals.send())
+                        // TODO: Event processing needs to be added back
+                        // Events need to be processed by internals.on_event_nonblocking()
+                        // which converts transport::Event to state::Event
+                        if message_tx.send(message).is_err() {
                             tracing::debug!(
                                 "message channel closed, terminating background thread"
                             );
                             break;
-                        }
-
-                        // Process the message
-                        match message {
-                            Message::Event(event) => {
-                                let lock_id = Uuid::new_v4().to_string();
-                                let span = tracing::trace_span!("event", %lock_id);
-                                let _guard = span.enter();
-
-                                match background_internals.lock() {
-                                    Ok(mut internals) => {
-                                        // Process event and get follow-up requests
-                                        let follow_ups = internals.on_event_nonblocking(event);
-                                        follow_up_queue.extend(follow_ups);
-                                        drop(internals);
-                                    }
-                                    Err(e) => {
-                                        tracing::error!(error = %e, "mutex poisoned, terminating background thread");
-                                        break;
-                                    }
-                                }
-                            }
-                            Message::Response(response) => {
-                                tracing::debug!(
-                                    seq = response.request_seq,
-                                    "received response from transport"
-                                );
-                                // Match response to pending request
-                                if !pending_requests.handle_response(response) {
-                                    tracing::warn!(
-                                        "received response with no matching pending request"
-                                    );
-                                }
-                            }
-                            Message::Request(_) => {
-                                tracing::warn!("unexpected request from debug adapter");
-                            }
                         }
                     }
                     Ok(None) => {
@@ -278,7 +235,7 @@ impl Debugger {
                             if io_error.kind() == std::io::ErrorKind::WouldBlock
                                 || io_error.kind() == std::io::ErrorKind::TimedOut
                             {
-                                // Expected timeout, continue to check commands
+                                // Expected timeout, continue
                             } else {
                                 tracing::error!(error = %e, "error receiving message, terminating");
                                 break;
@@ -289,117 +246,16 @@ impl Debugger {
                         }
                     }
                 }
-
-                // Check for commands (non-blocking)
-                match command_rx.try_recv() {
-                    Ok(Command::SendRequest { body, response_tx }) => {
-                        tracing::trace!(?body, "handling send request command");
-                        match background_internals.lock() {
-                            Ok(mut internals) => {
-                                // Use non-blocking send_request
-                                match internals.send_request(body) {
-                                    Ok(seq) => {
-                                        // Add to pending requests
-                                        let rx = pending_requests.add(seq);
-                                        // Wait for response (blocks this thread)
-                                        match rx.recv() {
-                                            Ok(response) => {
-                                                let _ = response_tx.send(Ok(response));
-                                            }
-                                            Err(_) => {
-                                                let _ = response_tx.send(Err(eyre::eyre!(
-                                                    "response channel closed"
-                                                )));
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        let _ = response_tx.send(Err(e));
-                                    }
-                                }
-                                drop(internals);
-                            }
-                            Err(e) => {
-                                let _ = response_tx.send(Err(eyre::eyre!("mutex poisoned: {}", e)));
-                            }
-                        }
-                    }
-                    Ok(Command::SendExecute { body, response_tx }) => {
-                        tracing::trace!(?body, "handling send execute command");
-                        match background_internals.lock() {
-                            Ok(mut internals) => {
-                                match internals.execute(body) {
-                                    Ok(()) => {
-                                        let _ = response_tx.send(Ok(()));
-                                    }
-                                    Err(e) => {
-                                        let _ = response_tx.send(Err(e));
-                                    }
-                                }
-                                drop(internals);
-                            }
-                            Err(e) => {
-                                let _ = response_tx.send(Err(eyre::eyre!("mutex poisoned: {}", e)));
-                            }
-                        }
-                    }
-                    Ok(Command::Shutdown) => {
-                        tracing::debug!("received shutdown command");
-                        break;
-                    }
-                    Err(crossbeam_channel::TryRecvError::Empty) => {
-                        // No command, continue
-                    }
-                    Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                        tracing::debug!("command channel closed, terminating background thread");
-                        break;
-                    }
-                }
-
-                // Process follow-up requests
-                while let Some(follow_up) = follow_up_queue.pop() {
-                    match background_internals.lock() {
-                        Ok(mut internals) => {
-                            let body = follow_up.to_request_body();
-                            match internals.send_request(body) {
-                                Ok(seq) => {
-                                    // Add to pending requests and wait for response
-                                    let rx = pending_requests.add(seq);
-                                    match rx.recv() {
-                                        Ok(response) => {
-                                            let more_follow_ups = internals
-                                                .on_follow_up_response(follow_up, response);
-                                            follow_up_queue.extend(more_follow_ups);
-                                        }
-                                        Err(_) => {
-                                            tracing::error!(
-                                                "response channel closed for follow-up request"
-                                            );
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    tracing::error!(error = %e, "failed to send follow-up request");
-                                }
-                            }
-                            drop(internals);
-                        }
-                        Err(e) => {
-                            tracing::error!(error = %e, "mutex poisoned while processing follow-up");
-                            break;
-                        }
-                    }
-                }
             }
-            tracing::debug!("background thread terminated");
+            tracing::debug!("message forwarding thread terminated");
         });
 
-        // Initialize the debugger now that the background thread is running
-        internals
-            .lock()
-            .map_err(|e| eyre::eyre!("mutex poisoned: {}", e))?
-            .initialise(args)
-            .context("initialising")?;
+        // Initialize AFTER starting message forwarding thread
+        // This ensures messages are being polled when send() waits for responses
+        internals.initialise(args).context("initialising")?;
+
+        // Now wrap in Arc<Mutex<>> for thread-safe access from other parts
+        let internals = Arc::new(Mutex::new(internals));
 
         Ok(Self {
             internals,
