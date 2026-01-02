@@ -142,6 +142,28 @@ impl DebuggerInternals {
         )
     }
 
+    /// Create internals from split connection without message channel
+    ///
+    /// This is used when the background thread owns the reader directly
+    /// and doesn't need the message_rx channel.
+    pub(crate) fn from_split_connection_no_channel(
+        writer: Arc<Mutex<Box<dyn Write + Send>>>,
+        sequence_number: Arc<AtomicI64>,
+        publisher: crossbeam_channel::Sender<Event>,
+        server: Option<Box<dyn Server + Send>>,
+    ) -> Self {
+        // Create a dummy channel that will never be used
+        let (_tx, rx) = crossbeam_channel::unbounded();
+        Self::with_split_breakpoints(
+            writer,
+            sequence_number,
+            publisher,
+            rx,
+            HashMap::new(),
+            server,
+        )
+    }
+
     /// Send a request and wait for the response
     ///
     /// This provides a blocking interface similar to the old Client.send()
