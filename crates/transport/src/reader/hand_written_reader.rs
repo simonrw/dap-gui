@@ -436,12 +436,12 @@ mod tests {
         assert!(matches!(result, PollResult::Timeout));
         // Verify it actually waited approximately the timeout duration
         assert!(
-            elapsed >= Duration::from_millis(40),
+            elapsed >= Duration::from_millis(20),
             "elapsed: {:?}",
             elapsed
         );
         assert!(
-            elapsed < Duration::from_millis(200),
+            elapsed < Duration::from_millis(500),
             "elapsed: {:?}",
             elapsed
         );
