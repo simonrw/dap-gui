@@ -11,9 +11,9 @@ pub mod requests;
 pub mod responses;
 pub mod types;
 
-pub use client::{Client, Message, Received, SyncTransport, TransportConnection};
+pub use client::{Client, Message, ReceiveResult, Received, SyncTransport, TransportConnection};
 pub use io::{DapTransport, InMemoryTransport, TcpTransport};
-pub use reader::Reader;
+pub use reader::{PollResult, Reader};
 
 /// The default port the DAP protocol listens on
 pub const DEFAULT_DAP_PORT: u16 = 5678;

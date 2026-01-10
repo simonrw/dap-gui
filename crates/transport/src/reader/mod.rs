@@ -4,6 +4,9 @@ use std::io::BufRead;
 
 pub mod hand_written_reader;
 
+// Re-export PollResult for use by other crates
+pub use hand_written_reader::PollResult;
+
 pub trait Reader<R> {
     fn new(input: R) -> Self;
     fn poll_message(&mut self) -> eyre::Result<Option<Message>>;

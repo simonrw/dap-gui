@@ -297,6 +297,17 @@ impl Drop for ClientInternals {
     }
 }
 
+/// Result of a timeout-aware receive operation
+#[derive(Debug)]
+pub enum ReceiveResult {
+    /// A message was successfully received
+    Message(Message),
+    /// The connection was closed
+    Closed,
+    /// The timeout expired before a complete message was received
+    Timeout,
+}
+
 /// Trait for synchronous DAP message transport operations
 ///
 /// This trait provides a simpler, synchronous interface for DAP message transport
@@ -308,6 +319,15 @@ pub trait SyncTransport {
     /// Returns `None` if the connection has been closed.
     /// May return `WouldBlock` error if configured with a timeout.
     fn receive_message(&mut self) -> Result<Option<Message>>;
+
+    /// Attempt to receive a message with a timeout
+    ///
+    /// Returns:
+    /// - `Ok(ReceiveResult::Message(msg))` if a message was received
+    /// - `Ok(ReceiveResult::Closed)` if the connection was closed
+    /// - `Ok(ReceiveResult::Timeout)` if the timeout expired
+    /// - `Err(_)` if an error occurred
+    fn try_receive_message(&mut self, timeout: Duration) -> Result<ReceiveResult>;
 
     /// Send a request and return its sequence number
     ///
@@ -386,38 +406,6 @@ impl TransportConnection {
         })
     }
 
-    /// Attempt to receive a message with a timeout
-    ///
-    /// This method sets a read timeout on the underlying transport and attempts
-    /// to read a message. If no message arrives within the timeout period, it
-    /// returns `Ok(None)`.
-    ///
-    /// Note: This method requires that the underlying transport supports setting
-    /// read timeouts (e.g., TCP streams). In-memory transports may not respect
-    /// the timeout.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use transport::TransportConnection;
-    /// use std::time::Duration;
-    ///
-    /// let mut conn = TransportConnection::connect("127.0.0.1:5678")?;
-    ///
-    /// // Try to receive a message with 100ms timeout
-    /// match conn.try_receive_message(Duration::from_millis(100))? {
-    ///     Some(message) => println!("Got message: {:?}", message),
-    ///     None => println!("Timeout - no message received"),
-    /// }
-    /// # Ok::<(), eyre::Error>(())
-    /// ```
-    pub fn try_receive_message(&mut self, _timeout: Duration) -> Result<Option<Message>> {
-        // For now, delegate to the regular receive_message
-        // The TCP transport is already configured with a timeout
-        // This method is here to make the API explicit about timeout behavior
-        self.reader.poll_message()
-    }
-
     /// Split the connection into separate reader and writer components
     ///
     /// This allows the reader and writer to be used independently, avoiding mutex contention.
@@ -473,6 +461,15 @@ impl TransportConnection {
 impl SyncTransport for TransportConnection {
     fn receive_message(&mut self) -> Result<Option<Message>> {
         self.reader.poll_message()
+    }
+
+    fn try_receive_message(&mut self, timeout: Duration) -> Result<ReceiveResult> {
+        use reader::PollResult;
+        match self.reader.try_poll_message(timeout)? {
+            PollResult::Message(msg) => Ok(ReceiveResult::Message(msg)),
+            PollResult::Closed => Ok(ReceiveResult::Closed),
+            PollResult::Timeout => Ok(ReceiveResult::Timeout),
+        }
     }
 
     fn send_request(&mut self, body: requests::RequestBody) -> Result<Seq> {
