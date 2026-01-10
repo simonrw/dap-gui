@@ -13,6 +13,8 @@ use crate::Reader;
 struct ParseState {
     /// Current parsing phase
     phase: ParsePhase,
+    /// Partial line buffer for Header/blank-line reads, preserved across timeouts
+    line_buffer: Vec<u8>,
     /// Content length from the header (valid when phase is Content or ContentReading)
     content_length: usize,
     /// Buffer for content bytes being read
@@ -36,6 +38,7 @@ enum ParsePhase {
 impl ParseState {
     fn reset(&mut self) {
         self.phase = ParsePhase::Header;
+        self.line_buffer.clear();
         self.content_length = 0;
         self.content_buffer.clear();
         self.content_bytes_read = 0;
@@ -163,7 +166,6 @@ where
     /// wait time may be up to 1 second longer than the specified timeout.
     pub fn try_poll_message(&mut self, timeout: Duration) -> eyre::Result<PollResult> {
         let start = Instant::now();
-        let mut line_buffer = String::new();
 
         loop {
             // Check timeout before each operation
@@ -174,16 +176,25 @@ where
             match self.parse_state.phase {
                 ParsePhase::Header => {
                     // Try to read a header line
-                    match self.input.read_line(&mut line_buffer) {
+                    match self
+                        .input
+                        .read_until(b'\n', &mut self.parse_state.line_buffer)
+                    {
                         Ok(0) => {
                             self.parse_state.reset();
                             return Ok(PollResult::Closed);
                         }
                         Ok(_) => {
-                            let parts: Vec<&str> = line_buffer.trim_end().split(':').collect();
-                            match parts[0] {
+                            let line = std::str::from_utf8(&self.parse_state.line_buffer)
+                                .context("invalid utf8 in header")?;
+                            let line = line.trim_end_matches(['\r', '\n']);
+                            let (name, value) = line
+                                .split_once(':')
+                                .ok_or_else(|| eyre::eyre!("malformed header line: {}", line))?;
+                            let error_name = name.to_string();
+                            match name {
                                 "Content-Length" => {
-                                    let content_length = match parts[1].trim().parse() {
+                                    let content_length = match value.trim().parse() {
                                         Ok(val) => val,
                                         Err(_) => {
                                             self.parse_state.reset();
@@ -194,11 +205,11 @@ where
                                     self.parse_state.content_buffer = vec![0u8; content_length];
                                     self.parse_state.content_bytes_read = 0;
                                     self.parse_state.phase = ParsePhase::Content;
-                                    line_buffer.clear();
+                                    self.parse_state.line_buffer.clear();
                                 }
-                                other => {
+                                _ => {
                                     self.parse_state.reset();
-                                    eyre::bail!("header {} not implemented", other);
+                                    eyre::bail!("header {} not implemented", error_name);
                                 }
                             }
                         }
@@ -217,15 +228,19 @@ where
                 }
                 ParsePhase::Content => {
                     // Read the blank line between header and content
-                    match self.input.read_line(&mut line_buffer) {
+                    match self
+                        .input
+                        .read_until(b'\n', &mut self.parse_state.line_buffer)
+                    {
                         Ok(0) => {
                             self.parse_state.reset();
                             return Ok(PollResult::Closed);
                         }
                         Ok(_) => {
-                            // Blank line consumed, move to reading content
+                            // Optional: validate it's actually the CRLF separator
+                            // (or extend Header parsing to consume additional headers like Content-Type)
                             self.parse_state.phase = ParsePhase::ContentReading;
-                            line_buffer.clear();
+                            self.parse_state.line_buffer.clear();
                         }
                         Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                             if start.elapsed() >= timeout {
@@ -366,7 +381,7 @@ mod tests {
     fn split_between_requests() -> eyre::Result<()> {
         execute_test!(
             "Content-Length: 37\r\n\r\n{\"ty",
-            "pe\":\"event\",\"event\":\"terminated\"}" => 
+            "pe\":\"event\",\"event\":\"terminated\"}" =>
         Message::Event(events::Event::Terminated));
 
         Ok(())
