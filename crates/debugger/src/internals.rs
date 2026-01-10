@@ -247,6 +247,7 @@ impl DebuggerInternals {
     }
 
     /// Send a request without waiting for a response (fire-and-forget)
+    #[allow(dead_code)]
     pub(crate) fn execute(&mut self, body: requests::RequestBody) -> eyre::Result<()> {
         // Get sequence number and create request
         let seq = self.sequence_number.fetch_add(1, Ordering::SeqCst) + 1;
@@ -372,6 +373,7 @@ impl DebuggerInternals {
         let _ = self.publisher.send(event);
     }
 
+    #[allow(dead_code)]
     #[tracing::instrument(skip(self))]
     pub(crate) fn initialise(&mut self, arguments: InitialiseArguments) -> eyre::Result<()> {
         tracing::debug!("initialising debugger internals");
