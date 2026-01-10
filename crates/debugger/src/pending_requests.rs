@@ -8,51 +8,62 @@
 use std::collections::HashMap;
 use transport::{responses, types::Seq};
 
+use crate::internals::FollowUpRequest;
+
+/// Type of pending item - either a command request or a follow-up request
+pub(crate) enum PendingItem {
+    /// A command from the main thread waiting for a response
+    Command(oneshot::Sender<eyre::Result<responses::Response>>),
+    /// A follow-up request from event processing
+    FollowUp(FollowUpRequest),
+}
+
 /// Tracker for pending DAP requests
 ///
-/// This structure maintains a map of sequence numbers to response channels.
+/// This structure maintains a map of sequence numbers to pending items.
 /// When a response arrives, it can be matched to the waiting request.
-#[allow(dead_code)] // Used in PR 2b
 pub(crate) struct PendingRequests {
-    pending: HashMap<Seq, oneshot::Sender<responses::Response>>,
+    pending: HashMap<Seq, PendingItem>,
 }
 
 impl PendingRequests {
     /// Create a new pending requests tracker
-    #[allow(dead_code)] // Used in PR 2b
     pub(crate) fn new() -> Self {
         Self {
             pending: HashMap::new(),
         }
     }
 
-    /// Add a pending request
-    ///
-    /// Returns the response receiver that will receive the response when it arrives
-    #[allow(dead_code)] // Used in PR 2b
-    pub(crate) fn add(&mut self, seq: Seq) -> oneshot::Receiver<responses::Response> {
-        let (tx, rx) = oneshot::channel();
-        self.pending.insert(seq, tx);
-        rx
+    /// Add a pending command request with the provided response sender
+    pub(crate) fn add_command_with_sender(
+        &mut self,
+        seq: Seq,
+        response_tx: oneshot::Sender<eyre::Result<responses::Response>>,
+    ) {
+        self.pending.insert(seq, PendingItem::Command(response_tx));
+    }
+
+    /// Add a pending follow-up request
+    pub(crate) fn add_follow_up(&mut self, seq: Seq, follow_up: FollowUpRequest) {
+        self.pending.insert(seq, PendingItem::FollowUp(follow_up));
     }
 
     /// Handle an incoming response
     ///
-    /// If this response matches a pending request, sends it to the waiter and returns true.
-    /// Otherwise returns false.
-    #[allow(dead_code)] // Used in PR 2b
-    pub(crate) fn handle_response(&mut self, response: responses::Response) -> bool {
-        if let Some(tx) = self.pending.remove(&response.request_seq) {
-            let _ = tx.send(response);
-            true
-        } else {
-            false
-        }
+    /// Returns the pending item if found, None otherwise
+    pub(crate) fn take(&mut self, request_seq: Seq) -> Option<PendingItem> {
+        self.pending.remove(&request_seq)
     }
 
     /// Get the number of pending requests
     #[allow(dead_code)]
     pub(crate) fn len(&self) -> usize {
         self.pending.len()
+    }
+
+    /// Check if there are any pending requests
+    #[allow(dead_code)]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.pending.is_empty()
     }
 }

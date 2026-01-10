@@ -14,7 +14,8 @@ use transport::{
     requests::{self, Initialize, PathFormat},
     responses::{self, ResponseBody},
     types::{
-        BreakpointLocation, Source, SourceBreakpoint, StackFrame, StackFrameId, ThreadId, Variable,
+        BreakpointLocation, Scope, Source, SourceBreakpoint, StackFrame, StackFrameId, ThreadId,
+        Variable,
     },
 };
 
@@ -24,6 +25,24 @@ use crate::{
     state::{DebuggerState, ProgramState},
     types::{Breakpoint, BreakpointId, PausedFrame},
 };
+
+/// Temporary state for building a paused frame across multiple async requests
+///
+/// When a Stopped event is received, we need to fetch StackTrace, Scopes, and Variables
+/// before we can emit the Paused state. This struct tracks the partial results.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingPausedState {
+    /// The full stack frames from the StackTrace response
+    pub stack_frames: Vec<StackFrame>,
+    /// The top frame we're building the paused frame for
+    pub top_frame: StackFrame,
+    /// Scopes for the top frame (collected after Scopes response)
+    pub scopes: Vec<Scope>,
+    /// Variables collected so far
+    pub collected_variables: Vec<Variable>,
+    /// Number of Variables requests we're still waiting for
+    pub pending_variable_requests: usize,
+}
 
 /// Represents a follow-up request that needs to be made to the debug adapter
 /// in response to an event. This allows event processing to be non-blocking.
@@ -98,6 +117,9 @@ pub(crate) struct DebuggerInternals {
     pub(crate) current_source: Option<FileSource>,
 
     pub(crate) _server: Option<Box<dyn Server + Send>>,
+
+    /// Temporary state for building paused frame across async requests
+    pub(crate) pending_paused_state: Option<PendingPausedState>,
 }
 
 impl DebuggerInternals {
@@ -439,6 +461,7 @@ impl DebuggerInternals {
             current_breakpoint_id,
             current_source: None,
             _server: server,
+            pending_paused_state: None,
         }
     }
 
@@ -808,28 +831,25 @@ impl DebuggerInternals {
                 }]
             }
             StackTraceContext::FullStack => {
-                // Process full stack trace and emit Paused event
-                let Some(top_frame) = stack_frames.first() else {
+                // Process full stack trace - need to get scopes and variables before emitting Paused
+                let Some(top_frame) = stack_frames.first().cloned() else {
                     tracing::error!("no frames found in full stack trace");
                     return Vec::new();
                 };
 
-                let paused_frame = match self.compute_paused_frame(top_frame) {
-                    Ok(frame) => frame,
-                    Err(e) => {
-                        tracing::error!(error = %e, "failed to compute paused frame");
-                        return Vec::new();
-                    }
-                };
-
-                self.set_state(DebuggerState::Paused {
-                    stack: stack_frames,
-                    paused_frame: Box::new(paused_frame),
-                    breakpoints: self.breakpoints.values().cloned().collect(),
+                // Store state for later - we'll emit Paused after collecting variables
+                self.pending_paused_state = Some(PendingPausedState {
+                    stack_frames,
+                    top_frame: top_frame.clone(),
+                    scopes: Vec::new(),
+                    collected_variables: Vec::new(),
+                    pending_variable_requests: 0,
                 });
 
-                // No more follow-up requests needed
-                Vec::new()
+                // Request scopes for the top frame
+                vec![FollowUpRequest::Scopes {
+                    frame_id: top_frame.id,
+                }]
             }
         }
     }
@@ -851,6 +871,18 @@ impl DebuggerInternals {
             }
         };
 
+        // Store scopes and track how many variable requests we're waiting for
+        if let Some(ref mut state) = self.pending_paused_state {
+            state.scopes = scopes.clone();
+            state.pending_variable_requests = scopes.len();
+
+            if scopes.is_empty() {
+                // No scopes means no variables - emit Paused now
+                self.emit_paused_from_pending_state();
+                return Vec::new();
+            }
+        }
+
         // Request variables for each scope
         scopes
             .into_iter()
@@ -869,21 +901,60 @@ impl DebuggerInternals {
             responses::Response {
                 body:
                     Some(responses::ResponseBody::Variables(responses::VariablesResponse {
-                        variables: _scope_variables,
+                        variables: scope_variables,
                     })),
                 success: true,
                 ..
             } => {
-                // Variables received - we would accumulate these and emit Paused event
-                // once all variables are collected. For now, this is a simplified version.
-                // The full implementation will need to track state across multiple variable requests.
-                tracing::debug!("variables received");
+                // Accumulate variables and check if we're done
+                if let Some(ref mut state) = self.pending_paused_state {
+                    state.collected_variables.extend(scope_variables);
+                    state.pending_variable_requests =
+                        state.pending_variable_requests.saturating_sub(1);
+
+                    tracing::debug!(
+                        pending = state.pending_variable_requests,
+                        "variables received, waiting for more"
+                    );
+
+                    if state.pending_variable_requests == 0 {
+                        // All variables collected - emit Paused event
+                        self.emit_paused_from_pending_state();
+                    }
+                }
                 Vec::new()
             }
             other => {
                 tracing::error!(?other, "unexpected response to Variables request");
+                // Still decrement counter to avoid getting stuck
+                if let Some(ref mut state) = self.pending_paused_state {
+                    state.pending_variable_requests =
+                        state.pending_variable_requests.saturating_sub(1);
+                    if state.pending_variable_requests == 0 {
+                        self.emit_paused_from_pending_state();
+                    }
+                }
                 Vec::new()
             }
         }
+    }
+
+    /// Emit the Paused state from accumulated pending state
+    fn emit_paused_from_pending_state(&mut self) {
+        let Some(state) = self.pending_paused_state.take() else {
+            tracing::error!("emit_paused_from_pending_state called with no pending state");
+            return;
+        };
+
+        let paused_frame = PausedFrame {
+            frame: state.top_frame,
+            variables: state.collected_variables,
+        };
+
+        self.set_state(DebuggerState::Paused {
+            stack: state.stack_frames,
+            paused_frame: Box::new(paused_frame),
+            breakpoints: self.breakpoints.values().cloned().collect(),
+        });
     }
 }
