@@ -58,7 +58,9 @@ pub mod testing;
 // Re-export main types
 pub use codec::DapCodec;
 pub use error::CodecError;
-pub use message::{Event, Message, OutgoingMessage, Request, Response};
+pub use message::{
+    Event, Message, OutgoingEvent, OutgoingMessage, OutgoingResponse, Request, Response,
+};
 pub use reader::DapReader;
 pub use transport::{DapTransport, split};
 pub use writer::DapWriter;

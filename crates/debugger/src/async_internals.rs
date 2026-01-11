@@ -3,6 +3,7 @@ use std::{
     collections::HashMap,
     sync::atomic::{AtomicI64, Ordering},
 };
+use tokio::io::AsyncWrite;
 use tokio::sync::{Mutex, mpsc, oneshot};
 use transport::{
     requests::{self},
@@ -18,8 +19,13 @@ use crate::{
     types::{Breakpoint, BreakpointId, EvaluateResult, PausedFrame},
 };
 
-pub(crate) struct AsyncDebuggerInternals {
-    writer: Mutex<DapWriter<tokio::net::tcp::OwnedWriteHalf>>,
+/// Internal state for the async debugger.
+///
+/// The type parameter `W` represents the underlying async writer type,
+/// allowing this to work with both TCP connections and in-memory transports
+/// for testing.
+pub struct AsyncDebuggerInternals<W> {
+    writer: Mutex<DapWriter<W>>,
     sequence_number: AtomicI64,
     event_tx: mpsc::UnboundedSender<Event>,
     pending_requests: Mutex<HashMap<Seq, oneshot::Sender<Response>>>,
@@ -31,11 +37,11 @@ pub(crate) struct AsyncDebuggerInternals {
     current_breakpoint_id: AtomicI64,
 }
 
-impl AsyncDebuggerInternals {
-    pub(crate) fn new(
-        writer: DapWriter<tokio::net::tcp::OwnedWriteHalf>,
-        event_tx: mpsc::UnboundedSender<Event>,
-    ) -> Self {
+impl<W> AsyncDebuggerInternals<W>
+where
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    pub(crate) fn new(writer: DapWriter<W>, event_tx: mpsc::UnboundedSender<Event>) -> Self {
         Self {
             writer: Mutex::new(writer),
             sequence_number: AtomicI64::new(0),
