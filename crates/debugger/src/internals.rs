@@ -84,6 +84,19 @@ pub struct FileSource {
     pub file_path: Option<PathBuf>,
 }
 
+/// State for building a paused frame from multiple follow-up responses
+#[derive(Debug, Default)]
+struct PendingPausedState {
+    /// Stack frames from the full stack trace
+    stack_frames: Vec<StackFrame>,
+    /// Top frame for which we're building the paused frame
+    top_frame: Option<StackFrame>,
+    /// Number of scopes we're waiting for variables from
+    pending_scope_count: usize,
+    /// Accumulated variables from all scopes
+    variables: Vec<Variable>,
+}
+
 pub(crate) struct DebuggerInternals {
     pub(crate) writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub(crate) sequence_number: Arc<AtomicI64>,
@@ -96,6 +109,9 @@ pub(crate) struct DebuggerInternals {
 
     current_breakpoint_id: BreakpointId,
     pub(crate) current_source: Option<FileSource>,
+
+    /// State for building a paused frame from follow-up responses
+    pending_paused: PendingPausedState,
 
     pub(crate) _server: Option<Box<dyn Server + Send>>,
 }
@@ -127,6 +143,7 @@ impl DebuggerInternals {
         Self::with_breakpoints(connection, publisher, message_rx, HashMap::new(), server)
     }
 
+    #[allow(dead_code)] // Legacy constructor, use from_split_connection_no_channel instead
     pub(crate) fn from_split_connection(
         writer: Arc<Mutex<Box<dyn Write + Send>>>,
         sequence_number: Arc<AtomicI64>,
@@ -148,7 +165,6 @@ impl DebuggerInternals {
     ///
     /// This is used when the background thread owns the reader directly
     /// and doesn't need the message_rx channel.
-    #[allow(dead_code)] // Used in PR 2b
     pub(crate) fn from_split_connection_no_channel(
         writer: Arc<Mutex<Box<dyn Write + Send>>>,
         sequence_number: Arc<AtomicI64>,
@@ -277,6 +293,7 @@ impl DebuggerInternals {
         Ok(())
     }
 
+    #[allow(dead_code)] // Legacy method - use Debugger::change_scope instead
     pub(crate) fn change_scope(&mut self, stack_frame_id: StackFrameId) -> eyre::Result<()> {
         let current_thread_id = self
             .current_thread_id
@@ -345,6 +362,7 @@ impl DebuggerInternals {
         Ok(paused_frame)
     }
 
+    #[allow(dead_code)] // Legacy method - use Debugger::variables instead
     pub(crate) fn variables(&mut self, variables_reference: i64) -> eyre::Result<Vec<Variable>> {
         let req = requests::RequestBody::Variables(requests::Variables {
             variables_reference,
@@ -440,6 +458,7 @@ impl DebuggerInternals {
             breakpoints,
             current_breakpoint_id,
             current_source: None,
+            pending_paused: PendingPausedState::default(),
             _server: server,
         }
     }
@@ -583,6 +602,18 @@ impl DebuggerInternals {
         tracing::debug!(?event, "event handled");
     }
 
+    /// Add a breakpoint to the local state and return the ID.
+    /// Does not send to the debug adapter - use `get_breakpoint_requests()` for that.
+    #[tracing::instrument(skip(self), level = "trace", ret)]
+    pub(crate) fn add_breakpoint_local(&mut self, breakpoint: &Breakpoint) -> BreakpointId {
+        tracing::debug!("adding breakpoint to local state");
+        let id = self.next_id();
+        self.breakpoints.insert(id, breakpoint.clone());
+        id
+    }
+
+    /// Legacy add_breakpoint that blocks on send - use add_breakpoint_local + command channel instead
+    #[allow(dead_code)]
     #[tracing::instrument(skip(self), level = "trace", ret)]
     pub(crate) fn add_breakpoint(&mut self, breakpoint: &Breakpoint) -> eyre::Result<BreakpointId> {
         tracing::debug!("adding breakpoint");
@@ -602,6 +633,40 @@ impl DebuggerInternals {
             .expect("updating breakpoints with debugee");
     }
 
+    /// Get the SetBreakpoints request bodies for all current breakpoints.
+    /// Returns a list of requests, one per source file.
+    pub(crate) fn get_breakpoint_requests(&self) -> Vec<requests::RequestBody> {
+        if self.breakpoints.is_empty() {
+            return Vec::new();
+        }
+
+        let breakpoints_by_source = self.breakpoints_by_source();
+        breakpoints_by_source
+            .iter()
+            .map(|(source, breakpoints)| {
+                requests::RequestBody::SetBreakpoints(requests::SetBreakpoints {
+                    source: Source {
+                        name: Some(source.display().to_string()),
+                        path: Some(source.clone()),
+                        ..Default::default()
+                    },
+                    lines: Some(breakpoints.iter().map(|b| b.line).collect()),
+                    breakpoints: Some(
+                        breakpoints
+                            .iter()
+                            .map(|b| SourceBreakpoint {
+                                line: b.line,
+                                ..Default::default()
+                            })
+                            .collect(),
+                    ),
+                    ..Default::default()
+                })
+            })
+            .collect()
+    }
+
+    #[allow(dead_code)]
     fn broadcast_breakpoints(&mut self) -> eyre::Result<()> {
         tracing::debug!("broadcasting breakpoints");
         // TODO: don't assume the breakpoints are for the same file
@@ -650,6 +715,7 @@ impl DebuggerInternals {
         out
     }
 
+    #[allow(dead_code)] // Legacy method - use Debugger::get_breakpoint_locations instead
     pub(crate) fn get_breakpoint_locations(
         &mut self,
         file: impl Into<PathBuf>,
@@ -810,28 +876,22 @@ impl DebuggerInternals {
                 }]
             }
             StackTraceContext::FullStack => {
-                // Process full stack trace and emit Paused event
-                let Some(top_frame) = stack_frames.first() else {
+                // Store stack frames for later use when building paused state
+                let Some(top_frame) = stack_frames.first().cloned() else {
                     tracing::error!("no frames found in full stack trace");
                     return Vec::new();
                 };
 
-                let paused_frame = match self.compute_paused_frame(top_frame) {
-                    Ok(frame) => frame,
-                    Err(e) => {
-                        tracing::error!(error = %e, "failed to compute paused frame");
-                        return Vec::new();
-                    }
-                };
+                // Store state for building paused frame
+                self.pending_paused.stack_frames = stack_frames;
+                self.pending_paused.top_frame = Some(top_frame.clone());
+                self.pending_paused.variables.clear();
+                self.pending_paused.pending_scope_count = 0;
 
-                self.set_state(DebuggerState::Paused {
-                    stack: stack_frames,
-                    paused_frame: Box::new(paused_frame),
-                    breakpoints: self.breakpoints.values().cloned().collect(),
-                });
-
-                // No more follow-up requests needed
-                Vec::new()
+                // Request scopes for the top frame
+                vec![FollowUpRequest::Scopes {
+                    frame_id: top_frame.id,
+                }]
             }
         }
     }
@@ -853,6 +913,15 @@ impl DebuggerInternals {
             }
         };
 
+        // Track how many scope variable requests we're waiting for
+        self.pending_paused.pending_scope_count = scopes.len();
+
+        if scopes.is_empty() {
+            // No scopes, emit paused event immediately
+            self.emit_paused_event();
+            return Vec::new();
+        }
+
         // Request variables for each scope
         scopes
             .into_iter()
@@ -871,21 +940,61 @@ impl DebuggerInternals {
             responses::Response {
                 body:
                     Some(responses::ResponseBody::Variables(responses::VariablesResponse {
-                        variables: _scope_variables,
+                        variables: scope_variables,
                     })),
                 success: true,
                 ..
             } => {
-                // Variables received - we would accumulate these and emit Paused event
-                // once all variables are collected. For now, this is a simplified version.
-                // The full implementation will need to track state across multiple variable requests.
-                tracing::debug!("variables received");
+                // Accumulate variables
+                self.pending_paused.variables.extend(scope_variables);
+
+                // Decrement pending scope count
+                if self.pending_paused.pending_scope_count > 0 {
+                    self.pending_paused.pending_scope_count -= 1;
+                }
+
+                // If all scopes are done, emit the paused event
+                if self.pending_paused.pending_scope_count == 0 {
+                    self.emit_paused_event();
+                }
+
                 Vec::new()
             }
             other => {
                 tracing::error!(?other, "unexpected response to Variables request");
+
+                // Still decrement count on error to avoid getting stuck
+                if self.pending_paused.pending_scope_count > 0 {
+                    self.pending_paused.pending_scope_count -= 1;
+                }
+
+                if self.pending_paused.pending_scope_count == 0 {
+                    self.emit_paused_event();
+                }
+
                 Vec::new()
             }
         }
+    }
+
+    /// Emit the Paused event with the accumulated state
+    fn emit_paused_event(&mut self) {
+        let Some(top_frame) = self.pending_paused.top_frame.take() else {
+            tracing::error!("no top frame stored for paused event");
+            return;
+        };
+
+        let paused_frame = PausedFrame {
+            frame: top_frame,
+            variables: std::mem::take(&mut self.pending_paused.variables),
+        };
+
+        let stack_frames = std::mem::take(&mut self.pending_paused.stack_frames);
+
+        self.set_state(DebuggerState::Paused {
+            stack: stack_frames,
+            paused_frame: Box::new(paused_frame),
+            breakpoints: self.breakpoints.values().cloned().collect(),
+        });
     }
 }

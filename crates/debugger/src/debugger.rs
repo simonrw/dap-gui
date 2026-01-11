@@ -1,8 +1,11 @@
 use std::{
-    io,
+    io::{self, BufRead, Write},
     net::{TcpStream, ToSocketAddrs},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicI64, Ordering},
+    },
     thread,
     time::Duration,
 };
@@ -13,16 +16,18 @@ use retry::{delay::Exponential, retry};
 use server::Implementation;
 use transport::{
     DEFAULT_DAP_PORT, Message, Reader, TransportConnection,
-    requests::{self, Disconnect},
+    reader::{PollResult, hand_written_reader::HandWrittenReader},
+    requests::{self, Disconnect, Initialize, PathFormat},
     responses,
-    types::{BreakpointLocation, StackFrameId, Variable},
+    types::{BreakpointLocation, Seq, StackFrameId, Variable},
 };
 use uuid::Uuid;
 
 use crate::{
     AttachArguments, Event, Language, LaunchArguments,
     commands::Command,
-    internals::DebuggerInternals,
+    internals::{DebuggerInternals, FollowUpRequest},
+    pending_requests::PendingRequests,
     state::{self, DebuggerState},
     types::{self, EvaluateResult},
 };
@@ -133,7 +138,9 @@ impl Debugger {
 
         let args: InitialiseArguments = initialise_arguments.into();
         let internals_rx = rx.clone();
-        let (mut internals, events) = match &args {
+
+        // Set up common connection components
+        let server: Option<Box<dyn server::Server + Send>> = match &args {
             InitialiseArguments::Launch(state::LaunchArguments {
                 program, language, ..
             }) => {
@@ -143,266 +150,59 @@ impl Debugger {
                     program.display()
                 );
 
-                // let implementation = language.into();
                 let implementation: Implementation = match language {
                     crate::Language::DebugPy => Implementation::Debugpy,
                     crate::Language::Delve => Implementation::Delve,
                 };
 
-                let s = server::for_implementation_on_port(implementation, port)
-                    .context("creating background server process")?;
-
-                let connection = TransportConnection::connect(format!("127.0.0.1:{port}"))
-                    .context("connecting to server")?;
-
-                // Split the connection into reader and writer to avoid mutex contention
-                let (mut reader, writer, sequence_number) = connection.split_connection();
-
-                let (ttx, trx) = crossbeam_channel::unbounded();
-                let (message_tx, message_rx) = crossbeam_channel::unbounded();
-
-                // Wrap writer in Arc<Mutex<>> for shared access
-                let writer_arc = Arc::new(Mutex::new(writer));
-
-                // Spawn polling thread with direct ownership of the reader (no mutex needed)
-                thread::spawn(move || {
-                    loop {
-                        match reader.poll_message() {
-                            Ok(Some(message)) => {
-                                tracing::debug!(?message, "received message in polling thread");
-                                // Forward events to event channel
-                                if let Message::Event(ref event) = message {
-                                    if ttx.send(event.clone()).is_err() {
-                                        tracing::debug!(
-                                            "event channel closed, terminating polling thread"
-                                        );
-                                        break;
-                                    }
-                                }
-                                // Forward ALL messages to the message channel
-                                if message_tx.send(message).is_err() {
-                                    tracing::debug!(
-                                        "message channel closed, terminating polling thread"
-                                    );
-                                    break;
-                                }
-                            }
-                            Ok(None) => {
-                                tracing::debug!("connection closed, terminating polling thread");
-                                break;
-                            }
-                            Err(e) => {
-                                tracing::error!(error = %e, "error receiving message in polling thread, terminating");
-                                break;
-                            }
-                        }
-                    }
-                    tracing::debug!("polling thread terminated");
-                });
-
-                let internals = DebuggerInternals::from_split_connection(
-                    writer_arc,
-                    sequence_number,
-                    tx,
-                    message_rx,
-                    Some(s),
-                );
-                (internals, trx)
+                Some(
+                    server::for_implementation_on_port(implementation, port)
+                        .context("creating background server process")?,
+                )
             }
-            InitialiseArguments::Attach(_) => {
-                let connection = TransportConnection::connect(format!("127.0.0.1:{port}"))
-                    .context("connecting to server")?;
-
-                // Split the connection into reader and writer to avoid mutex contention
-                let (mut reader, writer, sequence_number) = connection.split_connection();
-
-                let (ttx, trx) = crossbeam_channel::unbounded();
-                let (message_tx, message_rx) = crossbeam_channel::unbounded();
-
-                // Wrap writer in Arc<Mutex<>> for shared access
-                let writer_arc = Arc::new(Mutex::new(writer));
-
-                // Spawn polling thread with direct ownership of the reader (no mutex needed)
-                thread::spawn(move || {
-                    loop {
-                        match reader.poll_message() {
-                            Ok(Some(message)) => {
-                                tracing::debug!(?message, "received message in polling thread");
-                                // Forward events to event channel
-                                if let Message::Event(ref event) = message {
-                                    if ttx.send(event.clone()).is_err() {
-                                        tracing::debug!(
-                                            "event channel closed, terminating polling thread"
-                                        );
-                                        break;
-                                    }
-                                }
-                                // Forward ALL messages to the message channel
-                                if message_tx.send(message).is_err() {
-                                    tracing::debug!(
-                                        "message channel closed, terminating polling thread"
-                                    );
-                                    break;
-                                }
-                            }
-                            Ok(None) => {
-                                tracing::debug!("connection closed, terminating polling thread");
-                                break;
-                            }
-                            Err(e) => {
-                                tracing::error!(error = %e, "error receiving message in polling thread, terminating");
-                                break;
-                            }
-                        }
-                    }
-                    tracing::debug!("polling thread terminated");
-                });
-
-                let internals = DebuggerInternals::from_split_connection(
-                    writer_arc,
-                    sequence_number,
-                    tx,
-                    message_rx,
-                    None,
-                );
-                (internals, trx)
-            }
+            InitialiseArguments::Attach(_) => None,
         };
 
-        internals.initialise(args).context("initialising")?;
+        let connection = TransportConnection::connect(format!("127.0.0.1:{port}"))
+            .context("connecting to server")?;
+
+        // Split the connection into reader and writer
+        let (reader, writer, sequence_number) = connection.split_connection();
+
+        // Wrap writer in Arc<Mutex<>> for shared access
+        let writer_arc = Arc::new(Mutex::new(writer));
+
+        // Perform synchronous initialization before starting background thread
+        let (reader, queued_events) =
+            Self::initialise_sync(&sequence_number, &writer_arc, reader, args)
+                .context("synchronous initialization")?;
+
+        // Create internals (without message_rx channel since background thread owns reader)
+        let internals = DebuggerInternals::from_split_connection_no_channel(
+            Arc::clone(&writer_arc),
+            Arc::clone(&sequence_number),
+            tx.clone(),
+            server,
+        );
 
         let internals = Arc::new(Mutex::new(internals));
 
         // Create command channel for main thread -> background thread communication
         let (command_tx, command_rx) = crossbeam_channel::unbounded();
 
-        // background thread reading transport events and commands
+        // Single background thread that owns the reader and processes everything
         let background_internals = Arc::clone(&internals);
-        let background_events = events.clone();
+        let background_writer = Arc::clone(&writer_arc);
+        let background_seq = Arc::clone(&sequence_number);
         thread::spawn(move || {
-            use crate::internals::FollowUpRequest;
-
-            let mut follow_up_queue: Vec<FollowUpRequest> = Vec::new();
-
-            loop {
-                crossbeam_channel::select! {
-                    recv(background_events) -> msg => {
-                        let event = match msg {
-                            Ok(event) => event,
-                            Err(_) => {
-                                tracing::debug!("event channel closed, terminating background thread");
-                                break;
-                            }
-                        };
-
-                        let lock_id = Uuid::new_v4().to_string();
-                        let span = tracing::trace_span!("event", %lock_id);
-                        let _guard = span.enter();
-
-                        tracing::trace!(is_poisoned = %background_internals.is_poisoned(), "trying to unlock background internals");
-
-                        match background_internals.lock() {
-                            Ok(mut internals) => {
-                                tracing::trace!(?event, "handling event");
-
-                                // Use non-blocking event processing
-                                let follow_ups = internals.on_event_nonblocking(event);
-                                follow_up_queue.extend(follow_ups);
-
-                                drop(internals);
-                                tracing::trace!("unlocked background internals");
-                            }
-                            Err(e) => {
-                                tracing::error!(error = %e, "mutex poisoned, terminating background thread");
-                                break;
-                            }
-                        }
-                    }
-                    recv(command_rx) -> msg => {
-                        let command = match msg {
-                            Ok(command) => command,
-                            Err(_) => {
-                                tracing::debug!("command channel closed, terminating background thread");
-                                break;
-                            }
-                        };
-
-                        let lock_id = Uuid::new_v4().to_string();
-                        let span = tracing::trace_span!("command", %lock_id);
-                        let _guard = span.enter();
-
-                        match command {
-                            Command::SendRequest { body, response_tx } => {
-                                tracing::trace!(?body, "handling send request command");
-                                match background_internals.lock() {
-                                    Ok(mut internals) => {
-                                        match internals.send(body) {
-                                            Ok(response) => {
-                                                let _ = response_tx.send(Ok(response));
-                                            }
-                                            Err(e) => {
-                                                let _ = response_tx.send(Err(e));
-                                            }
-                                        }
-                                        drop(internals);
-                                    }
-                                    Err(e) => {
-                                        let _ = response_tx.send(Err(eyre::eyre!("mutex poisoned: {}", e)));
-                                    }
-                                }
-                            }
-                            Command::SendExecute { body, response_tx } => {
-                                tracing::trace!(?body, "handling send execute command");
-                                match background_internals.lock() {
-                                    Ok(mut internals) => {
-                                        match internals.execute(body) {
-                                            Ok(()) => {
-                                                let _ = response_tx.send(Ok(()));
-                                            }
-                                            Err(e) => {
-                                                let _ = response_tx.send(Err(e));
-                                            }
-                                        }
-                                        drop(internals);
-                                    }
-                                    Err(e) => {
-                                        let _ = response_tx.send(Err(eyre::eyre!("mutex poisoned: {}", e)));
-                                    }
-                                }
-                            }
-                            Command::Shutdown => {
-                                tracing::debug!("received shutdown command");
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Process follow-up requests
-                while let Some(follow_up) = follow_up_queue.pop() {
-                    match background_internals.lock() {
-                        Ok(mut internals) => {
-                            let body = follow_up.to_request_body();
-                            match internals.send(body) {
-                                Ok(response) => {
-                                    let more_follow_ups =
-                                        internals.on_follow_up_response(follow_up, response);
-                                    follow_up_queue.extend(more_follow_ups);
-                                }
-                                Err(e) => {
-                                    tracing::error!(error = %e, "failed to send follow-up request");
-                                }
-                            }
-                            drop(internals);
-                        }
-                        Err(e) => {
-                            tracing::error!(error = %e, "mutex poisoned while processing follow-up");
-                            break;
-                        }
-                    }
-                }
-            }
-            tracing::debug!("background thread terminated");
+            Self::background_thread_loop(
+                reader,
+                background_writer,
+                background_seq,
+                background_internals,
+                command_rx,
+                queued_events,
+            );
         });
 
         Ok(Self {
@@ -410,6 +210,311 @@ impl Debugger {
             rx: internals_rx,
             command_tx,
         })
+    }
+
+    /// Perform synchronous initialization before starting the background thread.
+    ///
+    /// This sends Initialize, Launch/Attach requests and waits for the Initialized event.
+    /// Returns the reader and any events that were received during initialization
+    /// (to be processed by the background thread).
+    fn initialise_sync(
+        sequence_number: &Arc<AtomicI64>,
+        writer: &Arc<Mutex<Box<dyn Write + Send>>>,
+        mut reader: HandWrittenReader<Box<dyn BufRead + Send>>,
+        args: InitialiseArguments,
+    ) -> eyre::Result<(
+        HandWrittenReader<Box<dyn BufRead + Send>>,
+        Vec<transport::events::Event>,
+    )> {
+        tracing::debug!("performing synchronous initialization");
+
+        let mut queued_events = Vec::new();
+
+        // Send Initialize request
+        let init_seq = Self::send_request_raw(
+            sequence_number,
+            writer,
+            requests::RequestBody::Initialize(Initialize {
+                adapter_id: "dap gui".to_string(),
+                lines_start_at_one: false,
+                path_format: PathFormat::Path,
+                supports_start_debugging_request: true,
+                supports_variable_type: true,
+                supports_variable_paging: true,
+                supports_progress_reporting: true,
+                supports_memory_event: true,
+            }),
+        )
+        .context("sending initialize request")?;
+
+        // Wait for Initialize response
+        Self::poll_for_response(&mut reader, init_seq, &mut queued_events)
+            .context("waiting for initialize response")?;
+
+        // Send Launch or Attach request (fire-and-forget)
+        let launch_body = match args {
+            InitialiseArguments::Launch(launch_args) => launch_args.to_request(),
+            InitialiseArguments::Attach(attach_args) => attach_args.to_request(),
+        };
+        Self::send_execute_raw(sequence_number, writer, launch_body)
+            .context("sending launch/attach request")?;
+
+        tracing::debug!("synchronous initialization complete");
+        Ok((reader, queued_events))
+    }
+
+    /// Send a request and return its sequence number (helper for sync init)
+    fn send_request_raw(
+        sequence_number: &Arc<AtomicI64>,
+        writer: &Arc<Mutex<Box<dyn Write + Send>>>,
+        body: requests::RequestBody,
+    ) -> eyre::Result<Seq> {
+        use std::io::Write as _;
+
+        let seq = sequence_number.fetch_add(1, Ordering::SeqCst) + 1;
+        let message = requests::Request {
+            seq,
+            r#type: "request".to_string(),
+            body,
+        };
+        let json = serde_json::to_string(&message).wrap_err("encoding json body")?;
+
+        let mut w = writer
+            .lock()
+            .map_err(|e| eyre::eyre!("writer mutex poisoned: {}", e))?;
+        write!(w.as_mut(), "Content-Length: {}\r\n\r\n{}", json.len(), json)
+            .wrap_err("writing message")?;
+        w.flush().wrap_err("flushing")?;
+
+        Ok(seq)
+    }
+
+    /// Send a fire-and-forget request (helper for sync init)
+    fn send_execute_raw(
+        sequence_number: &Arc<AtomicI64>,
+        writer: &Arc<Mutex<Box<dyn Write + Send>>>,
+        body: requests::RequestBody,
+    ) -> eyre::Result<()> {
+        Self::send_request_raw(sequence_number, writer, body)?;
+        Ok(())
+    }
+
+    /// Poll for a specific response, queuing any events received
+    fn poll_for_response(
+        reader: &mut HandWrittenReader<Box<dyn BufRead + Send>>,
+        expected_seq: Seq,
+        queued_events: &mut Vec<transport::events::Event>,
+    ) -> eyre::Result<responses::Response> {
+        loop {
+            match reader.poll_message()? {
+                Some(Message::Response(resp)) if resp.request_seq == expected_seq => {
+                    return Ok(resp);
+                }
+                Some(Message::Response(_)) => {
+                    // Different response, keep waiting
+                    continue;
+                }
+                Some(Message::Event(event)) => {
+                    // Queue event for later processing
+                    queued_events.push(event);
+                }
+                Some(Message::Request(_)) => {
+                    tracing::warn!("unexpected request from debug adapter during init");
+                }
+                None => {
+                    eyre::bail!("connection closed during initialization");
+                }
+            }
+        }
+    }
+
+    /// The main background thread loop that processes messages and commands
+    fn background_thread_loop(
+        mut reader: HandWrittenReader<Box<dyn BufRead + Send>>,
+        writer: Arc<Mutex<Box<dyn Write + Send>>>,
+        sequence_number: Arc<AtomicI64>,
+        internals: Arc<Mutex<DebuggerInternals>>,
+        command_rx: crossbeam_channel::Receiver<Command>,
+        queued_events: Vec<transport::events::Event>,
+    ) {
+        const POLL_TIMEOUT: Duration = Duration::from_millis(10);
+
+        let mut pending_requests = PendingRequests::new();
+        let mut follow_up_queue: Vec<FollowUpRequest> = Vec::new();
+        let mut pending_follow_ups: std::collections::HashMap<Seq, FollowUpRequest> =
+            std::collections::HashMap::new();
+
+        // Process any events that were queued during initialization
+        for event in queued_events {
+            if let Ok(mut guard) = internals.lock() {
+                let follow_ups = guard.on_event_nonblocking(event);
+                follow_up_queue.extend(follow_ups);
+            }
+        }
+
+        loop {
+            // 1. Poll for messages from the transport (non-blocking with timeout)
+            match reader.try_poll_message(POLL_TIMEOUT) {
+                Ok(PollResult::Message(message)) => {
+                    tracing::debug!(?message, "received message");
+                    Self::process_message(
+                        message,
+                        &internals,
+                        &mut pending_requests,
+                        &mut pending_follow_ups,
+                        &mut follow_up_queue,
+                    );
+                }
+                Ok(PollResult::Closed) => {
+                    tracing::debug!("connection closed, terminating background thread");
+                    break;
+                }
+                Ok(PollResult::Timeout) => {
+                    // No message available, continue to check commands
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "error receiving message, terminating");
+                    break;
+                }
+            }
+
+            // 2. Check for commands from the main thread (non-blocking)
+            match command_rx.try_recv() {
+                Ok(command) => {
+                    let should_exit = Self::process_command(
+                        command,
+                        &writer,
+                        &sequence_number,
+                        &mut pending_requests,
+                    );
+                    if should_exit {
+                        break;
+                    }
+                }
+                Err(crossbeam_channel::TryRecvError::Empty) => {
+                    // No command available
+                }
+                Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                    tracing::debug!("command channel closed, terminating background thread");
+                    break;
+                }
+            }
+
+            // 3. Process follow-up requests
+            Self::process_follow_ups(
+                &mut follow_up_queue,
+                &mut pending_follow_ups,
+                &writer,
+                &sequence_number,
+            );
+        }
+
+        tracing::debug!("background thread terminated");
+    }
+
+    /// Process an incoming message
+    fn process_message(
+        message: Message,
+        internals: &Arc<Mutex<DebuggerInternals>>,
+        pending_requests: &mut PendingRequests,
+        pending_follow_ups: &mut std::collections::HashMap<Seq, FollowUpRequest>,
+        follow_up_queue: &mut Vec<FollowUpRequest>,
+    ) {
+        match message {
+            Message::Event(event) => {
+                // Process event and get follow-up requests
+                if let Ok(mut guard) = internals.lock() {
+                    let follow_ups = guard.on_event_nonblocking(event);
+                    follow_up_queue.extend(follow_ups);
+                }
+            }
+            Message::Response(response) => {
+                let req_seq = response.request_seq;
+
+                // Check if this is a follow-up response
+                if let Some(follow_up) = pending_follow_ups.remove(&req_seq) {
+                    if let Ok(mut guard) = internals.lock() {
+                        let more_follow_ups = guard.on_follow_up_response(follow_up, response);
+                        follow_up_queue.extend(more_follow_ups);
+                    }
+                } else {
+                    // Regular command response
+                    pending_requests.handle_response(response);
+                }
+            }
+            Message::Request(_) => {
+                tracing::warn!("unexpected request from debug adapter");
+            }
+        }
+    }
+
+    /// Process a command from the main thread. Returns true if should exit.
+    fn process_command(
+        command: Command,
+        writer: &Arc<Mutex<Box<dyn Write + Send>>>,
+        sequence_number: &Arc<AtomicI64>,
+        pending_requests: &mut PendingRequests,
+    ) -> bool {
+        match command {
+            Command::SendRequest { body, response_tx } => {
+                match Self::send_request_raw(sequence_number, writer, body) {
+                    Ok(seq) => {
+                        // Track the pending request
+                        let rx = pending_requests.add(seq);
+                        // Spawn a helper to forward the response
+                        let tx = response_tx;
+                        std::thread::spawn(move || match rx.recv() {
+                            Ok(response) => {
+                                let _ = tx.send(Ok(response));
+                            }
+                            Err(_) => {
+                                let _ = tx.send(Err(eyre::eyre!("response channel closed")));
+                            }
+                        });
+                    }
+                    Err(e) => {
+                        let _ = response_tx.send(Err(e));
+                    }
+                }
+                false
+            }
+            Command::SendExecute { body, response_tx } => {
+                match Self::send_execute_raw(sequence_number, writer, body) {
+                    Ok(()) => {
+                        let _ = response_tx.send(Ok(()));
+                    }
+                    Err(e) => {
+                        let _ = response_tx.send(Err(e));
+                    }
+                }
+                false
+            }
+            Command::Shutdown => {
+                tracing::debug!("received shutdown command");
+                true
+            }
+        }
+    }
+
+    /// Process pending follow-up requests
+    fn process_follow_ups(
+        follow_up_queue: &mut Vec<FollowUpRequest>,
+        pending_follow_ups: &mut std::collections::HashMap<Seq, FollowUpRequest>,
+        writer: &Arc<Mutex<Box<dyn Write + Send>>>,
+        sequence_number: &Arc<AtomicI64>,
+    ) {
+        while let Some(follow_up) = follow_up_queue.pop() {
+            let body = follow_up.to_request_body();
+            match Self::send_request_raw(sequence_number, writer, body) {
+                Ok(seq) => {
+                    // Track this follow-up by its sequence number
+                    pending_follow_ups.insert(seq, follow_up);
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "failed to send follow-up request");
+                }
+            }
+        }
     }
 
     /// Create a new debugging session on the default DAP port (5678)
@@ -448,21 +553,43 @@ impl Debugger {
         &self,
         breakpoint: &types::Breakpoint,
     ) -> eyre::Result<types::BreakpointId> {
-        self.with_internals(|internals| {
-            internals
-                .add_breakpoint(breakpoint)
-                .context("adding breakpoint")
-        })
+        // First, update local state and get the breakpoint ID
+        let (id, requests) = self.with_internals(|internals| {
+            let id = internals.add_breakpoint_local(breakpoint);
+            let requests = internals.get_breakpoint_requests();
+            Ok((id, requests))
+        })?;
+
+        // Then send breakpoint requests through the command channel
+        for req in requests {
+            self.send_request(req).context("broadcasting breakpoints")?;
+        }
+
+        Ok(id)
     }
 
     pub fn get_breakpoint_locations(
         &self,
         path: impl Into<PathBuf>,
     ) -> eyre::Result<Vec<BreakpointLocation>> {
-        let locations = self
-            .with_internals(|internals| internals.get_breakpoint_locations(path))
-            .context("getting breakpoint locations")?;
-        Ok(locations)
+        let req = requests::RequestBody::BreakpointLocations(requests::BreakpointLocations {
+            source: transport::types::Source {
+                path: Some(path.into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let res = self
+            .send_request(req)
+            .context("sending BreakpointLocations request")?;
+
+        match res.body {
+            Some(responses::ResponseBody::BreakpointLocations(locations)) => {
+                Ok(locations.breakpoints)
+            }
+            _ => eyre::bail!("invalid response type: {:?}", res),
+        }
     }
 
     /// Return the list of breakpoints configured
@@ -582,7 +709,28 @@ impl Debugger {
     }
 
     pub fn variables(&self, variables_reference: i64) -> eyre::Result<Vec<Variable>> {
-        self.with_internals(|internals| internals.variables(variables_reference))
+        let req = requests::RequestBody::Variables(requests::Variables {
+            variables_reference,
+        });
+        match self.send_request(req).context("sending variables request") {
+            Ok(responses::Response {
+                body,
+                success: true,
+                ..
+            }) => {
+                if let Some(responses::ResponseBody::Variables(responses::VariablesResponse {
+                    variables: scope_variables,
+                })) = body
+                {
+                    Ok(scope_variables)
+                } else {
+                    tracing::debug!(vref = %variables_reference, "no variables found for reference");
+                    Ok(Vec::new())
+                }
+            }
+            Ok(other) => eyre::bail!("bad response from variables request: {other:?}"),
+            Err(e) => Err(e),
+        }
     }
 
     /// Send a request and wait for a response via the command channel
@@ -635,11 +783,91 @@ impl Debugger {
 
     /// Change the current scope to a new stack frame
     pub fn change_scope(&self, stack_frame_id: StackFrameId) -> eyre::Result<()> {
-        self.with_internals(|internals| {
+        // Get current thread ID
+        let current_thread_id = self.with_internals(|internals| {
             internals
-                .change_scope(stack_frame_id)
-                .wrap_err("changing scope")?;
+                .current_thread_id
+                .ok_or_else(|| eyre::eyre!("no current thread id"))
+        })?;
+
+        // Send StackTrace request
+        let stack_trace_response = self
+            .send_request(requests::RequestBody::StackTrace(requests::StackTrace {
+                thread_id: current_thread_id,
+                ..Default::default()
+            }))
+            .context("getting stack trace")?;
+
+        let stack_frames = match stack_trace_response {
+            responses::Response {
+                body:
+                    Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+                        stack_frames,
+                    })),
+                success: true,
+                ..
+            } => stack_frames,
+            resp => {
+                eyre::bail!("unexpected response to StackTrace request: {:?}", resp);
+            }
+        };
+
+        let chosen_stack_frame = stack_frames
+            .iter()
+            .find(|f| f.id == stack_frame_id)
+            .ok_or_else(|| eyre::eyre!("missing stack frame {}", stack_frame_id))?;
+
+        // Compute the paused frame (get scopes and variables)
+        let paused_frame = self
+            .compute_paused_frame(chosen_stack_frame)
+            .context("computing paused frame")?;
+
+        // Emit the scope change event
+        self.with_internals(|internals| {
+            internals.emit(Event::ScopeChange(state::ProgramState {
+                stack: stack_frames.clone(),
+                breakpoints: internals.breakpoints.values().cloned().collect(),
+                paused_frame,
+            }));
             Ok(())
+        })
+    }
+
+    /// Compute paused frame by getting scopes and variables
+    fn compute_paused_frame(
+        &self,
+        stack_frame: &transport::types::StackFrame,
+    ) -> eyre::Result<types::PausedFrame> {
+        // Get scopes for the frame
+        let scopes_response = self
+            .send_request(requests::RequestBody::Scopes(requests::Scopes {
+                frame_id: stack_frame.id,
+            }))
+            .context("requesting scopes")?;
+
+        let scopes = match scopes_response {
+            responses::Response {
+                body: Some(responses::ResponseBody::Scopes(responses::ScopesResponse { scopes })),
+                success: true,
+                ..
+            } => scopes,
+            resp => {
+                eyre::bail!("unexpected response to Scopes request: {:?}", resp);
+            }
+        };
+
+        // Get variables for each scope
+        let mut variables = Vec::new();
+        for scope in scopes {
+            let scope_vars = self
+                .variables(scope.variables_reference)
+                .with_context(|| format!("fetching variables for scope {:?}", scope))?;
+            variables.extend(scope_vars);
+        }
+
+        Ok(types::PausedFrame {
+            frame: stack_frame.clone(),
+            variables,
         })
     }
 
