@@ -6135,6 +6135,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "transport2"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "futures",
+ "pin-project-lite",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "tree-sitter"
 version = "0.25.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
