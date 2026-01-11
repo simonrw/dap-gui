@@ -1718,9 +1718,9 @@ dependencies = [
 
 [[package]]
 name = "emmy_dap_types"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a4f8222acb789c6f94ddd408a5f93d70ae6cf11719ba98173221adb5874147f"
+checksum = "2310ff06ab812a0332ffa037bbda9d994b3721a7f8a308ff38c28bdb20c37f56"
 dependencies = [
  "serde",
  "serde_json",
