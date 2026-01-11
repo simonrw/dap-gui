@@ -133,44 +133,6 @@ jobs:
           source .venv/bin/activate
           cargo nextest run --locked --all-features --all-targets
 
-  python:
-    runs-on: ${{ matrix.os }}
-    name: ${{ matrix.os }} / python
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-      - name: Install ${{ matrix.toolchain }}
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: beta
-      - uses: rui314/setup-mold@v1
-      - uses: Swatinem/rust-cache@v2
-      - name: cargo generate-lockfile
-        if: hashFiles('Cargo.lock') == ''
-        run: cargo generate-lockfile
-      - name: Create python venv with debugpy
-        run: |
-          python -m venv .venv
-          .venv/bin/python -m pip install debugpy pytest
-      - name: Install pythondap package
-        uses: PyO3/maturin-action@v1
-        with:
-          command: develop --manifest-path crates/pythondap/Cargo.toml --pip-path .venv/bin/pip
-          args: --release
-      - name: Run pythondap python tests
-        run: |
-          source .venv/bin/activate
-          python -m pytest crates/pythondap/tests
-
-
   # TODO
   # coverage:
   #   runs-on: ubuntu-latest
