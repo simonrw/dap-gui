@@ -6,15 +6,15 @@ description = "Async DAP transport layer using tokio"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-bytes = "1.10"
-futures = "0.3"
-pin-project-lite = "0.2"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "2.0"
-tokio = { version = "1.48", features = ["net", "io-util"] }
-tokio-util = { version = "0.7", features = ["codec"] }
-tracing = "0.1"
+bytes = "1.10.1"
+futures = "0.3.31"
+pin-project-lite = "0.2.16"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+thiserror = "2.0.17"
+tokio = { version = "1.48.0", features = ["net", "io-util"] }
+tokio-util = { version = "0.7.17", features = ["codec"] }
+tracing = "0.1.41"
 
 [dev-dependencies]
-tokio = { version = "1.48", features = ["full", "test-util"] }
+tokio = { version = "1.48.0", features = ["full", "test-util"] }
