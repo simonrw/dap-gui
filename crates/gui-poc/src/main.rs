@@ -244,10 +244,10 @@ impl App {
                 // Update current frame
                 let frame = &state.paused_frame.frame;
                 self.ui_state.current_frame_id = Some(frame.id);
-                if let Some(source) = &frame.source
-                    && let Some(path) = &source.path
-                {
-                    self.ui_state.current_file = path.to_str().unwrap_or("unknown").to_string();
+                if let Some(source) = &frame.source {
+                    if let Some(path) = &source.path {
+                        self.ui_state.current_file = path.to_str().unwrap_or("unknown").to_string();
+                    }
                 }
                 self.ui_state.current_line = frame.line;
 
