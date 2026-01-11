@@ -1,6 +1,7 @@
 use eyre::WrapErr;
 use futures::StreamExt;
 use std::sync::Arc;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -17,18 +18,35 @@ use crate::{
     types::{Breakpoint, BreakpointId, EvaluateResult},
 };
 
-pub struct AsyncDebugger {
-    internals: Arc<AsyncDebuggerInternals>,
+/// An async debugger client using the transport2 layer.
+///
+/// The type parameters `R` and `W` represent the underlying async reader
+/// and writer types, allowing this to work with both TCP connections and
+/// in-memory transports for testing.
+///
+/// For TCP connections, use the convenience methods [`connect`](Self::connect)
+/// and [`attach`](Self::attach). For testing, use [`from_transport`](Self::from_transport).
+pub struct AsyncDebugger<R, W> {
+    internals: Arc<AsyncDebuggerInternals<W>>,
     event_rx: AsyncEventReceiver,
     cancel_token: CancellationToken,
 
     // Task handles for cleanup
     reader_handle: Option<JoinHandle<()>>,
     processor_handle: Option<JoinHandle<()>>,
+
+    // Phantom data for the reader type (used in task but not stored)
+    _reader: std::marker::PhantomData<R>,
 }
 
-impl AsyncDebugger {
-    /// Connect to a debug adapter and initialize the session
+/// Type alias for TCP-based AsyncDebugger (the most common use case).
+pub type TcpAsyncDebugger =
+    AsyncDebugger<tokio::net::tcp::OwnedReadHalf, tokio::net::tcp::OwnedWriteHalf>;
+
+impl TcpAsyncDebugger {
+    /// Connect to a debug adapter and initialize the session.
+    ///
+    /// This is a convenience method for TCP connections.
     pub async fn connect(
         port: u16,
         language: Language,
@@ -51,7 +69,9 @@ impl AsyncDebugger {
         .await
     }
 
-    /// Attach to a running debug session
+    /// Attach to a running debug session.
+    ///
+    /// This is a convenience method for TCP connections.
     pub async fn attach(
         port: u16,
         language: Language,
@@ -72,11 +92,20 @@ impl AsyncDebugger {
         )
         .await
     }
+}
 
-    /// Create from an existing transport (useful for testing)
+impl<R, W> AsyncDebugger<R, W>
+where
+    R: AsyncRead + Unpin + Send + 'static,
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    /// Create from an existing transport.
+    ///
+    /// This is the primary constructor, useful for testing with in-memory
+    /// transports or for custom connection scenarios.
     pub async fn from_transport(
-        reader: DapReader<tokio::net::tcp::OwnedReadHalf>,
-        writer: DapWriter<tokio::net::tcp::OwnedWriteHalf>,
+        reader: DapReader<R>,
+        writer: DapWriter<W>,
         language: Language,
         launch_args: Option<LaunchArguments>,
         attach_args: Option<AttachArguments>,
@@ -105,6 +134,7 @@ impl AsyncDebugger {
             cancel_token,
             reader_handle: Some(reader_handle),
             processor_handle: Some(processor_handle),
+            _reader: std::marker::PhantomData,
         };
 
         // Initialize DAP session
@@ -212,7 +242,7 @@ impl AsyncDebugger {
 
     /// Spawn the reader task that reads messages from the debug adapter
     fn spawn_reader_task(
-        mut reader: DapReader<tokio::net::tcp::OwnedReadHalf>,
+        mut reader: DapReader<R>,
         message_tx: mpsc::UnboundedSender<Message>,
         cancel: CancellationToken,
     ) -> JoinHandle<()> {
@@ -250,7 +280,7 @@ impl AsyncDebugger {
     /// Spawn the processor task that handles incoming messages
     fn spawn_processor_task(
         mut message_rx: mpsc::UnboundedReceiver<Message>,
-        internals: Arc<AsyncDebuggerInternals>,
+        internals: Arc<AsyncDebuggerInternals<W>>,
         cancel: CancellationToken,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -469,7 +499,7 @@ impl AsyncDebugger {
     }
 }
 
-impl Drop for AsyncDebugger {
+impl<R, W> Drop for AsyncDebugger<R, W> {
     fn drop(&mut self) {
         self.cancel_token.cancel();
     }

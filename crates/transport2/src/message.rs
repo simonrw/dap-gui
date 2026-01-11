@@ -73,15 +73,55 @@ pub struct Request {
     pub arguments: Option<serde_json::Value>,
 }
 
-/// An outgoing message to send to the debug adapter.
+/// An outgoing response message (for mock adapters or reverse request responses).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OutgoingResponse {
+    /// Sequence number of this response.
+    pub seq: Seq,
+    /// Sequence number of the request this response is for.
+    #[serde(rename = "request_seq")]
+    pub request_seq: Seq,
+    /// Whether the request was successful.
+    pub success: bool,
+    /// The command that was requested.
+    pub command: String,
+    /// Error message if success is false.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    /// Response body (command-specific).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<serde_json::Value>,
+}
+
+/// An outgoing event message (for mock adapters).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OutgoingEvent {
+    /// Sequence number of this event.
+    pub seq: Seq,
+    /// The event type.
+    pub event: String,
+    /// Event body (event-specific).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<serde_json::Value>,
+}
+
+/// An outgoing message to send over the transport.
 ///
-/// Currently only requests can be sent from the client to the adapter.
-/// Responses to reverse requests could be added here if needed.
+/// This enum supports:
+/// - `Request`: Standard client-to-adapter requests
+/// - `Response`: Responses to reverse requests (or mock adapter responses in tests)
+/// - `Event`: Events from mock adapters in tests
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum OutgoingMessage {
     /// A request to send to the debug adapter.
     Request(Request),
+    /// A response to a reverse request (or from a mock adapter).
+    Response(OutgoingResponse),
+    /// An event (from a mock adapter in tests).
+    Event(OutgoingEvent),
 }
 
 #[cfg(test)]

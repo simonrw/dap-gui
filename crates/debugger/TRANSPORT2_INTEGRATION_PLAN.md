@@ -931,10 +931,14 @@ fn evaluate_selected_node(&mut self) {
 - [x] Add error handling for failed requests
 
 ### Phase 5: Testing Infrastructure
-- [ ] Create `testing.rs` module
-- [ ] Implement TestDebugger with MemoryTransport
-- [ ] Implement MockAdapter for simulating debug adapter
-- [ ] Write test for connect/initialize flow
+- [x] Create `testing.rs` module
+- [x] Implement TestAsyncDebugger type alias with MemoryTransport
+- [x] Implement MockAdapter for simulating debug adapter
+- [x] Implement MessageCapture with logical timestamps for robust matching
+- [x] Implement AutoInitMockAdapter for common init sequence
+- [x] Write test for message capture and response finding
+- [x] Write test for handling unexpected messages
+- [ ] Write test for connect/initialize flow with AsyncDebugger
 - [ ] Write test for step_over
 - [ ] Write test for step_in
 - [ ] Write test for step_out
