@@ -879,56 +879,56 @@ fn evaluate_selected_node(&mut self) {
 ## Task Checklist
 
 ### Phase 1: Infrastructure Setup
-- [ ] Add transport2 and tokio dependencies to debugger/Cargo.toml
-- [ ] Create `async_event.rs` with AsyncEventReceiver
-- [ ] Create `async_internals.rs` with AsyncDebuggerInternals
-- [ ] Add tokio-stream dependency for Stream conversions
-- [ ] Verify compilation with `cargo check -p debugger`
+- [x] Add transport2 and tokio dependencies to debugger/Cargo.toml
+- [x] Create `async_event.rs` with AsyncEventReceiver
+- [x] Create `async_internals.rs` with AsyncDebuggerInternals
+- [x] Add tokio-stream dependency for Stream conversions
+- [x] Verify compilation with `cargo check -p debugger`
 
 ### Phase 2: Core AsyncDebugger Implementation
-- [ ] Create `async_debugger.rs` with AsyncDebugger struct
-- [ ] Implement `AsyncDebugger::connect()` using transport2
-- [ ] Implement reader task spawning with cancellation support
-- [ ] Implement event processor task
-- [ ] Add request-response correlation with pending requests map
-- [ ] Implement `start()` method
-- [ ] Implement `continue_()` method
-- [ ] Implement `step_over()` method
-- [ ] Implement `step_in()` method
-- [ ] Implement `step_out()` method
-- [ ] Implement `evaluate()` method
-- [ ] Implement `add_breakpoint()` method
-- [ ] Implement `remove_breakpoint()` method
-- [ ] Implement `breakpoints()` method
-- [ ] Implement `variables()` method
-- [ ] Implement `change_scope()` method
-- [ ] Implement `shutdown()` method
-- [ ] Implement `Drop` for cleanup
+- [x] Create `async_debugger.rs` with AsyncDebugger struct
+- [x] Implement `AsyncDebugger::connect()` using transport2
+- [x] Implement reader task spawning with cancellation support
+- [x] Implement event processor task
+- [x] Add request-response correlation with pending requests map
+- [x] Implement `start()` method
+- [x] Implement `continue_()` method
+- [x] Implement `step_over()` method
+- [x] Implement `step_in()` method
+- [x] Implement `step_out()` method
+- [x] Implement `evaluate()` method
+- [x] Implement `add_breakpoint()` method
+- [x] Implement `remove_breakpoint()` method
+- [x] Implement `breakpoints()` method
+- [x] Implement `variables()` method
+- [x] Implement `change_scope()` method
+- [x] Implement `shutdown()` method
+- [x] Implement `Drop` for cleanup
 
 ### Phase 3: Event Processing
-- [ ] Create async event handler in AsyncDebuggerInternals
-- [ ] Migrate `on_event()` to async version
-- [ ] Implement async `fetch_stack_trace()`
-- [ ] Implement async `fetch_scopes()`
-- [ ] Implement async `fetch_variables()`
-- [ ] Handle Stopped event with full state fetch
-- [ ] Handle Continued event
-- [ ] Handle Terminated event
-- [ ] Handle Output event (console output)
+- [x] Create async event handler in AsyncDebuggerInternals
+- [x] Migrate `on_event()` to async version
+- [x] Implement async `fetch_stack_trace()`
+- [x] Implement async `fetch_scopes()`
+- [x] Implement async `fetch_variables()`
+- [x] Handle Stopped event with full state fetch
+- [x] Handle Continued event
+- [x] Handle Terminated event
+- [x] Handle Output event (console output)
 - [ ] Handle Thread event
 
 ### Phase 4: DAP Protocol Implementation
-- [ ] Implement async Initialize request/response
-- [ ] Implement async Launch request/response
-- [ ] Implement async Attach request/response
-- [ ] Implement async SetBreakpoints request/response
+- [x] Implement async Initialize request/response
+- [x] Implement async Launch request/response
+- [x] Implement async Attach request/response
+- [x] Implement async SetBreakpoints request/response (needs fix for setting all breakpoints)
 - [ ] Implement async SetFunctionBreakpoints request/response
-- [ ] Implement async SetExceptionBreakpoints request/response
-- [ ] Implement async ConfigurationDone request
-- [ ] Implement async Disconnect request
+- [x] Implement async SetExceptionBreakpoints request/response
+- [x] Implement async ConfigurationDone request
+- [x] Implement async Disconnect request
 - [ ] Implement async Terminate request
-- [ ] Add timeout handling for requests
-- [ ] Add error handling for failed requests
+- [x] Add timeout handling for requests
+- [x] Add error handling for failed requests
 
 ### Phase 5: Testing Infrastructure
 - [ ] Create `testing.rs` module

@@ -23,6 +23,7 @@ pub(crate) struct AsyncDebuggerInternals {
     sequence_number: AtomicI64,
     event_tx: mpsc::UnboundedSender<Event>,
     pending_requests: Mutex<HashMap<Seq, oneshot::Sender<Response>>>,
+    initialized_tx: Mutex<Option<oneshot::Sender<()>>>,
 
     // Debugger-specific state
     pub(crate) current_thread_id: Mutex<Option<ThreadId>>,
@@ -40,10 +41,17 @@ impl AsyncDebuggerInternals {
             sequence_number: AtomicI64::new(0),
             event_tx,
             pending_requests: Mutex::new(HashMap::new()),
+            initialized_tx: Mutex::new(None),
             current_thread_id: Mutex::new(None),
             breakpoints: Mutex::new(HashMap::new()),
             current_breakpoint_id: AtomicI64::new(0),
         }
+    }
+
+    /// Set the channel for receiving the initialized event
+    pub(crate) async fn set_initialized_channel(&self, tx: oneshot::Sender<()>) {
+        let mut initialized_tx = self.initialized_tx.lock().await;
+        *initialized_tx = Some(tx);
     }
 
     /// Send a request and return the sequence number
@@ -135,6 +143,14 @@ impl AsyncDebuggerInternals {
         tracing::debug!(?event, "handling event");
 
         match event.event.as_str() {
+            "initialized" => {
+                // Signal that initialization is complete
+                let mut initialized_tx = self.initialized_tx.lock().await;
+                if let Some(tx) = initialized_tx.take() {
+                    let _ = tx.send(());
+                }
+                let _ = self.event_tx.send(Event::Initialised);
+            }
             "stopped" => {
                 let body: transport::events::StoppedEventBody =
                     serde_json::from_value(event.body.clone().unwrap_or_default())
@@ -196,6 +212,20 @@ impl AsyncDebuggerInternals {
     /// Build the paused frame information
     async fn build_paused_frame(&self, stack: &[StackFrame]) -> eyre::Result<PausedFrame> {
         let frame = stack.first().ok_or_else(|| eyre::eyre!("no frames"))?;
+        self.build_paused_frame_for_id(stack, frame.id).await
+    }
+
+    /// Build the paused frame information for a specific frame ID
+    async fn build_paused_frame_for_id(
+        &self,
+        stack: &[StackFrame],
+        frame_id: StackFrameId,
+    ) -> eyre::Result<PausedFrame> {
+        // Find the frame with the given ID
+        let frame = stack
+            .iter()
+            .find(|f| f.id == frame_id)
+            .ok_or_else(|| eyre::eyre!("frame not found"))?;
 
         // Fetch scopes for the frame
         let response = self
@@ -285,13 +315,24 @@ impl AsyncDebuggerInternals {
     ) -> eyre::Result<BreakpointId> {
         let id = self.current_breakpoint_id.fetch_add(1, Ordering::SeqCst) as u64;
 
-        // Add to internal map
+        // Add to internal map and collect all breakpoints for this source file
+        let source_breakpoints: Vec<SourceBreakpoint>;
         {
             let mut breakpoints = self.breakpoints.lock().await;
             breakpoints.insert(id, breakpoint.clone());
+
+            // Collect all breakpoints for this source file
+            source_breakpoints = breakpoints
+                .values()
+                .filter(|bp| bp.path == breakpoint.path)
+                .map(|bp| SourceBreakpoint {
+                    line: bp.line,
+                    ..Default::default()
+                })
+                .collect();
         }
 
-        // Send to debug adapter
+        // Send all breakpoints for this file to debug adapter
         let response = self
             .send_and_wait(requests::RequestBody::SetBreakpoints(
                 requests::SetBreakpoints {
@@ -304,10 +345,7 @@ impl AsyncDebuggerInternals {
                         path: Some(breakpoint.path.clone()),
                         ..Default::default()
                     },
-                    breakpoints: Some(vec![SourceBreakpoint {
-                        line: breakpoint.line,
-                        ..Default::default()
-                    }]),
+                    breakpoints: Some(source_breakpoints),
                     ..Default::default()
                 },
             ))
@@ -325,8 +363,53 @@ impl AsyncDebuggerInternals {
 
     /// Remove a breakpoint
     pub(crate) async fn remove_breakpoint_async(&self, id: BreakpointId) -> eyre::Result<()> {
-        let mut breakpoints = self.breakpoints.lock().await;
-        breakpoints.remove(&id);
+        // Remove from internal map and get the file path
+        let (file_path, source_breakpoints): (std::path::PathBuf, Vec<SourceBreakpoint>);
+        {
+            let mut breakpoints = self.breakpoints.lock().await;
+
+            // Get the file path before removing
+            let removed_bp = breakpoints
+                .remove(&id)
+                .ok_or_else(|| eyre::eyre!("breakpoint not found"))?;
+            file_path = removed_bp.path.clone();
+
+            // Collect remaining breakpoints for this source file
+            source_breakpoints = breakpoints
+                .values()
+                .filter(|bp| bp.path == file_path)
+                .map(|bp| SourceBreakpoint {
+                    line: bp.line,
+                    ..Default::default()
+                })
+                .collect();
+        }
+
+        // Send updated breakpoints list to debug adapter
+        let response = self
+            .send_and_wait(requests::RequestBody::SetBreakpoints(
+                requests::SetBreakpoints {
+                    source: Source {
+                        name: file_path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .map(|s| s.to_string()),
+                        path: Some(file_path),
+                        ..Default::default()
+                    },
+                    breakpoints: Some(source_breakpoints),
+                    ..Default::default()
+                },
+            ))
+            .await?;
+
+        if !response.success {
+            eyre::bail!(
+                "setBreakpoints failed: {}",
+                response.message.unwrap_or_default()
+            );
+        }
+
         Ok(())
     }
 
@@ -339,7 +422,7 @@ impl AsyncDebuggerInternals {
     }
 
     /// Change the current scope to a different stack frame
-    pub(crate) async fn change_scope_async(&self, _frame_id: StackFrameId) -> eyre::Result<()> {
+    pub(crate) async fn change_scope_async(&self, frame_id: StackFrameId) -> eyre::Result<()> {
         let thread_id = self
             .current_thread_id
             .lock()
@@ -347,7 +430,7 @@ impl AsyncDebuggerInternals {
             .ok_or_else(|| eyre::eyre!("no current thread id"))?;
 
         let stack = self.fetch_stack_trace(thread_id).await?;
-        let paused_frame = self.build_paused_frame(&stack).await?;
+        let paused_frame = self.build_paused_frame_for_id(&stack, frame_id).await?;
         let breakpoints = self.breakpoints.lock().await;
 
         let _ = self.event_tx.send(Event::ScopeChange(ProgramState {

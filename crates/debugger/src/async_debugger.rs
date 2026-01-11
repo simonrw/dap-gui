@@ -180,8 +180,7 @@ impl AsyncDebugger {
         }
 
         // Wait for initialized event
-        // Note: In a real implementation, we'd wait for the initialized event here
-        // For now, we'll just proceed
+        self.wait_for_initialized_event().await?;
 
         // Set exception breakpoints (if needed)
         let _ = self
@@ -190,6 +189,23 @@ impl AsyncDebugger {
                 requests::SetExceptionBreakpoints { filters: vec![] },
             ))
             .await;
+
+        Ok(())
+    }
+
+    /// Wait for the initialized event from the debug adapter
+    async fn wait_for_initialized_event(&self) -> eyre::Result<()> {
+        // Create a oneshot channel to wait for the initialized event
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        // Store the channel in internals
+        self.internals.set_initialized_channel(tx).await;
+
+        // Wait for initialized event with timeout
+        tokio::time::timeout(std::time::Duration::from_secs(10), rx)
+            .await
+            .wrap_err("timeout waiting for initialized event")?
+            .wrap_err("initialized event channel closed")?;
 
         Ok(())
     }
