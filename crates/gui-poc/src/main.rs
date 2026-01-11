@@ -512,7 +512,7 @@ impl eframe::App for App {
 
         // Request repaint if we have a bridge (to poll for updates)
         if self.bridge.is_some() {
-            ctx.request_repaint();
+            ctx.request_repaint_after(std::time::Duration::from_millis(16));
         }
 
         // Handle keyboard input
