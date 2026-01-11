@@ -10,6 +10,7 @@ pub enum UiCommand {
     StepOver,
     StepIn,
     StepOut,
+    Terminate,
     AddBreakpoint(Breakpoint),
     RemoveBreakpoint(u64),
     Evaluate(String, StackFrameId),
@@ -88,6 +89,7 @@ impl AsyncBridge {
                         UiCommand::StepOver => debugger.step_over().await,
                         UiCommand::StepIn => debugger.step_in().await,
                         UiCommand::StepOut => debugger.step_out().await,
+                        UiCommand::Terminate => debugger.terminate().await,
                         UiCommand::AddBreakpoint(bp) => {
                             debugger.add_breakpoint(&bp).await.map(|_| ())
                         }

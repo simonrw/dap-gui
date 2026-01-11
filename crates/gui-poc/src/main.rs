@@ -601,6 +601,9 @@ impl eframe::App for App {
                 ui.separator();
 
                 if ui.button("⏹ Stop").clicked() {
+                    if let Some(bridge) = &self.bridge {
+                        bridge.send_command(UiCommand::Terminate);
+                    }
                     self.ui_state
                         .console_output
                         .push("Debugger stopped".to_string());
