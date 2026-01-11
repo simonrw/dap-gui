@@ -237,19 +237,19 @@ impl App {
                             .and_then(|p: &std::path::PathBuf| p.to_str())
                             .unwrap_or("unknown")
                             .to_string(),
-                        line: f.line as usize,
+                        line: f.line,
                     })
                     .collect();
 
                 // Update current frame
                 let frame = &state.paused_frame.frame;
                 self.ui_state.current_frame_id = Some(frame.id);
-                if let Some(source) = &frame.source {
-                    if let Some(path) = &source.path {
-                        self.ui_state.current_file = path.to_str().unwrap_or("unknown").to_string();
-                    }
+                if let Some(source) = &frame.source
+                    && let Some(path) = &source.path
+                {
+                    self.ui_state.current_file = path.to_str().unwrap_or("unknown").to_string();
                 }
-                self.ui_state.current_line = frame.line as usize;
+                self.ui_state.current_line = frame.line;
 
                 // Update variables
                 self.ui_state.variables = state
@@ -269,7 +269,7 @@ impl App {
                     .iter()
                     .map(|bp| Breakpoint {
                         file: bp.path.to_str().unwrap_or("unknown").to_string(),
-                        line: bp.line as usize,
+                        line: bp.line,
                         enabled: true,
                     })
                     .collect();
@@ -348,10 +348,8 @@ impl App {
                 if self.bridge.is_some() {
                     if self.ui_state.is_running {
                         // TODO: Implement pause
-                    } else {
-                        if let Some(bridge) = &self.bridge {
-                            bridge.send_command(UiCommand::Continue);
-                        }
+                    } else if let Some(bridge) = &self.bridge {
+                        bridge.send_command(UiCommand::Continue);
                     }
                 } else {
                     self.ui_state.is_running = !self.ui_state.is_running;
@@ -374,13 +372,14 @@ impl App {
                         .push(format!("Stepped to line {}", self.ui_state.current_line));
                 }
             }
-            if i.key_pressed(egui::Key::F11) && !self.ui_state.is_running {
-                if let Some(bridge) = &self.bridge {
-                    if i.modifiers.shift {
-                        bridge.send_command(UiCommand::StepOut);
-                    } else {
-                        bridge.send_command(UiCommand::StepIn);
-                    }
+            if i.key_pressed(egui::Key::F11)
+                && !self.ui_state.is_running
+                && let Some(bridge) = &self.bridge
+            {
+                if i.modifiers.shift {
+                    bridge.send_command(UiCommand::StepOut);
+                } else {
+                    bridge.send_command(UiCommand::StepIn);
                 }
             }
         });
@@ -559,14 +558,12 @@ impl eframe::App for App {
                         self.ui_state.is_running = false;
                         self.ui_state.console_output.push("Paused".to_string());
                     }
-                } else {
-                    if ui.button("▶ Continue").clicked() {
-                        if let Some(bridge) = &self.bridge {
-                            bridge.send_command(UiCommand::Continue);
-                        } else {
-                            self.ui_state.is_running = true;
-                            self.ui_state.console_output.push("Running...".to_string());
-                        }
+                } else if ui.button("▶ Continue").clicked() {
+                    if let Some(bridge) = &self.bridge {
+                        bridge.send_command(UiCommand::Continue);
+                    } else {
+                        self.ui_state.is_running = true;
+                        self.ui_state.console_output.push("Running...".to_string());
                     }
                 }
 
@@ -823,7 +820,7 @@ impl eframe::App for App {
 
                         // Check if this line contains the selected node
                         let line_has_selection =
-                            self.ui_state.selected_node.as_ref().map_or(false, |node| {
+                            self.ui_state.selected_node.as_ref().is_some_and(|node| {
                                 tree_line >= node.start_line && tree_line <= node.end_line
                             });
 
