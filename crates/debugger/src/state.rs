@@ -77,7 +77,7 @@ impl FromStr for Language {
 }
 
 /// Arguments for attaching to a running process
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AttachArguments {
     /// Working directory for the debugging session
     pub working_directory: PathBuf,
@@ -107,7 +107,7 @@ impl AttachArguments {
 }
 
 /// Arguments for launching a new process
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LaunchArguments {
     /// Program to run
     pub program: PathBuf,
