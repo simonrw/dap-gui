@@ -12,3 +12,7 @@ eframe = "0.33.3"
 egui_extras = { version = "0.33.3", features = ["syntect"] }
 tree-sitter = "0.24"
 tree-sitter-python = "0.23"
+debugger = { path = "../debugger" }
+transport = { path = "../transport" }
+tokio = { version = "1.48", features = ["sync", "rt-multi-thread"] }
+eyre = { workspace = true }

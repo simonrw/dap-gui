@@ -2,7 +2,6 @@
 resolver = "2"
 
 members = ["crates/*"]
-exclude = ["crates/gui-poc"]
 
 [workspace.dependencies]
 eyre = "0.6.12"
