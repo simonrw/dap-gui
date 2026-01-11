@@ -13,6 +13,11 @@ server = { path = "../server" }
 serde.workspace = true
 serde_json.workspace = true
 transport = { path = "../transport" }
+transport2 = { path = "../transport2" }
+tokio = { version = "1.48", features = ["sync", "rt", "macros"] }
+tokio-util = "0.7"
+tokio-stream = "0.1"
+futures = "0.3.31"
 retry = "2.1.0"
 dirs.workspace = true
 launch_configuration = { path = "../launch_configuration" }
