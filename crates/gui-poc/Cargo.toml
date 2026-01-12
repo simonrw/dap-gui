@@ -13,6 +13,11 @@ egui_extras = { version = "0.33.3", features = ["syntect"] }
 tree-sitter = "0.24"
 tree-sitter-python = "0.23"
 debugger = { path = "../debugger" }
+launch_configuration = { path = "../launch_configuration" }
+server = { path = "../server" }
 transport = { path = "../transport" }
 tokio = { version = "1.48", features = ["sync", "rt-multi-thread"] }
 eyre = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

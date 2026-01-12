@@ -1,5 +1,9 @@
+use clap::Parser;
 use eframe::egui;
 use egui_extras::syntax_highlighting::{self, CodeTheme};
+use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
+use server::Server;
+use std::path::PathBuf;
 use tree_sitter::Tree;
 
 mod ast;
@@ -7,6 +11,20 @@ use ast::SelectedNode;
 
 mod async_bridge;
 use async_bridge::{AsyncBridge, StateUpdate, UiCommand};
+
+#[derive(Parser)]
+struct Args {
+    /// Path to launch configuration file (e.g., .vscode/launch.json)
+    config_path: Option<PathBuf>,
+
+    /// Name of the configuration to use
+    #[clap(short, long)]
+    name: Option<String>,
+
+    /// Initial breakpoints (line numbers)
+    #[clap(short, long)]
+    breakpoints: Vec<usize>,
+}
 
 #[derive(PartialEq, Clone, Copy, Default)]
 enum EditorMode {
@@ -174,10 +192,105 @@ struct App {
 }
 
 impl App {
-    fn new(_cc: &eframe::CreationContext) -> Self {
-        Self {
-            ui_state: UiState::default(),
-            bridge: None,
+    fn new(args: Option<Args>, _cc: &eframe::CreationContext) -> eyre::Result<Self> {
+        let (ui_state, bridge) = if let Some(args) = args {
+            // Try to connect to a real debugger
+            match Self::connect_debugger(args) {
+                Ok((state, bridge)) => (state, Some(bridge)),
+                Err(e) => {
+                    eprintln!("Failed to connect to debugger: {}", e);
+                    eprintln!("Falling back to mock mode");
+                    (UiState::default(), None)
+                }
+            }
+        } else {
+            // No args provided, use mock mode
+            (UiState::default(), None)
+        };
+
+        Ok(Self { ui_state, bridge })
+    }
+
+    fn connect_debugger(args: Args) -> eyre::Result<(UiState, AsyncBridge)> {
+        let config_path = args
+            .config_path
+            .ok_or_else(|| eyre::eyre!("config_path is required to connect to a debugger"))?;
+
+        // Load launch configuration
+        let config = match launch_configuration::load_from_path(args.name.as_ref(), config_path)? {
+            ChosenLaunchConfiguration::Specific(config) => config,
+            ChosenLaunchConfiguration::NotFound => {
+                eyre::bail!("no matching configuration found")
+            }
+            ChosenLaunchConfiguration::ToBeChosen(configurations) => {
+                eprintln!("Configuration name not specified");
+                eprintln!("Available options:");
+                for config in &configurations {
+                    eprintln!("- {config}");
+                }
+                eyre::bail!("please specify a configuration name with --name")
+            }
+        };
+
+        let mut debug_root_dir = std::env::current_dir()?;
+
+        match config {
+            LaunchConfiguration::Debugpy(Debugpy {
+                request,
+                cwd,
+                program,
+                path_mappings,
+                ..
+            }) => {
+                if let Some(dir) = cwd {
+                    debug_root_dir = debugger::utils::normalise_path(&dir).into_owned();
+                }
+
+                match request.as_str() {
+                    "launch" => {
+                        let Some(program) = program else {
+                            eyre::bail!("'program' is a required setting for launch");
+                        };
+
+                        // Start the debug server on default port
+                        let port = transport::DEFAULT_DAP_PORT;
+                        let _server = server::debugpy::DebugpyServer::on_port(port)?;
+
+                        tracing::info!("Started debugpy server on port {}", port);
+
+                        // Create launch arguments
+                        let launch_args = debugger::LaunchArguments {
+                            program: program.clone(),
+                            working_directory: Some(debug_root_dir),
+                            language: debugger::Language::DebugPy,
+                        };
+
+                        // Connect to the debugger
+                        let bridge =
+                            AsyncBridge::new(port, debugger::Language::DebugPy, launch_args)?;
+
+                        // Create initial UI state
+                        let mut ui_state = UiState::default();
+                        ui_state.current_file = program.to_str().unwrap_or("unknown").to_string();
+                        ui_state.console_output.clear();
+                        ui_state
+                            .console_output
+                            .push(format!("Connected to debugpy on port {}", port));
+                        ui_state
+                            .console_output
+                            .push(format!("Program: {}", program.display()));
+
+                        // TODO: Add initial breakpoints from args
+
+                        Ok((ui_state, bridge))
+                    }
+                    "attach" => {
+                        eyre::bail!("attach mode not yet implemented in gui-poc")
+                    }
+                    _ => eyre::bail!("unsupported request type: {}", request),
+                }
+            }
+            other => eyre::bail!("unsupported configuration type: {:?}", other),
         }
     }
 
@@ -923,6 +1036,16 @@ impl App {
 }
 
 fn main() {
+    // Initialize tracing
+    tracing_subscriber::fmt::init();
+
+    // Parse CLI arguments (if any)
+    let args = if std::env::args().len() > 1 {
+        Some(Args::parse())
+    } else {
+        None
+    };
+
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
@@ -933,7 +1056,16 @@ fn main() {
     eframe::run_native(
         "DAP Debugger POC",
         native_options,
-        Box::new(|cc| Ok(Box::new(App::new(cc)))),
+        Box::new(move |cc| {
+            match App::new(args, cc) {
+                Ok(app) => Ok(Box::new(app)),
+                Err(e) => {
+                    // Convert eyre::Report to a Box<dyn Error>
+                    let error_msg = format!("{:?}", e);
+                    Err(Box::<dyn std::error::Error + Send + Sync>::from(error_msg))
+                }
+            }
+        }),
     )
     .unwrap();
 }

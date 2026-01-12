@@ -2039,11 +2039,16 @@ dependencies = [
 name = "gui-poc"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "debugger",
  "eframe",
  "egui_extras",
  "eyre",
+ "launch_configuration",
+ "server",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "transport",
  "tree-sitter",
  "tree-sitter-python",
