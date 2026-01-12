@@ -192,23 +192,11 @@ struct App {
 }
 
 impl App {
-    fn new(args: Option<Args>, _cc: &eframe::CreationContext) -> eyre::Result<Self> {
-        let (ui_state, bridge) = if let Some(args) = args {
-            // Try to connect to a real debugger
-            match Self::connect_debugger(args) {
-                Ok((state, bridge)) => (state, Some(bridge)),
-                Err(e) => {
-                    eprintln!("Failed to connect to debugger: {}", e);
-                    eprintln!("Falling back to mock mode");
-                    (UiState::default(), None)
-                }
-            }
-        } else {
-            // No args provided, use mock mode
-            (UiState::default(), None)
-        };
-
-        Ok(Self { ui_state, bridge })
+    fn new(args: Args, _cc: &eframe::CreationContext) -> eyre::Result<Self> {
+        Self::connect_debugger(args).map(|(state, bridge)| Self {
+            ui_state: state,
+            bridge: Some(bridge),
+        })
     }
 
     fn connect_debugger(args: Args) -> eyre::Result<(UiState, AsyncBridge)> {
@@ -1039,12 +1027,7 @@ fn main() {
     // Initialize tracing
     tracing_subscriber::fmt::init();
 
-    // Parse CLI arguments (if any)
-    let args = if std::env::args().len() > 1 {
-        Some(Args::parse())
-    } else {
-        None
-    };
+    let args = Args::parse();
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
