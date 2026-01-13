@@ -1,16 +1,18 @@
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 
 use clap::Parser;
 use iced::widget::{column, container, row};
 use iced::{Element, Fill, Subscription, Task, Theme};
+use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
 
 mod debugger_bridge;
 mod message;
 mod state;
 mod widgets;
 
-use debugger::TcpAsyncDebugger;
+use debugger::{Language, LaunchArguments};
+use debugger_bridge::DebuggerHandle;
 use message::Message;
 use state::AppState;
 
@@ -23,7 +25,7 @@ struct Args {
     #[clap(short, long)]
     file: Option<PathBuf>,
 
-    /// Path to launch configuration file
+    /// Path to launch configuration file (e.g., .vscode/launch.json)
     config_path: Option<PathBuf>,
 
     /// Name of the configuration to use
@@ -33,7 +35,18 @@ struct Args {
 
 struct App {
     state: AppState,
-    debugger: Option<Arc<TcpAsyncDebugger>>,
+    /// Handle for sending commands to the debugger
+    debugger_handle: Option<DebuggerHandle>,
+    /// Launch configuration if provided
+    launch_config: Option<ParsedLaunchConfig>,
+    /// Subscription ID counter (incremented to restart subscription)
+    subscription_id: usize,
+}
+
+#[derive(Clone)]
+struct ParsedLaunchConfig {
+    language: Language,
+    launch_args: LaunchArguments,
 }
 
 impl App {
@@ -42,33 +55,101 @@ impl App {
 
         let mut app = Self {
             state: AppState::default(),
-            debugger: None,
+            debugger_handle: None,
+            launch_config: None,
+            subscription_id: 0,
         };
 
-        // If a file was specified, load it for testing
+        // Parse launch configuration if provided
+        if let Some(config_path) = &args.config_path {
+            match Self::parse_launch_config(config_path, args.name.as_ref()) {
+                Ok(config) => {
+                    app.launch_config = Some(config);
+                    app.state
+                        .console_output
+                        .push("Launch configuration loaded".into());
+                }
+                Err(e) => {
+                    app.state
+                        .console_output
+                        .push(format!("Config error: {}", e));
+                }
+            }
+        }
+
+        // Determine initial task
         let task = if let Some(file) = &args.file {
+            // Just load a file for viewing (no debugger)
             app.state.current_file = Some(file.clone());
             debugger_bridge::load_source_file(file.clone())
+        } else if app.launch_config.is_some() {
+            // Start debug server automatically
+            app.state
+                .console_output
+                .push("Starting debug server...".into());
+            debugger_bridge::spawn_debug_server(Language::DebugPy)
         } else {
+            app.state
+                .console_output
+                .push("No configuration provided. Use --file to view a source file or provide a launch.json config.".into());
             Task::none()
         };
 
         (app, task)
     }
 
+    fn parse_launch_config(
+        config_path: &PathBuf,
+        name: Option<&String>,
+    ) -> eyre::Result<ParsedLaunchConfig> {
+        let config = match launch_configuration::load_from_path(name, config_path)? {
+            ChosenLaunchConfiguration::Specific(config) => config,
+            ChosenLaunchConfiguration::NotFound => {
+                eyre::bail!("No matching configuration found")
+            }
+            ChosenLaunchConfiguration::ToBeChosen(configurations) => {
+                eyre::bail!(
+                    "Please specify a configuration name with --name. Available: {:?}",
+                    configurations
+                )
+            }
+        };
+
+        match config {
+            LaunchConfiguration::Debugpy(Debugpy {
+                request,
+                cwd,
+                program,
+                ..
+            }) => {
+                if request != "launch" {
+                    eyre::bail!("Only 'launch' request type is supported, got: {}", request);
+                }
+
+                let program = program.ok_or_else(|| eyre::eyre!("'program' is required"))?;
+                let working_directory = cwd.or_else(|| program.parent().map(|p| p.to_path_buf()));
+
+                Ok(ParsedLaunchConfig {
+                    language: Language::DebugPy,
+                    launch_args: LaunchArguments {
+                        program,
+                        working_directory,
+                        language: Language::DebugPy,
+                    },
+                })
+            }
+            other => eyre::bail!("Unsupported configuration type: {:?}", other),
+        }
+    }
+
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Continue => {
-                self.send_debugger_command(debugger_bridge::DebuggerCommand::Continue)
-            }
-            Message::StepOver => {
-                self.send_debugger_command(debugger_bridge::DebuggerCommand::StepOver)
-            }
-            Message::StepIn => self.send_debugger_command(debugger_bridge::DebuggerCommand::StepIn),
-            Message::StepOut => {
-                self.send_debugger_command(debugger_bridge::DebuggerCommand::StepOut)
-            }
-            Message::Stop => self.send_debugger_command(debugger_bridge::DebuggerCommand::Stop),
+            // Debugger control commands
+            Message::Continue => self.send_command(debugger_bridge::DebuggerCommand::Continue),
+            Message::StepOver => self.send_command(debugger_bridge::DebuggerCommand::StepOver),
+            Message::StepIn => self.send_command(debugger_bridge::DebuggerCommand::StepIn),
+            Message::StepOut => self.send_command(debugger_bridge::DebuggerCommand::StepOut),
+            Message::Stop => self.send_command(debugger_bridge::DebuggerCommand::Stop),
 
             Message::ToggleBreakpoint(line) => {
                 if self.state.breakpoints.contains(&line) {
@@ -80,21 +161,66 @@ impl App {
                 Task::none()
             }
 
-            Message::DebuggerConnected => {
+            // Debugger lifecycle
+            Message::StartDebugSession => {
+                if self.launch_config.is_some() {
+                    self.state
+                        .console_output
+                        .push("Starting debug server...".into());
+                    debugger_bridge::spawn_debug_server(Language::DebugPy)
+                } else {
+                    self.state
+                        .console_output
+                        .push("No launch configuration".into());
+                    Task::none()
+                }
+            }
+
+            Message::DebugServerStarted(port) => {
+                self.state
+                    .console_output
+                    .push(format!("Debug server started on port {}", port));
+
+                if let Some(config) = &self.launch_config {
+                    self.state
+                        .console_output
+                        .push("Connecting to debugger...".into());
+                    debugger_bridge::connect_and_run(
+                        port,
+                        config.language,
+                        config.launch_args.clone(),
+                    )
+                } else {
+                    Task::none()
+                }
+            }
+
+            Message::DebuggerReady(handle) => {
                 self.state.connected = true;
-                self.state.console_output.push("Debugger connected".into());
+                self.state.console_output.push("Debugger ready!".into());
+                self.debugger_handle = Some(handle);
+                self.subscription_id += 1; // Trigger subscription refresh
                 Task::none()
             }
 
             Message::DebuggerEvent(event) => self.handle_debugger_event(event),
 
-            Message::CommandResult(result) => {
-                if let Err(e) = result {
-                    self.state.console_output.push(format!("Error: {}", e));
-                }
+            Message::DebuggerError(e) => {
+                self.state.console_output.push(format!("Error: {}", e));
                 Task::none()
             }
 
+            Message::DebuggerDisconnected => {
+                self.state.connected = false;
+                self.state.is_running = false;
+                self.debugger_handle = None;
+                self.state
+                    .console_output
+                    .push("Debugger disconnected".into());
+                Task::none()
+            }
+
+            // Source file operations
             Message::LoadSource(path) => {
                 self.state.current_file = Some(path.clone());
                 debugger_bridge::load_source_file(path)
@@ -114,12 +240,11 @@ impl App {
         }
     }
 
-    fn send_debugger_command(&self, cmd: debugger_bridge::DebuggerCommand) -> Task<Message> {
-        if let Some(debugger) = &self.debugger {
-            debugger_bridge::send_command(debugger.clone(), cmd)
-        } else {
-            Task::none()
+    fn send_command(&self, cmd: debugger_bridge::DebuggerCommand) -> Task<Message> {
+        if let Some(handle) = &self.debugger_handle {
+            handle.send(cmd);
         }
+        Task::none()
     }
 
     fn handle_debugger_event(&mut self, event: debugger::Event) -> Task<Message> {
@@ -213,7 +338,7 @@ impl App {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        // TODO: Wire up debugger event subscription when connected
+        // No subscriptions needed - events come through the channel in connect_and_run
         Subscription::none()
     }
 

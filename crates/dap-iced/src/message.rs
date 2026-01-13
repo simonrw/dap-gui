@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
+use crate::debugger_bridge::DebuggerHandle;
+
 /// Messages that drive the application state machine.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum Message {
-    // Debugger commands
+    // Debugger commands (from UI buttons)
     Continue,
     StepOver,
     StepIn,
@@ -15,9 +16,12 @@ pub enum Message {
     ToggleBreakpoint(usize), // line number (1-indexed)
 
     // Debugger lifecycle
-    DebuggerConnected,
+    StartDebugSession,
+    DebugServerStarted(u16),
+    DebuggerReady(DebuggerHandle),
     DebuggerEvent(debugger::Event),
-    CommandResult(Result<(), String>),
+    DebuggerError(String),
+    DebuggerDisconnected,
 
     // Source file loading
     SourceLoaded(Result<String, String>),
