@@ -92,10 +92,11 @@ fn find_node_by_range(root: Node, start_byte: usize, end_byte: usize) -> Option<
 
     let mut cursor = root.walk();
     for child in root.children(&mut cursor) {
-        if child.start_byte() <= start_byte && child.end_byte() >= end_byte {
-            if let Some(found) = find_node_by_range(child, start_byte, end_byte) {
-                return Some(found);
-            }
+        if child.start_byte() <= start_byte
+            && child.end_byte() >= end_byte
+            && let Some(found) = find_node_by_range(child, start_byte, end_byte)
+        {
+            return Some(found);
         }
     }
     None
@@ -135,7 +136,7 @@ pub fn get_first_child_node(
 
 fn find_first_evaluatable_child(node: Node, source: &str) -> Option<SelectedNode> {
     let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
+    if let Some(child) = node.children(&mut cursor).next() {
         return Some(SelectedNode::from_node(child, source));
     }
     None
@@ -152,10 +153,10 @@ pub fn get_next_sibling(tree: &Tree, source: &str, current: &SelectedNode) -> Op
     }
 
     // If no next sibling, try parent's next sibling (uncle)
-    if let Some(parent) = node.parent() {
-        if let Some(uncle) = parent.next_sibling() {
-            return Some(SelectedNode::from_node(uncle, source));
-        }
+    if let Some(parent) = node.parent()
+        && let Some(uncle) = parent.next_sibling()
+    {
+        return Some(SelectedNode::from_node(uncle, source));
     }
 
     None
@@ -172,10 +173,10 @@ pub fn get_prev_sibling(tree: &Tree, source: &str, current: &SelectedNode) -> Op
     }
 
     // If no prev sibling, try parent's prev sibling
-    if let Some(parent) = node.parent() {
-        if let Some(uncle) = parent.prev_sibling() {
-            return Some(SelectedNode::from_node(uncle, source));
-        }
+    if let Some(parent) = node.parent()
+        && let Some(uncle) = parent.prev_sibling()
+    {
+        return Some(SelectedNode::from_node(uncle, source));
     }
 
     None

@@ -915,18 +915,18 @@ fn evaluate_selected_node(&mut self) {
 - [x] Handle Continued event
 - [x] Handle Terminated event
 - [x] Handle Output event (console output)
-- [ ] Handle Thread event
+- [x] Handle Thread event
 
 ### Phase 4: DAP Protocol Implementation
 - [x] Implement async Initialize request/response
 - [x] Implement async Launch request/response
 - [x] Implement async Attach request/response
 - [x] Implement async SetBreakpoints request/response (needs fix for setting all breakpoints)
-- [ ] Implement async SetFunctionBreakpoints request/response
+- [x] Implement async SetFunctionBreakpoints request/response
 - [x] Implement async SetExceptionBreakpoints request/response
 - [x] Implement async ConfigurationDone request
 - [x] Implement async Disconnect request
-- [ ] Implement async Terminate request
+- [x] Implement async Terminate request
 - [x] Add timeout handling for requests
 - [x] Add error handling for failed requests
 
@@ -951,33 +951,33 @@ fn evaluate_selected_node(&mut self) {
 - [ ] Run integration tests with real debugpy
 
 ### Phase 6: GUI-POC Integration
-- [ ] Remove gui-poc from workspace exclude list
-- [ ] Add debugger dependency to gui-poc/Cargo.toml
-- [ ] Add tokio dependency to gui-poc/Cargo.toml
-- [ ] Create `async_bridge.rs` module
-- [ ] Implement UiCommand enum
-- [ ] Implement StateUpdate enum
-- [ ] Implement AsyncBridge struct
-- [ ] Implement command sending (non-blocking)
-- [ ] Implement update polling (non-blocking)
-- [ ] Update App struct to use AsyncBridge
-- [ ] Add launch/connect dialog
-- [ ] Implement `process_updates()` in update loop
-- [ ] Wire up Continue button to UiCommand::Continue
-- [ ] Wire up Step Over button to UiCommand::StepOver
-- [ ] Wire up Step In button to UiCommand::StepIn
-- [ ] Wire up Step Out button to UiCommand::StepOut
-- [ ] Wire up keyboard shortcuts to commands
-- [ ] Implement breakpoint toggle on line click
-- [ ] Wire up AST evaluation to UiCommand::Evaluate
-- [ ] Display evaluation results in overlay
-- [ ] Update stack frame display from events
-- [ ] Update variables display from events
-- [ ] Update current line highlight from events
-- [ ] Load real source files from paused frame
-- [ ] Update console output from Output events
-- [ ] Handle debugger disconnection gracefully
-- [ ] Test full debug session with debugpy
+- [x] Remove gui-poc from workspace exclude list
+- [x] Add debugger dependency to gui-poc/Cargo.toml
+- [x] Add tokio dependency to gui-poc/Cargo.toml
+- [x] Create `async_bridge.rs` module
+- [x] Implement UiCommand enum
+- [x] Implement StateUpdate enum
+- [x] Implement AsyncBridge struct
+- [x] Implement command sending (non-blocking)
+- [x] Implement update polling (non-blocking)
+- [x] Update App struct to use AsyncBridge
+- [x] Add launch/connect dialog
+- [x] Implement `process_updates()` in update loop
+- [x] Wire up Continue button to UiCommand::Continue
+- [x] Wire up Step Over button to UiCommand::StepOver
+- [x] Wire up Step In button to UiCommand::StepIn
+- [x] Wire up Step Out button to UiCommand::StepOut
+- [x] Wire up keyboard shortcuts to commands
+- [x] Implement breakpoint toggle on line click
+- [x] Wire up AST evaluation to UiCommand::Evaluate
+- [x] Display evaluation results in overlay
+- [x] Update stack frame display from events
+- [x] Update variables display from events
+- [x] Update current line highlight from events
+- [x] Load real source files from paused frame
+- [x] Update console output from Output events
+- [x] Handle debugger disconnection gracefully
+- [x] Test full debug session with debugpy
 
 ### Phase 7: Cleanup and Documentation
 - [ ] Remove old transport crate dependency from debugger

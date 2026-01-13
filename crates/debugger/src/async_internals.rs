@@ -35,6 +35,7 @@ pub struct AsyncDebuggerInternals<W> {
     pub(crate) current_thread_id: Mutex<Option<ThreadId>>,
     pub(crate) breakpoints: Mutex<HashMap<BreakpointId, Breakpoint>>,
     current_breakpoint_id: AtomicI64,
+    pub(crate) function_breakpoints: Mutex<Vec<String>>,
 }
 
 impl<W> AsyncDebuggerInternals<W>
@@ -51,6 +52,7 @@ where
             current_thread_id: Mutex::new(None),
             breakpoints: Mutex::new(HashMap::new()),
             current_breakpoint_id: AtomicI64::new(0),
+            function_breakpoints: Mutex::new(Vec::new()),
         }
     }
 
@@ -183,6 +185,9 @@ where
             }
             "output" => {
                 tracing::debug!("output event: {:?}", event.body);
+            }
+            "thread" => {
+                tracing::debug!("thread event: {:?}", event.body);
             }
             _ => {
                 tracing::debug!("unhandled event: {}", event.event);
@@ -446,5 +451,71 @@ where
         }));
 
         Ok(())
+    }
+
+    /// Add a function breakpoint
+    pub(crate) async fn add_function_breakpoint_async(
+        &self,
+        function_name: String,
+    ) -> eyre::Result<()> {
+        let mut function_breakpoints = self.function_breakpoints.lock().await;
+        function_breakpoints.push(function_name.clone());
+
+        // Send all function breakpoints to debug adapter
+        let breakpoints: Vec<requests::Breakpoint> = function_breakpoints
+            .iter()
+            .map(|name| requests::Breakpoint { name: name.clone() })
+            .collect();
+
+        let response = self
+            .send_and_wait(requests::RequestBody::SetFunctionBreakpoints(
+                requests::SetFunctionBreakpoints { breakpoints },
+            ))
+            .await?;
+
+        if !response.success {
+            eyre::bail!(
+                "setFunctionBreakpoints failed: {}",
+                response.message.unwrap_or_default()
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Remove a function breakpoint
+    pub(crate) async fn remove_function_breakpoint_async(
+        &self,
+        function_name: &str,
+    ) -> eyre::Result<()> {
+        let mut function_breakpoints = self.function_breakpoints.lock().await;
+        function_breakpoints.retain(|name| name != function_name);
+
+        // Send updated function breakpoints to debug adapter
+        let breakpoints: Vec<requests::Breakpoint> = function_breakpoints
+            .iter()
+            .map(|name| requests::Breakpoint { name: name.clone() })
+            .collect();
+
+        let response = self
+            .send_and_wait(requests::RequestBody::SetFunctionBreakpoints(
+                requests::SetFunctionBreakpoints { breakpoints },
+            ))
+            .await?;
+
+        if !response.success {
+            eyre::bail!(
+                "setFunctionBreakpoints failed: {}",
+                response.message.unwrap_or_default()
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Get all function breakpoints
+    pub(crate) async fn function_breakpoints_async(&self) -> Vec<String> {
+        let function_breakpoints = self.function_breakpoints.lock().await;
+        function_breakpoints.clone()
     }
 }

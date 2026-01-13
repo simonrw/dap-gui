@@ -474,6 +474,44 @@ where
         self.internals.change_scope_async(frame_id).await
     }
 
+    /// Add a function breakpoint
+    pub async fn add_function_breakpoint(&self, function_name: String) -> eyre::Result<()> {
+        self.internals
+            .add_function_breakpoint_async(function_name)
+            .await
+    }
+
+    /// Remove a function breakpoint
+    pub async fn remove_function_breakpoint(&self, function_name: &str) -> eyre::Result<()> {
+        self.internals
+            .remove_function_breakpoint_async(function_name)
+            .await
+    }
+
+    /// Get current function breakpoints
+    pub async fn function_breakpoints(&self) -> Vec<String> {
+        self.internals.function_breakpoints_async().await
+    }
+
+    /// Terminate the debugee process
+    pub async fn terminate(&self) -> eyre::Result<()> {
+        let response = self
+            .internals
+            .send_and_wait(requests::RequestBody::Terminate(requests::Terminate {
+                restart: Some(false),
+            }))
+            .await?;
+
+        if !response.success {
+            eyre::bail!(
+                "terminate request failed: {}",
+                response.message.unwrap_or_default()
+            );
+        }
+
+        Ok(())
+    }
+
     /// Shutdown the debugger
     pub async fn shutdown(mut self) -> eyre::Result<()> {
         // Send disconnect request
