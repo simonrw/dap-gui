@@ -7,7 +7,7 @@ use transport::types::StackFrame;
 use crate::{
     DebuggerAppState, State, TabState,
     code_view::CodeView,
-    ui::{breakpoints::Breakpoints, call_stack::CallStack, control_panel::ControlPanel},
+    ui::{breakpoints::Breakpoints, call_stack::CallStack},
 };
 
 pub(crate) struct Renderer<'a> {
@@ -76,16 +76,32 @@ impl<'s> Renderer<'s> {
             .show(ctx, |ui| {
                 self.render_bottom_panel(ctx, ui, paused_frame, show_details);
             });
+        self.render_controls_window(ctx);
         egui::CentralPanel::default().show(ctx, |ui| {
             self.render_code_panel(ctx, ui, paused_frame, original_breakpoints);
-            if show_details {
-                self.render_controls_window(ctx, ui);
-            }
         });
     }
 
-    fn render_controls_window(&mut self, ctx: &Context, ui: &mut Ui) {
-        ui.add(ControlPanel::new(&self.state.debugger, ctx));
+    fn render_controls_window(&mut self, ctx: &Context) {
+        egui::TopBottomPanel::top("control_panel").show(ctx, |ui| {
+            ui.heading("DAP Debugger");
+            ui.separator();
+
+            ui.horizontal(|ui| {
+                if ui.button("▶ Continue").clicked() {
+                    self.state.debugger.r#continue().unwrap();
+                }
+                if ui.button("⏭ Step Over").clicked() {
+                    self.state.debugger.step_over().unwrap();
+                }
+                if ui.button("⏬ Step Into").clicked() {
+                    self.state.debugger.step_in().unwrap();
+                }
+                if ui.button("⏫ Step Out").clicked() {
+                    self.state.debugger.step_out().unwrap();
+                }
+            });
+        });
     }
 
     fn render_sidepanel(
