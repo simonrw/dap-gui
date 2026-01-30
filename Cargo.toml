@@ -19,4 +19,7 @@ oneshot = { version = "0.1.11", default-features = false, features = ["std"] }
 tokio-util = { version = "0.7.17", features = ["codec"] }
 
 [profile.release]
-debug = true
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

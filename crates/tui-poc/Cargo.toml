@@ -1,0 +1,9 @@
+[package]
+name = "tui-poc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ratatui = "0.30.0"
+color-eyre = "0.6.3"
+crossterm = "0.29.0"
