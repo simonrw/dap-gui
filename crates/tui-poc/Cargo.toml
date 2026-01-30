@@ -5,5 +5,5 @@ edition = "2024"
 
 [dependencies]
 ratatui = "0.30.0"
-color-eyre = "0.6.3"
+color-eyre.workspace = true
 crossterm = "0.29.0"
