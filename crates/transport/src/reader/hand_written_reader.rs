@@ -55,7 +55,7 @@ pub struct HandWrittenReader<R> {
 #[derive(Debug)]
 pub enum PollResult {
     /// A message was successfully received
-    Message(crate::Message),
+    Message(Box<crate::Message>),
     /// The connection was closed
     Closed,
     /// The timeout expired before a complete message was received
@@ -474,7 +474,9 @@ mod tests {
         let result = reader.try_poll_message(Duration::from_secs(1))?;
 
         match result {
-            PollResult::Message(Message::Event(events::Event::Terminated)) => {}
+            // PollResult::Message(Message::Event(events::Event::Terminated)) => {}
+            PollResult::Message(message)
+                if matches!(*message, Message::Event(events::Event::Terminated)) => {}
             other => panic!("unexpected result: {:?}", other),
         }
 
@@ -549,7 +551,8 @@ mod tests {
         // Second poll should complete the message
         let result = reader.try_poll_message(Duration::from_secs(1))?;
         match result {
-            PollResult::Message(Message::Event(events::Event::Terminated)) => {}
+            PollResult::Message(message)
+                if matches!(*message, Message::Event(events::Event::Terminated)) => {}
             other => panic!("expected Terminated event, got {:?}", other),
         }
 

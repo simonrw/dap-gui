@@ -283,10 +283,7 @@ impl MockAdapter {
     pub async fn expect_request(&self, expected_command: &str) -> Request {
         self.expect_request_timeout(expected_command, Duration::from_secs(5))
             .await
-            .expect(&format!(
-                "timeout waiting for '{}' request",
-                expected_command
-            ))
+            .unwrap_or_else(|| panic!("timeout waiting for '{}' request", expected_command))
     }
 
     /// Wait for a specific request command with custom timeout.

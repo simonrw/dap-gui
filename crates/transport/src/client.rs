@@ -301,7 +301,7 @@ impl Drop for ClientInternals {
 #[derive(Debug)]
 pub enum ReceiveResult {
     /// A message was successfully received
-    Message(Message),
+    Message(Box<Message>),
     /// The connection was closed
     Closed,
     /// The timeout expired before a complete message was received

@@ -227,7 +227,6 @@ impl App {
                 request,
                 cwd,
                 program,
-                path_mappings,
                 ..
             }) => {
                 if let Some(dir) = cwd {
