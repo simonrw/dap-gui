@@ -1,0 +1,10 @@
+[package]
+name = "gui-iced"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+color-eyre.workspace = true
+iced = { version = "0.14.0", features = ["tokio"] }
+debugger = { path = "../debugger" }
+transport = { path = "../transport" }
