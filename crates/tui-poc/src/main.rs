@@ -1,14 +1,18 @@
 use std::collections::HashMap;
 use std::io;
+use std::time::Duration;
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{
+    DefaultTerminal, Frame,
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
-    DefaultTerminal, Frame,
 };
+
+mod async_bridge;
+pub use async_bridge::{AsyncBridge, StateUpdate, UiCommand};
 
 #[derive(Default, Clone, Copy, PartialEq)]
 enum PanelFocus {
@@ -84,122 +88,140 @@ struct App {
     // Adding breakpoint mode
     adding_breakpoint: bool,
     new_breakpoint_input: String,
+    // Async bridge for debugger communication
+    async_bridge: AsyncBridge,
 }
 
-impl Default for App {
-    fn default() -> Self {
-        let mut files = HashMap::new();
-
-        files.insert(
-            "main.rs",
-            FileContent {
-                lines: vec![
-                    "fn main() {",
-                    "    let x = 10;",
-                    "    let y = 20;",
-                    "    let result = process(x, y);",
-                    "    println!(\"{}\", result);",
-                    "}",
-                    "",
-                    "fn process(a: i32, b: i32) -> i32 {",
-                    "    validate(a);",
-                    "    validate(b);",
-                    "    a + b",
-                    "}",
-                    "",
-                    "fn validate(n: i32) {",
-                    "    assert!(n > 0);",
-                    "}",
-                ],
-            },
-        );
-
-        files.insert(
-            "utils.rs",
-            FileContent {
-                lines: vec![
-                    "pub fn helper() -> i32 {",
-                    "    42",
-                    "}",
-                    "",
-                    "pub fn format_output(val: i32) -> String {",
-                    "    format!(\"Result: {}\", val)",
-                    "}",
-                ],
-            },
-        );
-
-        files.insert(
-            "config.rs",
-            FileContent {
-                lines: vec![
-                    "pub struct Config {",
-                    "    pub debug: bool,",
-                    "    pub verbose: bool,",
-                    "}",
-                    "",
-                    "impl Default for Config {",
-                    "    fn default() -> Self {",
-                    "        Self {",
-                    "            debug: false,",
-                    "            verbose: false,",
-                    "        }",
-                    "    }",
-                    "}",
-                ],
-            },
-        );
-
-        let breakpoints = vec![
-            Breakpoint {
-                line: 5,
-                enabled: true,
-            },
-            Breakpoint {
-                line: 12,
-                enabled: true,
-            },
-        ];
-
-        let call_stack = vec![StackFrame {
-            name: "main",
-            line: 1,
-        }];
-
-        let variables = vec![("x", "10".to_string()), ("y", "20".to_string())];
-
+impl App {
+    fn new(async_bridge: AsyncBridge) -> Self {
         Self {
             focus: PanelFocus::default(),
             debug_state: DebugState::Stopped,
-            files,
-            current_file: "main.rs",
-            current_line: 1,
-            breakpoints,
+            files: HashMap::new(),
+            current_file: "",
+            current_line: 0,
+            breakpoints: Vec::new(),
             breakpoint_cursor: 0,
-            call_stack,
+            call_stack: Vec::new(),
             call_stack_cursor: 0,
-            variables,
+            variables: Vec::new(),
             state_input: String::new(),
-            state_output: vec!["Debugger ready. Press F9 to continue.".to_string()],
+            state_output: vec!["Connected to debugger".to_string()],
             exit: false,
-            code_cursor_line: 1,
+            code_cursor_line: 0,
             command_palette_open: false,
             command_palette_input: String::new(),
             command_palette_cursor: 0,
             command_palette_filtered: Vec::new(),
             adding_breakpoint: false,
             new_breakpoint_input: String::new(),
+            async_bridge,
         }
     }
 }
 
 impl App {
     fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+        // Target ~60fps with 16ms poll timeout
+        let poll_timeout = Duration::from_millis(16);
+
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
+
+            // Poll async updates from debugger (non-blocking)
+            for update in self.async_bridge.poll_updates() {
+                self.handle_state_update(update);
+            }
+
+            // Poll terminal events with timeout (non-blocking)
+            if event::poll(poll_timeout)? {
+                self.handle_events()?;
+            }
         }
         Ok(())
+    }
+
+    /// Handle state updates from the async debugger.
+    fn handle_state_update(&mut self, update: StateUpdate) {
+        match update {
+            StateUpdate::DebuggerEvent(event) => {
+                self.handle_debugger_event(event);
+            }
+            StateUpdate::EvaluateResult(result) => {
+                let prefix = if result.error { "Error: " } else { "=> " };
+                self.state_output
+                    .push(format!("{}{}", prefix, result.output));
+            }
+            StateUpdate::VariablesResult(vars) => {
+                // Update variables display
+                self.variables = vars
+                    .iter()
+                    .map(|v| {
+                        // Convert to static str for compatibility with existing code
+                        // In a real implementation, you'd want to change the type
+                        let name: &'static str = Box::leak(v.name.clone().into_boxed_str());
+                        (name, v.value.clone())
+                    })
+                    .collect();
+            }
+            StateUpdate::Error(msg) => {
+                self.state_output.push(format!("Error: {}", msg));
+            }
+        }
+    }
+
+    /// Handle debugger events from the async runtime.
+    fn handle_debugger_event(&mut self, event: debugger::Event) {
+        use debugger::Event;
+
+        match event {
+            Event::Uninitialised => {
+                self.state_output.push("Debugger uninitialised".to_string());
+            }
+            Event::Initialised => {
+                self.state_output.push("Debugger initialised".to_string());
+            }
+            Event::Paused(program_state) => {
+                self.debug_state = DebugState::Stopped;
+                self.state_output.push("Paused".to_string());
+
+                // Update call stack from program state
+                self.call_stack = program_state
+                    .stack
+                    .iter()
+                    .map(|f| StackFrame {
+                        name: Box::leak(f.name.clone().into_boxed_str()),
+                        line: f.line,
+                    })
+                    .collect();
+
+                // Update current line from paused frame
+                let line = program_state.paused_frame.frame.line;
+                self.current_line = line;
+                self.code_cursor_line = line;
+            }
+            Event::ScopeChange(program_state) => {
+                self.state_output.push("Scope changed".to_string());
+
+                // Update call stack
+                self.call_stack = program_state
+                    .stack
+                    .iter()
+                    .map(|f| StackFrame {
+                        name: Box::leak(f.name.clone().into_boxed_str()),
+                        line: f.line,
+                    })
+                    .collect();
+            }
+            Event::Running => {
+                self.debug_state = DebugState::Running;
+                self.state_output.push("Running".to_string());
+            }
+            Event::Ended => {
+                self.debug_state = DebugState::Stopped;
+                self.state_output.push("Session ended".to_string());
+            }
+        }
     }
 
     fn get_current_file_lines(&self) -> &[&'static str] {
@@ -632,163 +654,27 @@ impl App {
     }
 
     fn step_into(&mut self) {
-        self.debug_state = DebugState::Stopped;
-        let code_lines = self.get_current_file_lines();
-        let line = code_lines.get(self.current_line.saturating_sub(1));
-
-        if let Some(code) = line {
-            if code.contains("process(") {
-                self.call_stack.push(StackFrame {
-                    name: "process",
-                    line: self.current_line,
-                });
-                self.current_line = 8;
-                self.code_cursor_line = 8;
-                self.variables.push(("a", "10".to_string()));
-                self.variables.push(("b", "20".to_string()));
-                self.state_output.push("Step into: process()".to_string());
-                return;
-            } else if code.contains("validate(") {
-                self.call_stack.push(StackFrame {
-                    name: "validate",
-                    line: self.current_line,
-                });
-                self.current_line = 14;
-                self.code_cursor_line = 14;
-                self.variables.push(("n", "10".to_string()));
-                self.state_output.push("Step into: validate()".to_string());
-                return;
-            }
-        }
-
-        self.advance_line();
-        self.code_cursor_line = self.current_line;
-        self.state_output
-            .push(format!("Step into: line {}", self.current_line));
+        self.async_bridge.send_command(UiCommand::StepIn);
+        self.debug_state = DebugState::Running;
+        self.state_output.push("Step in...".to_string());
     }
 
     fn step_out(&mut self) {
-        self.debug_state = DebugState::Stopped;
-        if self.call_stack.len() > 1 {
-            if let Some(frame) = self.call_stack.pop() {
-                self.current_line = frame.line;
-                self.advance_line();
-                self.code_cursor_line = self.current_line;
-                self.variables.retain(|(name, _)| {
-                    !matches!(*name, "a" | "b" | "n")
-                        || self.call_stack.iter().any(|f| f.name == "process")
-                });
-                self.state_output.push(format!(
-                    "Step out: returned to {} at line {}",
-                    self.call_stack.last().map(|f| f.name).unwrap_or("main"),
-                    self.current_line
-                ));
-            }
-        } else {
-            self.state_output
-                .push("Cannot step out: at top of call stack".to_string());
-        }
+        self.async_bridge.send_command(UiCommand::StepOut);
+        self.debug_state = DebugState::Running;
+        self.state_output.push("Step out...".to_string());
     }
 
     fn step_over(&mut self) {
-        self.debug_state = DebugState::Stopped;
-        self.advance_line();
-        self.code_cursor_line = self.current_line;
-        self.update_variables_for_line();
-        self.state_output
-            .push(format!("Step over: line {}", self.current_line));
+        self.async_bridge.send_command(UiCommand::StepOver);
+        self.debug_state = DebugState::Running;
+        self.state_output.push("Step over...".to_string());
     }
 
     fn continue_execution(&mut self) {
+        self.async_bridge.send_command(UiCommand::Continue);
         self.debug_state = DebugState::Running;
         self.state_output.push("Continuing...".to_string());
-
-        let start = self.current_line;
-        let code_len = self.get_current_file_lines().len();
-        loop {
-            self.advance_line();
-            self.update_variables_for_line();
-
-            // Check if we hit an enabled breakpoint
-            if self
-                .breakpoints
-                .iter()
-                .any(|bp| bp.line == self.current_line && bp.enabled)
-            {
-                self.debug_state = DebugState::Stopped;
-                self.code_cursor_line = self.current_line;
-                self.state_output
-                    .push(format!("Hit breakpoint at line {}", self.current_line));
-                return;
-            }
-
-            if self.current_line == start || self.current_line >= code_len {
-                self.debug_state = DebugState::Stopped;
-                self.code_cursor_line = self.current_line;
-                self.state_output
-                    .push("No more breakpoints hit".to_string());
-                return;
-            }
-        }
-    }
-
-    fn advance_line(&mut self) {
-        let code_len = self.get_current_file_lines().len();
-        let current_code = self
-            .get_current_file_lines()
-            .get(self.current_line.saturating_sub(1))
-            .copied()
-            .unwrap_or("");
-
-        if current_code.trim() == "}" {
-            if self.call_stack.len() > 1 {
-                if let Some(frame) = self.call_stack.pop() {
-                    self.current_line = frame.line + 1;
-                    return;
-                }
-            }
-        }
-
-        self.current_line += 1;
-        if self.current_line > code_len {
-            self.current_line = 1;
-        }
-
-        let new_code = self
-            .get_current_file_lines()
-            .get(self.current_line.saturating_sub(1))
-            .copied()
-            .unwrap_or("");
-        if new_code.trim().is_empty()
-            || new_code.trim().starts_with("fn ")
-            || new_code.trim() == "}"
-        {
-            let code_len = self.get_current_file_lines().len();
-            if self.current_line < code_len {
-                self.current_line += 1;
-            }
-        }
-    }
-
-    fn update_variables_for_line(&mut self) {
-        match self.current_line {
-            2 => {
-                if !self.variables.iter().any(|(n, _)| *n == "x") {
-                    self.variables.push(("x", "10".to_string()));
-                }
-            }
-            3 => {
-                if !self.variables.iter().any(|(n, _)| *n == "y") {
-                    self.variables.push(("y", "20".to_string()));
-                }
-            }
-            4 | 5 => {
-                if !self.variables.iter().any(|(n, _)| *n == "result") {
-                    self.variables.push(("result", "30".to_string()));
-                }
-            }
-            _ => {}
-        }
     }
 
     fn draw(&self, frame: &mut Frame) {
@@ -1160,6 +1046,23 @@ impl App {
     }
 }
 
-fn main() -> io::Result<()> {
-    ratatui::run(|terminal| App::default().run(terminal))
+fn main() -> eyre::Result<()> {
+    // TODO: Parse command-line arguments for debugger connection
+    // For now, use default values for debugpy
+    let port = 5678;
+    let language = debugger::Language::DebugPy;
+    let launch_args = debugger::LaunchArguments {
+        program: std::path::PathBuf::from("main.py"),
+        working_directory: Some(std::env::current_dir()?),
+        language,
+    };
+
+    let async_bridge = AsyncBridge::new(port, language, launch_args)?;
+    let mut app = App::new(async_bridge);
+
+    let mut terminal = ratatui::init();
+    let result = app.run(&mut terminal);
+    ratatui::restore();
+
+    result.map_err(Into::into)
 }
