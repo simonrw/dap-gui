@@ -14,7 +14,7 @@ launch_configuration = { path = "../launch_configuration" }
 state = { path = "../state" }
 server = { path = "../server" }
 eyre.workspace = true
-clap = { version = "4", features = ["derive"] }
+clap.workspace = true
 dirs = "6"
 tracing.workspace = true
 tracing-subscriber.workspace = true
