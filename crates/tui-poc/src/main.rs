@@ -1262,6 +1262,24 @@ fn load_breakpoints(state_path: &PathBuf) -> Vec<debugger::Breakpoint> {
     }
 }
 
+/// Launch the debug adapter server based on the language.
+///
+/// Returns a boxed Server trait object that must be kept alive for the duration
+/// of the debugging session. When dropped, the server process is terminated.
+fn launch_debug_adapter(
+    language: debugger::Language,
+    port: u16,
+) -> eyre::Result<Box<dyn server::Server + Send>> {
+    tracing::info!(?language, port, "Launching debug adapter");
+
+    let implementation = match language {
+        debugger::Language::DebugPy => server::Implementation::Debugpy,
+        debugger::Language::Delve => server::Implementation::Delve,
+    };
+
+    server::for_implementation_on_port(implementation, port)
+}
+
 fn main() -> eyre::Result<()> {
     let args = Args::parse();
 
@@ -1281,6 +1299,17 @@ fn main() -> eyre::Result<()> {
 
     // Convert to InitialiseArguments
     let init_args: debugger::InitialiseArguments = config.into();
+
+    // Extract the language to launch the debug adapter
+    let language = match &init_args {
+        debugger::InitialiseArguments::Launch(launch_args) => launch_args.language,
+        debugger::InitialiseArguments::Attach(attach_args) => attach_args.language,
+    };
+
+    // Launch the debug adapter server
+    // Keep the server alive for the duration of the program
+    let _server = launch_debug_adapter(language, args.port)?;
+    tracing::info!("Debug adapter server started");
 
     // Load persisted breakpoints
     let state_path = args.state.unwrap_or_else(default_state_path);

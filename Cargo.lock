@@ -6231,6 +6231,7 @@ dependencies = [
  "eyre",
  "launch_configuration",
  "ratatui",
+ "server",
  "state",
  "tokio",
  "tracing",
