@@ -38,3 +38,5 @@ out.txt
 log.log
 result
 .venv
+
+state.json

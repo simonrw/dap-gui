@@ -1,7 +1,10 @@
 use std::collections::HashMap;
+use std::fs::File;
 use std::io;
+use std::path::PathBuf;
 use std::time::Duration;
 
+use clap::Parser;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{
     DefaultTerminal, Frame,
@@ -10,9 +13,36 @@ use ratatui::{
     text::{Line, Span},
     widgets::Paragraph,
 };
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 mod async_bridge;
 pub use async_bridge::{AsyncBridge, StateUpdate, UiCommand};
+
+/// Terminal UI debugger using the Debug Adapter Protocol (DAP)
+#[derive(Parser)]
+#[command(name = "dap-tui")]
+#[command(about = "Terminal UI debugger using DAP", long_about = None)]
+struct Args {
+    /// Path to launch.json or .code-workspace file
+    #[arg(short, long)]
+    config: PathBuf,
+
+    /// Name of the configuration to use (required if multiple configs exist)
+    #[arg(short, long)]
+    name: Option<String>,
+
+    /// Port to connect to (overrides launch.json default)
+    #[arg(short, long, default_value = "5678")]
+    port: u16,
+
+    /// Path to state file for persisting breakpoints (default: ~/.config/dap-tui/state.json)
+    #[arg(long)]
+    state: Option<PathBuf>,
+
+    /// Path to log file for tracing output (default: /tmp/dap-gui.log)
+    #[arg(long, default_value = "/tmp/dap-gui.log")]
+    log: PathBuf,
+}
 
 #[derive(Default, Clone, Copy, PartialEq)]
 enum PanelFocus {
@@ -35,9 +65,44 @@ struct StackFrame {
     line: usize,
 }
 
-struct Breakpoint {
+/// A breakpoint in the UI, tracking the debugger's breakpoint ID for syncing.
+struct UiBreakpoint {
+    /// The debugger's breakpoint ID (None if not yet confirmed by debugger)
+    id: Option<u64>,
+    /// Path to the source file
+    path: PathBuf,
+    /// Line number (1-indexed)
     line: usize,
+    /// Whether the breakpoint is enabled
     enabled: bool,
+}
+
+impl UiBreakpoint {
+    fn new(path: PathBuf, line: usize) -> Self {
+        Self {
+            id: None,
+            path,
+            line,
+            enabled: true,
+        }
+    }
+
+    fn from_debugger_breakpoint(bp: &debugger::Breakpoint) -> Self {
+        Self {
+            id: None, // Will be set when confirmed
+            path: bp.path.clone(),
+            line: bp.line,
+            enabled: true,
+        }
+    }
+
+    fn to_debugger_breakpoint(&self) -> debugger::Breakpoint {
+        debugger::Breakpoint {
+            name: None,
+            path: self.path.clone(),
+            line: self.line,
+        }
+    }
 }
 
 struct FileContent {
@@ -69,8 +134,10 @@ struct App {
     debug_state: DebugState,
     files: HashMap<&'static str, FileContent>,
     current_file: &'static str,
+    /// The path to the current source file (for breakpoint management)
+    current_file_path: Option<PathBuf>,
     current_line: usize,
-    breakpoints: Vec<Breakpoint>,
+    breakpoints: Vec<UiBreakpoint>,
     breakpoint_cursor: usize,
     call_stack: Vec<StackFrame>,
     call_stack_cursor: usize,
@@ -93,14 +160,20 @@ struct App {
 }
 
 impl App {
-    fn new(async_bridge: AsyncBridge) -> Self {
+    fn new(async_bridge: AsyncBridge, initial_breakpoints: Vec<debugger::Breakpoint>) -> Self {
+        let breakpoints: Vec<UiBreakpoint> = initial_breakpoints
+            .iter()
+            .map(UiBreakpoint::from_debugger_breakpoint)
+            .collect();
+
         Self {
             focus: PanelFocus::default(),
             debug_state: DebugState::Stopped,
             files: HashMap::new(),
             current_file: "",
+            current_file_path: None,
             current_line: 0,
-            breakpoints: Vec::new(),
+            breakpoints,
             breakpoint_cursor: 0,
             call_stack: Vec::new(),
             call_stack_cursor: 0,
@@ -195,10 +268,21 @@ impl App {
                     })
                     .collect();
 
-                // Update current line from paused frame
-                let line = program_state.paused_frame.frame.line;
-                self.current_line = line;
-                self.code_cursor_line = line;
+                // Update current line and file from paused frame
+                let frame = &program_state.paused_frame.frame;
+                self.current_line = frame.line;
+                self.code_cursor_line = frame.line;
+
+                // Extract the source file path
+                if let Some(ref source) = frame.source {
+                    if let Some(ref path) = source.path {
+                        self.current_file_path = Some(path.clone());
+                        // Update display name
+                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                            self.current_file = Box::leak(name.to_string().into_boxed_str());
+                        }
+                    }
+                }
             }
             Event::ScopeChange(program_state) => {
                 self.state_output.push("Scope changed".to_string());
@@ -382,23 +466,34 @@ impl App {
             }
             KeyCode::Enter => {
                 if let Ok(line) = self.new_breakpoint_input.trim().parse::<usize>() {
-                    // Check if breakpoint already exists
-                    if !self.breakpoints.iter().any(|bp| bp.line == line) {
-                        self.breakpoints.push(Breakpoint {
-                            line,
-                            enabled: true,
-                        });
-                        self.breakpoints.sort_by_key(|bp| bp.line);
-                        self.breakpoint_cursor = self
+                    // Check if breakpoint already exists at this line
+                    let file_path = self.current_file_path.clone();
+                    if let Some(path) = file_path {
+                        if !self
                             .breakpoints
                             .iter()
-                            .position(|bp| bp.line == line)
-                            .unwrap_or(0);
-                        self.state_output
-                            .push(format!("Added breakpoint at line {}", line));
+                            .any(|bp| bp.line == line && bp.path == path)
+                        {
+                            let bp = UiBreakpoint::new(path, line);
+                            // Send to debugger
+                            self.async_bridge.send_command(UiCommand::AddBreakpoint(
+                                bp.to_debugger_breakpoint(),
+                            ));
+                            self.breakpoints.push(bp);
+                            self.breakpoints.sort_by_key(|bp| bp.line);
+                            self.breakpoint_cursor = self
+                                .breakpoints
+                                .iter()
+                                .position(|bp| bp.line == line)
+                                .unwrap_or(0);
+                            self.state_output
+                                .push(format!("Added breakpoint at line {}", line));
+                        } else {
+                            self.state_output
+                                .push(format!("Breakpoint already exists at line {}", line));
+                        }
                     } else {
-                        self.state_output
-                            .push(format!("Breakpoint already exists at line {}", line));
+                        self.state_output.push("No file selected".to_string());
                     }
                 } else {
                     self.state_output.push("Invalid line number".to_string());
@@ -441,18 +536,32 @@ impl App {
             KeyCode::Char('b') => {
                 // Toggle breakpoint at cursor line
                 let line = self.code_cursor_line;
-                if let Some(idx) = self.breakpoints.iter().position(|bp| bp.line == line) {
-                    self.breakpoints.remove(idx);
-                    self.state_output
-                        .push(format!("Removed breakpoint at line {}", line));
+                if let Some(path) = self.current_file_path.clone() {
+                    if let Some(idx) = self
+                        .breakpoints
+                        .iter()
+                        .position(|bp| bp.line == line && bp.path == path)
+                    {
+                        let removed = self.breakpoints.remove(idx);
+                        // Remove from debugger if it has an ID
+                        if let Some(id) = removed.id {
+                            self.async_bridge
+                                .send_command(UiCommand::RemoveBreakpoint(id));
+                        }
+                        self.state_output
+                            .push(format!("Removed breakpoint at line {}", line));
+                    } else {
+                        let bp = UiBreakpoint::new(path, line);
+                        // Send to debugger
+                        self.async_bridge
+                            .send_command(UiCommand::AddBreakpoint(bp.to_debugger_breakpoint()));
+                        self.breakpoints.push(bp);
+                        self.breakpoints.sort_by_key(|bp| bp.line);
+                        self.state_output
+                            .push(format!("Added breakpoint at line {}", line));
+                    }
                 } else {
-                    self.breakpoints.push(Breakpoint {
-                        line,
-                        enabled: true,
-                    });
-                    self.breakpoints.sort_by_key(|bp| bp.line);
-                    self.state_output
-                        .push(format!("Added breakpoint at line {}", line));
+                    self.state_output.push("No file selected".to_string());
                 }
             }
             KeyCode::Char('0') => {
@@ -607,15 +716,24 @@ impl App {
             "files" => self.get_file_list().join(", "),
             other if other.starts_with("break ") => {
                 if let Ok(n) = other[6..].trim().parse::<usize>() {
-                    if !self.breakpoints.iter().any(|bp| bp.line == n) {
-                        self.breakpoints.push(Breakpoint {
-                            line: n,
-                            enabled: true,
-                        });
-                        self.breakpoints.sort_by_key(|bp| bp.line);
-                        format!("Breakpoint set at line {}", n)
+                    if let Some(path) = self.current_file_path.clone() {
+                        if !self
+                            .breakpoints
+                            .iter()
+                            .any(|bp| bp.line == n && bp.path == path)
+                        {
+                            let bp = UiBreakpoint::new(path, n);
+                            self.async_bridge.send_command(UiCommand::AddBreakpoint(
+                                bp.to_debugger_breakpoint(),
+                            ));
+                            self.breakpoints.push(bp);
+                            self.breakpoints.sort_by_key(|bp| bp.line);
+                            format!("Breakpoint set at line {}", n)
+                        } else {
+                            format!("Breakpoint already exists at line {}", n)
+                        }
                     } else {
-                        format!("Breakpoint already exists at line {}", n)
+                        "No file selected".to_string()
                     }
                 } else {
                     "Usage: break <line_number>".to_string()
@@ -624,7 +742,11 @@ impl App {
             other if other.starts_with("clear ") => {
                 if let Ok(n) = other[6..].trim().parse::<usize>() {
                     if let Some(idx) = self.breakpoints.iter().position(|bp| bp.line == n) {
-                        self.breakpoints.remove(idx);
+                        let removed = self.breakpoints.remove(idx);
+                        if let Some(id) = removed.id {
+                            self.async_bridge
+                                .send_command(UiCommand::RemoveBreakpoint(id));
+                        }
                         format!("Breakpoint cleared at line {}", n)
                     } else {
                         format!("No breakpoint at line {}", n)
@@ -878,7 +1000,7 @@ impl App {
             frame.render_widget(Paragraph::new(title), chunks[0]);
         }
 
-        let mut bp_list: Vec<&Breakpoint> = self.breakpoints.iter().collect();
+        let mut bp_list: Vec<&UiBreakpoint> = self.breakpoints.iter().collect();
         bp_list.sort_by_key(|bp| bp.line);
 
         let bp_lines: Vec<Line> = bp_list
@@ -898,10 +1020,12 @@ impl App {
                 } else {
                     Style::default()
                 };
+                // Show file:line for clarity
+                let file_name = bp.path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
                 Line::from(vec![
                     Span::styled(prefix, line_style),
                     Span::styled(marker, Style::default().fg(marker_color)),
-                    Span::styled(format!(" line {}", bp.line), line_style),
+                    Span::styled(format!(" {}:{}", file_name, bp.line), line_style),
                 ])
             })
             .collect();
@@ -1046,19 +1170,126 @@ impl App {
     }
 }
 
-fn main() -> eyre::Result<()> {
-    // TODO: Parse command-line arguments for debugger connection
-    // For now, use default values for debugpy
-    let port = 5678;
-    let language = debugger::Language::DebugPy;
-    let launch_args = debugger::LaunchArguments {
-        program: std::path::PathBuf::from("main.py"),
-        working_directory: Some(std::env::current_dir()?),
-        language,
-    };
+/// Get the default state file path
+fn default_state_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("dap-tui")
+        .join("state.json")
+}
 
-    let async_bridge = AsyncBridge::new(port, language, launch_args)?;
-    let mut app = App::new(async_bridge);
+/// Initialize tracing to log to a file.
+///
+/// Logs are written to the specified file path. The log level can be controlled
+/// via the `RUST_LOG` environment variable (defaults to `debug`).
+fn init_tracing(log_path: &PathBuf) -> eyre::Result<()> {
+    // Create parent directories if they don't exist
+    if let Some(parent) = log_path.parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+
+    // Open the log file (create or truncate)
+    let log_file = File::create(log_path)?;
+
+    // Set up the file layer for tracing
+    let file_layer = fmt::layer()
+        .with_writer(log_file)
+        .with_ansi(false) // No ANSI colors in file output
+        .with_target(true)
+        .with_thread_ids(true)
+        .with_file(true)
+        .with_line_number(true);
+
+    // Use RUST_LOG env var for filtering, default to debug
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug"));
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(file_layer)
+        .init();
+
+    tracing::info!("Tracing initialized, logging to {}", log_path.display());
+
+    Ok(())
+}
+
+/// Load launch configuration from file
+fn load_launch_config(
+    config_path: &PathBuf,
+    name: &Option<String>,
+) -> eyre::Result<launch_configuration::LaunchConfiguration> {
+    use launch_configuration::ChosenLaunchConfiguration;
+
+    let config = launch_configuration::load_from_path(name.as_ref(), config_path)?;
+
+    match config {
+        ChosenLaunchConfiguration::Specific(cfg) => Ok(cfg),
+        ChosenLaunchConfiguration::NotFound => {
+            eyre::bail!(
+                "Configuration '{}' not found in {}",
+                name.as_deref().unwrap_or("<none>"),
+                config_path.display()
+            )
+        }
+        ChosenLaunchConfiguration::ToBeChosen(available) => {
+            eyre::bail!(
+                "Multiple configurations available. Please specify one with --name:\n  {}",
+                available.join("\n  ")
+            )
+        }
+    }
+}
+
+/// Load breakpoints from persisted state
+fn load_breakpoints(state_path: &PathBuf) -> Vec<debugger::Breakpoint> {
+    match state::StateManager::new(state_path) {
+        Ok(manager) => manager
+            .current()
+            .projects
+            .iter()
+            .flat_map(|p| p.breakpoints.clone())
+            .collect(),
+        Err(e) => {
+            eprintln!(
+                "Warning: Could not load state from {}: {}",
+                state_path.display(),
+                e
+            );
+            vec![]
+        }
+    }
+}
+
+fn main() -> eyre::Result<()> {
+    let args = Args::parse();
+
+    // Initialize tracing to log file
+    init_tracing(&args.log)?;
+
+    tracing::info!("Starting dap-tui");
+    tracing::debug!(config = %args.config.display(), "Loading launch configuration");
+
+    // Load launch configuration
+    let mut config = load_launch_config(&args.config, &args.name)?;
+
+    // Resolve any path variables in the config (e.g., ${workspaceFolder})
+    if let Some(parent) = args.config.parent() {
+        config.resolve(parent);
+    }
+
+    // Convert to InitialiseArguments
+    let init_args: debugger::InitialiseArguments = config.into();
+
+    // Load persisted breakpoints
+    let state_path = args.state.unwrap_or_else(default_state_path);
+    let initial_breakpoints = load_breakpoints(&state_path);
+
+    // Create the async bridge with initial breakpoints
+    let async_bridge =
+        AsyncBridge::with_breakpoints(args.port, init_args, initial_breakpoints.clone())?;
+    let mut app = App::new(async_bridge, initial_breakpoints);
 
     let mut terminal = ratatui::init();
     let result = app.run(&mut terminal);

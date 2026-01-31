@@ -5,7 +5,7 @@
 //! to send commands to and receive events from the async debugger without
 //! blocking the UI thread.
 
-use debugger::{Breakpoint, EvaluateResult, Event, Language, LaunchArguments, TcpAsyncDebugger};
+use debugger::{Breakpoint, EvaluateResult, Event, InitialiseArguments, TcpAsyncDebugger};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 use transport::types::{StackFrameId, Variable};
@@ -82,14 +82,32 @@ impl AsyncBridge {
     /// Create a new async bridge and connect to the debugger.
     ///
     /// This spawns a tokio runtime and a background task that manages
-    /// the debugger connection.
+    /// the debugger connection. No initial breakpoints are configured.
     ///
     /// # Arguments
     ///
     /// * `port` - The port to connect to the debug adapter
-    /// * `language` - The programming language being debugged
-    /// * `launch_args` - Arguments for launching the debug session
-    pub fn new(port: u16, language: Language, launch_args: LaunchArguments) -> eyre::Result<Self> {
+    /// * `init_args` - Arguments for initializing the debug session (Launch or Attach)
+    pub fn new(port: u16, init_args: InitialiseArguments) -> eyre::Result<Self> {
+        Self::with_breakpoints(port, init_args, vec![])
+    }
+
+    /// Create a new async bridge with initial breakpoints.
+    ///
+    /// This spawns a tokio runtime and a background task that manages
+    /// the debugger connection. The provided breakpoints are configured
+    /// before the debuggee starts executing.
+    ///
+    /// # Arguments
+    ///
+    /// * `port` - The port to connect to the debug adapter
+    /// * `init_args` - Arguments for initializing the debug session (Launch or Attach)
+    /// * `initial_breakpoints` - Breakpoints to configure before starting execution
+    pub fn with_breakpoints(
+        port: u16,
+        init_args: InitialiseArguments,
+        initial_breakpoints: Vec<Breakpoint>,
+    ) -> eyre::Result<Self> {
         let runtime = Runtime::new()?;
         let (command_tx, command_rx) = mpsc::unbounded_channel();
         let (update_tx, update_rx) = mpsc::unbounded_channel();
@@ -97,8 +115,8 @@ impl AsyncBridge {
         // Spawn the debugger management task
         runtime.spawn(Self::run_debugger(
             port,
-            language,
-            launch_args,
+            init_args,
+            initial_breakpoints,
             command_rx,
             update_tx,
         ));
@@ -113,28 +131,61 @@ impl AsyncBridge {
     /// Run the debugger in an async context.
     ///
     /// This is the main async task that:
-    /// 1. Connects to the debug adapter
-    /// 2. Starts the debug session
-    /// 3. Processes commands from the UI
-    /// 4. Forwards events to the UI
+    /// 1. Connects to the debug adapter (staged)
+    /// 2. Configures initial breakpoints
+    /// 3. Starts the debug session (sends ConfigurationDone)
+    /// 4. Processes commands from the UI
+    /// 5. Forwards events to the UI
     async fn run_debugger(
         port: u16,
-        language: Language,
-        launch_args: LaunchArguments,
+        init_args: InitialiseArguments,
+        initial_breakpoints: Vec<Breakpoint>,
         mut command_rx: mpsc::UnboundedReceiver<UiCommand>,
         update_tx: mpsc::UnboundedSender<StateUpdate>,
     ) {
-        // Connect to debugger
-        let mut debugger: TcpAsyncDebugger =
-            match TcpAsyncDebugger::connect(port, language, &launch_args, true).await {
-                Ok(d) => d,
-                Err(e) => {
-                    let _ = update_tx.send(StateUpdate::Error(format!("Connect failed: {}", e)));
-                    return;
+        // Connect to debugger using staged initialization
+        let mut debugger: TcpAsyncDebugger = match &init_args {
+            InitialiseArguments::Launch(launch_args) => {
+                match TcpAsyncDebugger::connect_staged(
+                    port,
+                    launch_args.language,
+                    launch_args,
+                    true,
+                )
+                .await
+                {
+                    Ok(d) => d,
+                    Err(e) => {
+                        let _ =
+                            update_tx.send(StateUpdate::Error(format!("Connect failed: {}", e)));
+                        return;
+                    }
                 }
-            };
+            }
+            InitialiseArguments::Attach(attach_args) => {
+                match TcpAsyncDebugger::attach_staged(port, attach_args.language, attach_args).await
+                {
+                    Ok(d) => d,
+                    Err(e) => {
+                        let _ = update_tx.send(StateUpdate::Error(format!("Attach failed: {}", e)));
+                        return;
+                    }
+                }
+            }
+        };
 
-        // Start the debug session
+        // Configure initial breakpoints BEFORE starting execution
+        if !initial_breakpoints.is_empty() {
+            if let Err(e) = debugger.configure_breakpoints(&initial_breakpoints).await {
+                let _ = update_tx.send(StateUpdate::Error(format!(
+                    "Failed to configure breakpoints: {}",
+                    e
+                )));
+                // Continue anyway - breakpoints failing shouldn't prevent debugging
+            }
+        }
+
+        // Start the debug session (sends ConfigurationDone)
         if let Err(e) = debugger.start().await {
             let _ = update_tx.send(StateUpdate::Error(format!("Start failed: {}", e)));
             return;

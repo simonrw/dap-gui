@@ -46,7 +46,11 @@ pub type TcpAsyncDebugger =
 impl TcpAsyncDebugger {
     /// Connect to a debug adapter and initialize the session.
     ///
-    /// This is a convenience method for TCP connections.
+    /// This is a convenience method for TCP connections. The debugger is fully
+    /// initialized and ready to start after this call returns.
+    ///
+    /// If you need to configure breakpoints before starting, use [`connect_staged`]
+    /// instead, which allows you to call [`configure_breakpoints`] before [`start`].
     pub async fn connect(
         port: u16,
         language: Language,
@@ -59,6 +63,46 @@ impl TcpAsyncDebugger {
             .wrap_err("connecting to debug adapter")?;
 
         Self::from_transport(
+            reader,
+            writer,
+            language,
+            Some(launch_args.clone()),
+            None,
+            stop_on_entry,
+        )
+        .await
+    }
+
+    /// Connect to a debug adapter with staged initialization.
+    ///
+    /// This method connects and initializes the DAP session (sends Initialize,
+    /// Launch requests, and waits for the Initialized event), but does NOT send
+    /// ConfigurationDone. This allows you to configure breakpoints before the
+    /// debuggee starts executing.
+    ///
+    /// # Usage
+    ///
+    /// ```ignore
+    /// let debugger = TcpAsyncDebugger::connect_staged(port, language, &launch_args, true).await?;
+    ///
+    /// // Configure breakpoints BEFORE execution starts
+    /// debugger.configure_breakpoints(&breakpoints).await?;
+    ///
+    /// // Now start execution (sends ConfigurationDone)
+    /// debugger.start().await?;
+    /// ```
+    pub async fn connect_staged(
+        port: u16,
+        language: Language,
+        launch_args: &LaunchArguments,
+        stop_on_entry: bool,
+    ) -> eyre::Result<Self> {
+        // Connect using transport2
+        let (reader, writer) = transport2::connect(format!("127.0.0.1:{}", port))
+            .await
+            .wrap_err("connecting to debug adapter")?;
+
+        Self::from_transport_staged(
             reader,
             writer,
             language,
@@ -83,6 +127,31 @@ impl TcpAsyncDebugger {
             .wrap_err("connecting to debug adapter")?;
 
         Self::from_transport(
+            reader,
+            writer,
+            language,
+            None,
+            Some(attach_args.clone()),
+            false,
+        )
+        .await
+    }
+
+    /// Attach to a running debug session with staged initialization.
+    ///
+    /// Like [`attach`], but doesn't send ConfigurationDone. Use this when you
+    /// need to configure breakpoints before the session starts.
+    pub async fn attach_staged(
+        port: u16,
+        language: Language,
+        attach_args: &AttachArguments,
+    ) -> eyre::Result<Self> {
+        // Connect using transport2
+        let (reader, writer) = transport2::connect(format!("127.0.0.1:{}", port))
+            .await
+            .wrap_err("connecting to debug adapter")?;
+
+        Self::from_transport_staged(
             reader,
             writer,
             language,
@@ -140,6 +209,54 @@ where
         // Initialize DAP session
         debugger
             .initialize(language, launch_args, attach_args, stop_on_entry)
+            .await?;
+
+        Ok(debugger)
+    }
+
+    /// Create from an existing transport with staged initialization.
+    ///
+    /// Like [`from_transport`], but doesn't complete the initialization sequence.
+    /// The DAP session is initialized (Initialize, Launch/Attach, Initialized event),
+    /// but ConfigurationDone is NOT sent. Call [`configure_breakpoints`] then [`start`]
+    /// to complete the initialization.
+    pub async fn from_transport_staged(
+        reader: DapReader<R>,
+        writer: DapWriter<W>,
+        language: Language,
+        launch_args: Option<LaunchArguments>,
+        attach_args: Option<AttachArguments>,
+        stop_on_entry: bool,
+    ) -> eyre::Result<Self> {
+        // Create channels
+        let (event_tx, event_rx) = mpsc::unbounded_channel();
+        let (message_tx, message_rx) = mpsc::unbounded_channel();
+
+        // Create cancellation token
+        let cancel_token = CancellationToken::new();
+
+        // Create internals
+        let internals = Arc::new(AsyncDebuggerInternals::new(writer, event_tx.clone()));
+
+        // Spawn reader task
+        let reader_handle = Self::spawn_reader_task(reader, message_tx, cancel_token.clone());
+
+        // Spawn event processor task
+        let processor_handle =
+            Self::spawn_processor_task(message_rx, internals.clone(), cancel_token.clone());
+
+        let debugger = Self {
+            internals,
+            event_rx: AsyncEventReceiver::new(event_rx),
+            cancel_token,
+            reader_handle: Some(reader_handle),
+            processor_handle: Some(processor_handle),
+            _reader: std::marker::PhantomData,
+        };
+
+        // Initialize DAP session (but don't send ConfigurationDone)
+        debugger
+            .initialize_staged(language, launch_args, attach_args, stop_on_entry)
             .await?;
 
         Ok(debugger)
@@ -220,6 +337,118 @@ where
             ))
             .await;
 
+        Ok(())
+    }
+
+    /// Initialize the debug session but don't send ConfigurationDone.
+    ///
+    /// This is used by staged initialization to allow breakpoint configuration
+    /// before the debuggee starts executing.
+    async fn initialize_staged(
+        &self,
+        language: Language,
+        launch_args: Option<LaunchArguments>,
+        attach_args: Option<AttachArguments>,
+        _stop_on_entry: bool,
+    ) -> eyre::Result<()> {
+        // Send Initialize request
+        let adapter_id = match language {
+            Language::DebugPy => "debugpy",
+            Language::Delve => "delve",
+        };
+
+        let response = self
+            .internals
+            .send_and_wait(requests::RequestBody::Initialize(requests::Initialize {
+                adapter_id: adapter_id.to_string(),
+                path_format: PathFormat::Path,
+                lines_start_at_one: true,
+                supports_start_debugging_request: false,
+                supports_variable_type: false,
+                supports_variable_paging: false,
+                supports_progress_reporting: false,
+                supports_memory_event: false,
+            }))
+            .await?;
+
+        if !response.success {
+            eyre::bail!(
+                "initialize request failed: {}",
+                response.message.unwrap_or_default()
+            );
+        }
+
+        // Send Launch or Attach request
+        if let Some(launch_args) = launch_args {
+            let response = self
+                .internals
+                .send_and_wait(launch_args.to_request())
+                .await?;
+
+            if !response.success {
+                eyre::bail!(
+                    "launch request failed: {}",
+                    response.message.unwrap_or_default()
+                );
+            }
+        } else if let Some(attach_args) = attach_args {
+            let response = self
+                .internals
+                .send_and_wait(attach_args.to_request())
+                .await?;
+
+            if !response.success {
+                eyre::bail!(
+                    "attach request failed: {}",
+                    response.message.unwrap_or_default()
+                );
+            }
+        } else {
+            eyre::bail!("either launch or attach arguments must be provided");
+        }
+
+        // Wait for initialized event
+        self.wait_for_initialized_event().await?;
+
+        // Set exception breakpoints (if needed)
+        let _ = self
+            .internals
+            .send_and_wait(requests::RequestBody::SetExceptionBreakpoints(
+                requests::SetExceptionBreakpoints { filters: vec![] },
+            ))
+            .await;
+
+        // NOTE: We intentionally do NOT send ConfigurationDone here.
+        // The caller should call configure_breakpoints() then start().
+
+        Ok(())
+    }
+
+    /// Configure initial breakpoints before starting the debug session.
+    ///
+    /// This method should be called after [`connect_staged`] or [`from_transport_staged`]
+    /// but before [`start`]. It allows you to set breakpoints that will be hit
+    /// from the very beginning of program execution.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let debugger = TcpAsyncDebugger::connect_staged(port, language, &launch_args, true).await?;
+    ///
+    /// // Configure breakpoints before execution starts
+    /// let breakpoints = vec![
+    ///     Breakpoint { path: "main.py".into(), line: 10, name: None },
+    ///     Breakpoint { path: "main.py".into(), line: 20, name: None },
+    /// ];
+    /// debugger.configure_breakpoints(&breakpoints).await?;
+    ///
+    /// // Now start execution
+    /// debugger.start().await?;
+    /// ```
+    pub async fn configure_breakpoints(&self, breakpoints: &[Breakpoint]) -> eyre::Result<()> {
+        for bp in breakpoints {
+            self.add_breakpoint(bp).await?;
+        }
         Ok(())
     }
 
