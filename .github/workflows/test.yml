@@ -48,12 +48,12 @@ jobs:
       - name: cargo nextest run --locked
         run: |
           source .venv/bin/activate
-          cargo nextest run --locked --all-features --all-targets
+          cargo xtask test
       # https://github.com/rust-lang/cargo/issues/6669
       - name: cargo test --doc
         run: |
           source .venv/bin/activate
-          cargo test --locked --all-features --doc
+          cargo xtask doctest
 
   minimal:
     runs-on: ubuntu-latest
@@ -82,15 +82,13 @@ jobs:
       - name: cargo update -Zdirect-minimal-versions
         run: cargo +nightly update -Zdirect-minimal-versions
       - name: Create python venv with debugpy
-        run: |
-          python -m venv .venv
-          .venv/bin/python -m pip install debugpy
+        run: cargo xtask init-venv
       - name: Install nextest
         uses: taiki-e/install-action@nextest
       - name: cargo test
         run: |
           source .venv/bin/activate
-          cargo nextest run --locked --all-features --all-targets
+          cargo xtask test
 
   os-check:
     runs-on: ${{ matrix.os }}
