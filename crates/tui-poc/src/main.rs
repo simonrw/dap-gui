@@ -255,6 +255,7 @@ impl App {
                 self.state_output.push("Debugger initialised".to_string());
             }
             Event::Paused(program_state) => {
+                tracing::warn!(?program_state, "SRW: got paused event");
                 self.debug_state = DebugState::Stopped;
                 self.state_output.push("Paused".to_string());
 

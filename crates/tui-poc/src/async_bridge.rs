@@ -175,8 +175,13 @@ impl AsyncBridge {
         };
 
         // Configure initial breakpoints BEFORE starting execution
+        tracing::debug!(
+            count = initial_breakpoints.len(),
+            "configuring initial breakpoints"
+        );
         if !initial_breakpoints.is_empty() {
             if let Err(e) = debugger.configure_breakpoints(&initial_breakpoints).await {
+                tracing::error!(error = %e, "failed to configure breakpoints");
                 let _ = update_tx.send(StateUpdate::Error(format!(
                     "Failed to configure breakpoints: {}",
                     e
@@ -184,12 +189,15 @@ impl AsyncBridge {
                 // Continue anyway - breakpoints failing shouldn't prevent debugging
             }
         }
+        tracing::debug!("breakpoints configured, starting debug session");
 
         // Start the debug session (sends ConfigurationDone)
         if let Err(e) = debugger.start().await {
+            tracing::error!(error = %e, "failed to start debug session");
             let _ = update_tx.send(StateUpdate::Error(format!("Start failed: {}", e)));
             return;
         }
+        tracing::debug!("debug session started");
 
         loop {
             tokio::select! {

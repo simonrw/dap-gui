@@ -297,37 +297,26 @@ where
             );
         }
 
-        // Send Launch or Attach request
+        // Set up the channel to receive the initialized event BEFORE sending
+        // Launch/Attach. This prevents a race condition where the initialized
+        // event arrives before we start waiting for it.
+        let initialized_rx = self.setup_initialized_event_channel().await;
+
+        // Send Launch or Attach request (fire-and-forget, don't wait for response)
         if let Some(launch_args) = launch_args {
-            let response = self
-                .internals
-                .send_and_wait(launch_args.to_request())
+            self.internals
+                .send_request(launch_args.to_request())
                 .await?;
-
-            if !response.success {
-                eyre::bail!(
-                    "launch request failed: {}",
-                    response.message.unwrap_or_default()
-                );
-            }
         } else if let Some(attach_args) = attach_args {
-            let response = self
-                .internals
-                .send_and_wait(attach_args.to_request())
+            self.internals
+                .send_request(attach_args.to_request())
                 .await?;
-
-            if !response.success {
-                eyre::bail!(
-                    "attach request failed: {}",
-                    response.message.unwrap_or_default()
-                );
-            }
         } else {
             eyre::bail!("either launch or attach arguments must be provided");
         }
 
         // Wait for initialized event
-        self.wait_for_initialized_event().await?;
+        self.wait_for_initialized_event(initialized_rx).await?;
 
         // Set exception breakpoints (if needed)
         let _ = self
@@ -378,37 +367,33 @@ where
             );
         }
 
-        // Send Launch or Attach request
+        // Set up the channel to receive the initialized event BEFORE sending
+        // Launch/Attach. This prevents a race condition where the initialized
+        // event arrives before we start waiting for it.
+        let initialized_rx = self.setup_initialized_event_channel().await;
+
+        // Send Launch or Attach request (fire-and-forget, don't wait for response)
+        // The response will arrive eventually, but we don't need to wait for it.
+        // This matches the behavior of the sync debugger and debugpy's expectations.
         if let Some(launch_args) = launch_args {
-            let response = self
-                .internals
-                .send_and_wait(launch_args.to_request())
+            tracing::debug!("sending launch request");
+            self.internals
+                .send_request(launch_args.to_request())
                 .await?;
-
-            if !response.success {
-                eyre::bail!(
-                    "launch request failed: {}",
-                    response.message.unwrap_or_default()
-                );
-            }
+            tracing::debug!("launch request sent");
         } else if let Some(attach_args) = attach_args {
-            let response = self
-                .internals
-                .send_and_wait(attach_args.to_request())
+            tracing::debug!("sending attach request");
+            self.internals
+                .send_request(attach_args.to_request())
                 .await?;
-
-            if !response.success {
-                eyre::bail!(
-                    "attach request failed: {}",
-                    response.message.unwrap_or_default()
-                );
-            }
+            tracing::debug!("attach request sent");
         } else {
             eyre::bail!("either launch or attach arguments must be provided");
         }
 
         // Wait for initialized event
-        self.wait_for_initialized_event().await?;
+        self.wait_for_initialized_event(initialized_rx).await?;
+        tracing::debug!("initialization complete, setting exception breakpoints");
 
         // Set exception breakpoints (if needed)
         let _ = self
@@ -418,6 +403,7 @@ where
             ))
             .await;
 
+        tracing::debug!("initialize_staged complete");
         // NOTE: We intentionally do NOT send ConfigurationDone here.
         // The caller should call configure_breakpoints() then start().
 
@@ -453,19 +439,31 @@ where
     }
 
     /// Wait for the initialized event from the debug adapter
-    async fn wait_for_initialized_event(&self) -> eyre::Result<()> {
-        // Create a oneshot channel to wait for the initialized event
+    /// Set up a channel to receive the initialized event.
+    ///
+    /// Returns a receiver that will be signaled when the initialized event arrives.
+    /// This must be called BEFORE sending the Launch/Attach request to avoid a race
+    /// condition where the initialized event arrives before we start waiting for it.
+    async fn setup_initialized_event_channel(&self) -> tokio::sync::oneshot::Receiver<()> {
+        tracing::debug!("setting up initialized event channel");
         let (tx, rx) = tokio::sync::oneshot::channel();
-
-        // Store the channel in internals
         self.internals.set_initialized_channel(tx).await;
+        tracing::debug!("initialized event channel set up");
+        rx
+    }
 
-        // Wait for initialized event with timeout
+    /// Wait for the initialized event using a pre-created receiver.
+    async fn wait_for_initialized_event(
+        &self,
+        rx: tokio::sync::oneshot::Receiver<()>,
+    ) -> eyre::Result<()> {
+        tracing::debug!("waiting for initialized event");
         tokio::time::timeout(std::time::Duration::from_secs(10), rx)
             .await
             .wrap_err("timeout waiting for initialized event")?
             .wrap_err("initialized event channel closed")?;
 
+        tracing::debug!("initialized event received");
         Ok(())
     }
 
@@ -513,6 +511,7 @@ where
         cancel: CancellationToken,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
+            tracing::debug!("processor task started");
             loop {
                 tokio::select! {
                     _ = cancel.cancelled() => {
@@ -520,12 +519,13 @@ where
                         break;
                     }
                     msg = message_rx.recv() => {
+                        tracing::debug!("processor task received message");
                         match msg {
                             Some(Message::Response(response)) => {
                                 internals.handle_response(response).await;
                             }
                             Some(Message::Event(event)) => {
-                                if let Err(e) = internals.handle_event(&event).await {
+                                if let Err(e) = AsyncDebuggerInternals::handle_event(Arc::clone(&internals), event).await {
                                     tracing::error!(error = %e, "error handling event");
                                 }
                             }
@@ -533,13 +533,14 @@ where
                                 tracing::warn!("received reverse request from adapter (not implemented)");
                             }
                             None => {
-                                tracing::debug!("message channel closed");
+                                tracing::debug!("processor task: message channel closed");
                                 break;
                             }
                         }
                     }
                 }
             }
+            tracing::debug!("processor task ended");
         })
     }
 
@@ -570,7 +571,7 @@ where
         let thread_id = self
             .internals
             .current_thread_id
-            .lock()
+            .read()
             .await
             .ok_or_else(|| eyre::eyre!("no current thread"))?;
 
@@ -597,7 +598,7 @@ where
         let thread_id = self
             .internals
             .current_thread_id
-            .lock()
+            .read()
             .await
             .ok_or_else(|| eyre::eyre!("no current thread"))?;
 
@@ -621,7 +622,7 @@ where
         let thread_id = self
             .internals
             .current_thread_id
-            .lock()
+            .read()
             .await
             .ok_or_else(|| eyre::eyre!("no current thread"))?;
 
@@ -647,7 +648,7 @@ where
         let thread_id = self
             .internals
             .current_thread_id
-            .lock()
+            .read()
             .await
             .ok_or_else(|| eyre::eyre!("no current thread"))?;
 
@@ -689,7 +690,7 @@ where
 
     /// Get current breakpoints
     pub async fn breakpoints(&self) -> Vec<Breakpoint> {
-        let breakpoints = self.internals.breakpoints.lock().await;
+        let breakpoints = self.internals.breakpoints.read().await;
         breakpoints.values().cloned().collect()
     }
 

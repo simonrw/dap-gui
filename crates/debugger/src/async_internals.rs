@@ -1,10 +1,13 @@
 use eyre::WrapErr;
 use std::{
     collections::HashMap,
-    sync::atomic::{AtomicI64, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicI64, Ordering},
+    },
 };
 use tokio::io::AsyncWrite;
-use tokio::sync::{Mutex, mpsc, oneshot};
+use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
 use transport::{
     requests::{self},
     responses::{self},
@@ -32,8 +35,8 @@ pub struct AsyncDebuggerInternals<W> {
     initialized_tx: Mutex<Option<oneshot::Sender<()>>>,
 
     // Debugger-specific state
-    pub(crate) current_thread_id: Mutex<Option<ThreadId>>,
-    pub(crate) breakpoints: Mutex<HashMap<BreakpointId, Breakpoint>>,
+    pub(crate) current_thread_id: RwLock<Option<ThreadId>>,
+    pub(crate) breakpoints: RwLock<HashMap<BreakpointId, Breakpoint>>,
     current_breakpoint_id: AtomicI64,
     pub(crate) function_breakpoints: Mutex<Vec<String>>,
 }
@@ -49,8 +52,8 @@ where
             event_tx,
             pending_requests: Mutex::new(HashMap::new()),
             initialized_tx: Mutex::new(None),
-            current_thread_id: Mutex::new(None),
-            breakpoints: Mutex::new(HashMap::new()),
+            current_thread_id: RwLock::new(None),
+            breakpoints: RwLock::new(HashMap::new()),
             current_breakpoint_id: AtomicI64::new(0),
             function_breakpoints: Mutex::new(Vec::new()),
         }
@@ -104,23 +107,29 @@ where
 
         let msg = OutgoingMessage::Request(transport2::Request {
             seq,
-            command,
-            arguments,
+            command: command.clone(),
+            arguments: arguments.clone(),
         });
+
+        tracing::debug!(seq, command, ?arguments, "sending request");
 
         let mut writer = self.writer.lock().await;
         futures::SinkExt::send(&mut *writer, msg)
             .await
             .wrap_err("sending request")?;
 
+        tracing::debug!(seq, "request sent");
+
         Ok(seq)
     }
 
     /// Send a request and wait for the response
+    #[tracing::instrument(skip(self))]
     pub(crate) async fn send_and_wait(
         &self,
         body: requests::RequestBody,
     ) -> eyre::Result<Response> {
+        tracing::debug!("sending request");
         let seq = self.send_request(body).await?;
 
         let (tx, rx) = oneshot::channel();
@@ -129,59 +138,86 @@ where
             pending.insert(seq, tx);
         }
 
+        tracing::debug!(seq, "waiting for response");
+
         // Wait for response with timeout
         let response = tokio::time::timeout(std::time::Duration::from_secs(30), rx)
             .await
             .wrap_err("timeout waiting for response")?
             .wrap_err("response channel closed")?;
 
+        tracing::debug!(seq, success = response.success, "received response");
+
         Ok(response)
     }
 
     /// Handle a response message by forwarding it to the waiting request
     pub(crate) async fn handle_response(&self, response: Response) {
+        tracing::debug!(
+            request_seq = response.request_seq,
+            success = response.success,
+            command = %response.command,
+            message = ?response.message,
+            "handling response"
+        );
         let mut pending = self.pending_requests.lock().await;
         if let Some(tx) = pending.remove(&response.request_seq) {
+            tracing::debug!(
+                request_seq = response.request_seq,
+                "forwarding response to waiter"
+            );
             let _ = tx.send(response);
+        } else {
+            tracing::warn!(
+                request_seq = response.request_seq,
+                "no waiter found for response"
+            );
         }
     }
 
-    /// Handle an event from the debug adapter
-    pub(crate) async fn handle_event(&self, event: &transport2::Event) -> eyre::Result<()> {
+    /// Handle an event from the debug adapter.
+    ///
+    /// This method takes an `Arc<Self>` to allow spawning background tasks
+    /// for heavy event handlers (like `stopped`) that need to make further
+    /// DAP requests without blocking the processor task.
+    pub(crate) async fn handle_event(
+        self_arc: Arc<Self>,
+        event: transport2::Event,
+    ) -> eyre::Result<()> {
         tracing::debug!(?event, "handling event");
 
         match event.event.as_str() {
             "initialized" => {
                 // Signal that initialization is complete
-                let mut initialized_tx = self.initialized_tx.lock().await;
+                let mut initialized_tx = self_arc.initialized_tx.lock().await;
                 if let Some(tx) = initialized_tx.take() {
+                    tracing::debug!("signaling initialized event");
                     let _ = tx.send(());
+                } else {
+                    tracing::warn!("initialized event received but no channel was set up");
                 }
-                let _ = self.event_tx.send(Event::Initialised);
+                let _ = self_arc.event_tx.send(Event::Initialised);
             }
             "stopped" => {
                 let body: transport::events::StoppedEventBody =
                     serde_json::from_value(event.body.clone().unwrap_or_default())
                         .wrap_err("parsing stopped event")?;
 
-                *self.current_thread_id.lock().await = Some(body.thread_id);
-
-                // Fetch full program state
-                let stack = self.fetch_stack_trace(body.thread_id).await?;
-                let paused_frame = self.build_paused_frame(&stack).await?;
-                let breakpoints = self.breakpoints.lock().await;
-
-                let _ = self.event_tx.send(Event::Paused(ProgramState {
-                    stack,
-                    breakpoints: breakpoints.values().cloned().collect(),
-                    paused_frame,
-                }));
+                // Spawn the heavy work (fetching stack trace, scopes, variables)
+                // in a separate task so the processor task can continue processing
+                // incoming messages (including the responses we need).
+                let internals = Arc::clone(&self_arc);
+                tokio::spawn(async move {
+                    if let Err(e) = internals.handle_stopped_event(body).await {
+                        tracing::error!(error = %e, "error handling stopped event");
+                    }
+                });
             }
             "continued" => {
-                let _ = self.event_tx.send(Event::Running);
+                let _ = self_arc.event_tx.send(Event::Running);
             }
             "terminated" => {
-                let _ = self.event_tx.send(Event::Ended);
+                let _ = self_arc.event_tx.send(Event::Ended);
             }
             "output" => {
                 tracing::debug!("output event: {:?}", event.body);
@@ -197,14 +233,47 @@ where
         Ok(())
     }
 
+    /// Handle a stopped event by fetching the full program state.
+    ///
+    /// This is extracted into a separate method so it can be spawned as a
+    /// background task, avoiding deadlock in the processor task.
+    async fn handle_stopped_event(
+        &self,
+        body: transport::events::StoppedEventBody,
+    ) -> eyre::Result<()> {
+        tracing::debug!("locking current thread id");
+        *self.current_thread_id.write().await = Some(body.thread_id);
+
+        // Fetch full program state
+        tracing::debug!(?body.thread_id, "fetching stack trace");
+        let stack = self.fetch_stack_trace(body.thread_id).await?;
+        tracing::debug!("building paused stack frame");
+        let paused_frame = self.build_paused_frame(&stack).await?;
+        tracing::debug!(?paused_frame, "locking breakpoints");
+        let breakpoints = self.breakpoints.read().await;
+
+        tracing::debug!("sending paused event");
+        let _ = self.event_tx.send(Event::Paused(ProgramState {
+            stack,
+            breakpoints: breakpoints.values().cloned().collect(),
+            paused_frame,
+        }));
+
+        Ok(())
+    }
+
     /// Fetch stack trace for a thread
+    #[tracing::instrument(skip(self))]
     async fn fetch_stack_trace(&self, thread_id: ThreadId) -> eyre::Result<Vec<StackFrame>> {
+        tracing::debug!("sending request");
         let response = self
             .send_and_wait(requests::RequestBody::StackTrace(requests::StackTrace {
                 thread_id,
                 ..Default::default()
             }))
             .await?;
+
+        tracing::debug!(?response, "got response");
 
         if !response.success {
             eyre::bail!(
@@ -238,6 +307,8 @@ where
             .find(|f| f.id == frame_id)
             .ok_or_else(|| eyre::eyre!("frame not found"))?;
 
+        tracing::debug!(?frame.id, "fetching scopes");
+
         // Fetch scopes for the frame
         let response = self
             .send_and_wait(requests::RequestBody::Scopes(requests::Scopes {
@@ -246,6 +317,7 @@ where
             .await?;
 
         if !response.success {
+            tracing::warn!(?response, "bad response received");
             return Ok(PausedFrame {
                 frame: frame.clone(),
                 variables: vec![],
@@ -329,7 +401,7 @@ where
         // Add to internal map and collect all breakpoints for this source file
         let source_breakpoints: Vec<SourceBreakpoint>;
         {
-            let mut breakpoints = self.breakpoints.lock().await;
+            let mut breakpoints = self.breakpoints.write().await;
             breakpoints.insert(id, breakpoint.clone());
 
             // Collect all breakpoints for this source file
@@ -377,7 +449,7 @@ where
         // Remove from internal map and get the file path
         let (file_path, source_breakpoints): (std::path::PathBuf, Vec<SourceBreakpoint>);
         {
-            let mut breakpoints = self.breakpoints.lock().await;
+            let mut breakpoints = self.breakpoints.write().await;
 
             // Get the file path before removing
             let removed_bp = breakpoints
@@ -436,13 +508,13 @@ where
     pub(crate) async fn change_scope_async(&self, frame_id: StackFrameId) -> eyre::Result<()> {
         let thread_id = self
             .current_thread_id
-            .lock()
+            .read()
             .await
             .ok_or_else(|| eyre::eyre!("no current thread id"))?;
 
         let stack = self.fetch_stack_trace(thread_id).await?;
         let paused_frame = self.build_paused_frame_for_id(&stack, frame_id).await?;
-        let breakpoints = self.breakpoints.lock().await;
+        let breakpoints = self.breakpoints.read().await;
 
         let _ = self.event_tx.send(Event::ScopeChange(ProgramState {
             stack,
