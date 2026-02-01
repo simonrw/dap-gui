@@ -46,9 +46,9 @@ struct Args {
 
 #[derive(Default, Clone, Copy, PartialEq)]
 enum PanelFocus {
-    #[default]
     CallStack,
     Breakpoints,
+    #[default]
     CodeWindow,
     BottomPanel,
 }
