@@ -106,7 +106,7 @@ impl UiBreakpoint {
 }
 
 struct FileContent {
-    lines: Vec<&'static str>,
+    lines: Vec<String>,
 }
 
 impl PanelFocus {
@@ -132,9 +132,11 @@ impl PanelFocus {
 struct App {
     focus: PanelFocus,
     debug_state: DebugState,
-    files: HashMap<&'static str, FileContent>,
-    current_file: &'static str,
-    /// The path to the current source file (for breakpoint management)
+    /// Cache of loaded file contents, keyed by absolute path
+    file_cache: HashMap<PathBuf, FileContent>,
+    /// Display name of the current file (filename only)
+    current_file: String,
+    /// The path to the current source file (for breakpoint management and loading)
     current_file_path: Option<PathBuf>,
     current_line: usize,
     breakpoints: Vec<UiBreakpoint>,
@@ -151,7 +153,7 @@ struct App {
     command_palette_open: bool,
     command_palette_input: String,
     command_palette_cursor: usize,
-    command_palette_filtered: Vec<&'static str>,
+    command_palette_filtered: Vec<String>,
     // Adding breakpoint mode
     adding_breakpoint: bool,
     new_breakpoint_input: String,
@@ -169,8 +171,8 @@ impl App {
         Self {
             focus: PanelFocus::default(),
             debug_state: DebugState::Stopped,
-            files: HashMap::new(),
-            current_file: "",
+            file_cache: HashMap::new(),
+            current_file: String::new(),
             current_file_path: None,
             current_line: 0,
             breakpoints,
@@ -255,7 +257,7 @@ impl App {
                 self.state_output.push("Debugger initialised".to_string());
             }
             Event::Paused(program_state) => {
-                tracing::warn!(?program_state, "SRW: got paused event");
+                tracing::debug!(?program_state, "got paused event");
                 self.debug_state = DebugState::Stopped;
                 self.state_output.push("Paused".to_string());
 
@@ -274,13 +276,16 @@ impl App {
                 self.current_line = frame.line;
                 self.code_cursor_line = frame.line;
 
-                // Extract the source file path
+                // Extract the source file path and load the file
                 if let Some(ref source) = frame.source {
                     if let Some(ref path) = source.path {
+                        // Load the file into cache if not already loaded
+                        self.load_file(path);
+
                         self.current_file_path = Some(path.clone());
                         // Update display name
                         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                            self.current_file = Box::leak(name.to_string().into_boxed_str());
+                            self.current_file = name.to_string();
                         }
                     }
                 }
@@ -309,15 +314,44 @@ impl App {
         }
     }
 
-    fn get_current_file_lines(&self) -> &[&'static str] {
-        self.files
-            .get(self.current_file)
-            .map(|f| f.lines.as_slice())
-            .unwrap_or(&[])
+    /// Load a file into the cache if not already loaded.
+    /// Returns true if the file was loaded successfully (or was already cached).
+    fn load_file(&mut self, path: &PathBuf) -> bool {
+        if self.file_cache.contains_key(path) {
+            return true;
+        }
+
+        match std::fs::read_to_string(path) {
+            Ok(content) => {
+                let lines: Vec<String> = content.lines().map(String::from).collect();
+                self.file_cache.insert(path.clone(), FileContent { lines });
+                self.state_output
+                    .push(format!("Loaded file: {}", path.display()));
+                true
+            }
+            Err(e) => {
+                self.state_output
+                    .push(format!("Failed to load {}: {}", path.display(), e));
+                false
+            }
+        }
     }
 
-    fn get_file_list(&self) -> Vec<&'static str> {
-        let mut files: Vec<_> = self.files.keys().copied().collect();
+    /// Get the lines of the currently displayed file.
+    fn get_current_file_lines(&self) -> Vec<&str> {
+        self.current_file_path
+            .as_ref()
+            .and_then(|path| self.file_cache.get(path))
+            .map(|f| f.lines.iter().map(String::as_str).collect())
+            .unwrap_or_default()
+    }
+
+    fn get_file_list(&self) -> Vec<String> {
+        let mut files: Vec<_> = self
+            .file_cache
+            .keys()
+            .filter_map(|p| p.file_name().and_then(|n| n.to_str()).map(String::from))
+            .collect();
         files.sort();
         files
     }
@@ -643,11 +677,12 @@ impl App {
                 self.command_palette_open = false;
             }
             KeyCode::Enter => {
-                if let Some(&file) = self
+                if let Some(file) = self
                     .command_palette_filtered
                     .get(self.command_palette_cursor)
+                    .cloned()
                 {
-                    self.current_file = file;
+                    self.current_file = file.clone();
                     self.code_cursor_line = 1;
                     self.state_output.push(format!("Opened file: {}", file));
                 }
@@ -758,8 +793,19 @@ impl App {
             }
             other if other.starts_with("open ") => {
                 let filename = other[5..].trim();
-                if self.files.contains_key(filename) {
-                    self.current_file = self.files.keys().find(|&&k| k == filename).unwrap();
+                // Find a cached file that matches the filename
+                if let Some(path) = self
+                    .file_cache
+                    .keys()
+                    .find(|p| {
+                        p.file_name()
+                            .and_then(|n| n.to_str())
+                            .map_or(false, |n| n == filename)
+                    })
+                    .cloned()
+                {
+                    self.current_file = filename.to_string();
+                    self.current_file_path = Some(path);
                     self.code_cursor_line = 1;
                     format!("Opened file: {}", filename)
                 } else {
@@ -878,7 +924,7 @@ impl App {
             Line::from("-".repeat(palette_width as usize - 2)),
         ];
 
-        for (i, &file) in self.command_palette_filtered.iter().enumerate() {
+        for (i, file) in self.command_palette_filtered.iter().enumerate() {
             let style = if i == self.command_palette_cursor {
                 Style::default().bg(Color::DarkGray).bold()
             } else {
@@ -1053,7 +1099,7 @@ impl App {
         let lines: Vec<Line> = code_lines
             .iter()
             .enumerate()
-            .map(|(idx, &code)| {
+            .map(|(idx, code)| {
                 let line_num = idx + 1;
                 let is_current_exec = line_num == self.current_line;
                 let is_cursor = line_num == self.code_cursor_line && focused;
