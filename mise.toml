@@ -12,4 +12,4 @@ pre-commit = "latest"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
-RUST_LOG = "gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug,pythondap=debug,tui=debug,repl=debug"
+RUST_LOG = "tui-poc=debug,gui=trace,end_to_end=debug,transport=debug,dap_gui_client=debug,debugger=debug,pythondap=debug,tui=debug,repl=debug"
