@@ -40,3 +40,4 @@ result
 .venv
 
 state.json
+dap-gui.log

@@ -1249,10 +1249,16 @@ fn init_tracing(log_path: &PathBuf) -> eyre::Result<()> {
         .with_file(true)
         .with_line_number(true);
 
+    // let console_layer = console_subscriber::spawn();
+    let console_layer = console_subscriber::Builder::default()
+        .server_addr(([127, 0, 0, 1], 6669))
+        .spawn();
+
     // Use RUST_LOG env var for filtering, default to debug
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug"));
 
     tracing_subscriber::registry()
+        .with(console_layer)
         .with(filter)
         .with(file_layer)
         .init();

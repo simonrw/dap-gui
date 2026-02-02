@@ -10,6 +10,7 @@ enum Args {
     Test,
     Doctest,
     InitVenv,
+    TuiPoc,
 }
 
 macro_rules! run {
@@ -69,6 +70,35 @@ fn main() {
         Args::InitVenv => {
             run!("python", "-m", "venv", ".venv");
             run!(".venv/bin/python", "-m", "pip", "install", "debugpy");
+        }
+        Args::TuiPoc => {
+            let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+
+            if !Command::new(cargo)
+                .args([
+                    "run",
+                    "-p",
+                    "tui-poc",
+                    "--",
+                    "--config",
+                    "launch.json",
+                    "--name",
+                    "Launch",
+                    "--state",
+                    "state.json",
+                    "--log",
+                    "dap-gui.log",
+                ])
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .env("RUST_LOG", "debug,tokio=trace,runtime=trace")
+                .output()
+                .unwrap()
+                .status
+                .success()
+            {
+                panic!("command failed");
+            }
         }
     };
 }

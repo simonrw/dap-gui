@@ -8,6 +8,7 @@ uv = "latest"
 "go:github.com/go-delve/delve/cmd/dlv" = "latest"
 pre-commit = "latest"
 "pipx:maturin" = "latest"
+"cargo:tokio-console" = "latest"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
