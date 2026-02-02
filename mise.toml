@@ -9,6 +9,7 @@ uv = "latest"
 pre-commit = "latest"
 "pipx:maturin" = "latest"
 "cargo:tokio-console" = "latest"
+"npm:@fission-ai/openspec" = "latest"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
