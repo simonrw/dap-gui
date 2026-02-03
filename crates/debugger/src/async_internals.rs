@@ -242,7 +242,10 @@ where
         body: transport::events::StoppedEventBody,
     ) -> eyre::Result<()> {
         tracing::debug!("locking current thread id");
-        *self.current_thread_id.write().await = Some(body.thread_id);
+        {
+            // scope to enforce lock drop
+            *self.current_thread_id.write().await = Some(body.thread_id);
+        }
 
         // Fetch full program state
         tracing::debug!(?body.thread_id, "fetching stack trace");
