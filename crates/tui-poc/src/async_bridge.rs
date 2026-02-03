@@ -203,6 +203,7 @@ impl AsyncBridge {
             tokio::select! {
                 // Handle commands from UI
                 Some(cmd) = command_rx.recv() => {
+                    tracing::debug!(command = ?cmd, "received command");
                     let result: eyre::Result<()> = match cmd {
                         UiCommand::Continue => debugger.continue_().await,
                         UiCommand::StepOver => debugger.step_over().await,
@@ -257,7 +258,9 @@ impl AsyncBridge {
     ///
     /// Commands are queued and processed by the background task.
     /// This method never blocks.
+    #[tracing::instrument(skip(self))]
     pub fn send_command(&self, cmd: UiCommand) {
+        tracing::debug!("sending command to debugger");
         let _ = self.command_tx.send(cmd);
     }
 

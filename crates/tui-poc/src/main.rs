@@ -235,7 +235,8 @@ impl App {
                         // Convert to static str for compatibility with existing code
                         // In a real implementation, you'd want to change the type
                         let name: &'static str = Box::leak(v.name.clone().into_boxed_str());
-                        (name, v.value.clone())
+                        let value = v.value.clone().unwrap_or_default();
+                        (name, value)
                     })
                     .collect();
             }

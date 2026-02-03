@@ -304,7 +304,7 @@ impl App {
                             .iter()
                             .map(|v| Variable {
                                 name: v.name.clone(),
-                                value: v.value.clone(),
+                                value: v.value.clone().unwrap_or_default(),
                                 var_type: v.r#type.clone().unwrap_or_default(),
                             })
                             .collect();
@@ -358,7 +358,7 @@ impl App {
                     .iter()
                     .map(|v| Variable {
                         name: v.name.clone(),
-                        value: v.value.clone(),
+                        value: v.value.clone().unwrap_or_default(),
                         var_type: v.r#type.clone().unwrap_or_default(),
                     })
                     .collect();
@@ -397,7 +397,7 @@ impl App {
                     .iter()
                     .map(|v| Variable {
                         name: v.name.clone(),
-                        value: v.value.clone(),
+                        value: v.value.clone().unwrap_or_default(),
                         var_type: v.r#type.clone().unwrap_or_default(),
                     })
                     .collect();
@@ -802,7 +802,8 @@ impl eframe::App for App {
 
                                     for var in &self.ui_state.variables {
                                         ui.label(&var.name);
-                                        ui.label(&var.value);
+                                        let value = var.value.clone();
+                                        ui.label(&value);
                                         ui.label(&var.var_type);
                                         ui.end_row();
                                     }

@@ -11,22 +11,23 @@ use transport::types::Variable;
 
 // TODO: this would be better async
 fn print_var(debugger: &mut Debugger, v: Variable) -> eyre::Result<()> {
-    let span = tracing::debug_span!("print_var", name = %v.name);
-    let _guard = span.enter();
-
-    // TODO: presentation hint
-    if v.variables_reference == 0 {
-        tracing::debug!(name = ?v.name, "got leaf variable");
-        println!(". {} = {}", v.name, v.value);
-    } else {
-        tracing::debug!(vref = %v.variables_reference, "recursing into variable");
-        let vs = debugger.variables(v.variables_reference)?;
-        for vv in vs {
-            tracing::debug!(?vv, "recursing");
-            print_var(debugger, vv.clone())?;
-        }
-    }
-    Ok(())
+    todo!()
+    // let span = tracing::debug_span!("print_var", name = %v.name);
+    // let _guard = span.enter();
+    //
+    // // TODO: presentation hint
+    // if v.variables_reference == 0 {
+    //     tracing::debug!(name = ?v.name, "got leaf variable");
+    //     println!(". {} = {}", v.name, v.value);
+    // } else {
+    //     tracing::debug!(vref = %v.variables_reference, "recursing into variable");
+    //     let vs = debugger.variables(v.variables_reference)?;
+    //     for vv in vs {
+    //         tracing::debug!(?vv, "recursing");
+    //         print_var(debugger, vv.clone())?;
+    //     }
+    // }
+    // Ok(())
 }
 
 struct App {
@@ -168,7 +169,7 @@ impl App {
                     tracing::debug!("printing variable names in scope");
                     for var in &paused_frame.variables {
                         tracing::debug!(?var, "printing variable recursively");
-                        print_var(&mut self.debugger, var.clone()).context("printing variable")?;
+                        // print_var(&mut self.debugger, var.clone()).context("printing variable")?;
                     }
                 } else {
                     println!("???");
@@ -191,7 +192,7 @@ impl App {
                 tracing::debug!("printing variable {}", var_name);
                 if let Some(ProgramState { paused_frame, .. }) = &self.program_description {
                     if let Some(var) = paused_frame.variables.iter().find(|v| v.name == var_name) {
-                        println!(". {} = {}", var.name, var.value);
+                        println!(". {} = {}", var.name, var.value.clone().unwrap_or_default());
                     } else {
                         println!("Variable '{}' not found in current scope", var_name);
                     }

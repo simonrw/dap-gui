@@ -137,10 +137,17 @@ pub struct StackFrame {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(untagged, rename_all = "camelCase")]
+pub enum Attribute {
+    String(String),
+    Array(Vec<String>),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct VariablePresentationHint {
     pub kind: Option<String>,
-    pub attributes: Option<String>,
+    pub attributes: Option<Vec<Attribute>>,
     pub visibility: Option<String>,
     pub lazy: Option<bool>,
 }
@@ -149,9 +156,11 @@ pub struct VariablePresentationHint {
 #[serde(rename_all = "camelCase")]
 pub struct Variable {
     pub name: String,
-    pub value: String,
+    pub value: Option<String>,
+    pub evaluate_name: Option<String>,
     pub r#type: Option<String>,
-    pub variables_reference: VariablesReference,
+    // TODO: I don't think this should be optional
+    pub variables_reference: Option<VariablesReference>,
     pub presentation_hint: Option<VariablePresentationHint>,
 }
 

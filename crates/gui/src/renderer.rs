@@ -185,21 +185,13 @@ impl<'s> Renderer<'s> {
             ui.heading("Variables");
             if show_details {
                 for var in &paused_frame.variables {
+                    let value = var.value.clone().unwrap_or_default();
                     match &var.r#type {
                         Some(t) => {
-                            ui.label(format!(
-                                "{name}: {typ} = {value}",
-                                name = var.name,
-                                typ = t,
-                                value = var.value,
-                            ));
+                            ui.label(format!("{name}: {typ} = {value}", name = var.name, typ = t,));
                         }
                         None => {
-                            ui.label(format!(
-                                "{name} = {value}",
-                                name = var.name,
-                                value = var.value,
-                            ));
+                            ui.label(format!("{name} = {value}", name = var.name,));
                         }
                     }
                 }
