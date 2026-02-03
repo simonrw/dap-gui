@@ -39,5 +39,5 @@ log.log
 result
 .venv
 
-state.json
-dap-gui.log
+/state.json
+/dap-gui.log
