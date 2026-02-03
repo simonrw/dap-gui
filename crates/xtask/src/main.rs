@@ -85,13 +85,13 @@ fn main() {
                     "--name",
                     "Launch",
                     "--state",
-                    "state.json",
+                    "crates/tui-poc/state.json",
                     "--log",
                     "dap-gui.log",
                 ])
+                .stdin(Stdio::inherit())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
-                .env("RUST_LOG", "debug,tokio=trace,runtime=trace")
                 .output()
                 .unwrap()
                 .status
