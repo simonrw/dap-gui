@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
@@ -154,7 +154,10 @@ struct App {
     command_palette_open: bool,
     command_palette_input: String,
     command_palette_cursor: usize,
-    command_palette_filtered: Vec<String>,
+    command_palette_filtered: Vec<fuzzy::FuzzyMatch>,
+    git_files: Vec<fuzzy::TrackedFile>,
+    git_files_loaded: bool,
+    repo_root: Option<PathBuf>,
     // Adding breakpoint mode
     adding_breakpoint: bool,
     new_breakpoint_input: String,
@@ -189,6 +192,9 @@ impl App {
             command_palette_input: String::new(),
             command_palette_cursor: 0,
             command_palette_filtered: Vec::new(),
+            git_files: Vec::new(),
+            git_files_loaded: false,
+            repo_root: None,
             adding_breakpoint: false,
             new_breakpoint_input: String::new(),
             async_bridge,
@@ -359,12 +365,8 @@ impl App {
     }
 
     fn update_filtered_files(&mut self) {
-        let query = self.command_palette_input.to_lowercase();
-        self.command_palette_filtered = self
-            .get_file_list()
-            .into_iter()
-            .filter(|f| f.to_lowercase().contains(&query))
-            .collect();
+        self.command_palette_filtered =
+            fuzzy::fuzzy_filter(&self.git_files, &self.command_palette_input);
         if self.command_palette_cursor >= self.command_palette_filtered.len() {
             self.command_palette_cursor = 0;
         }
@@ -670,7 +672,104 @@ impl App {
         self.command_palette_open = true;
         self.command_palette_input.clear();
         self.command_palette_cursor = 0;
+        if !self.git_files_loaded {
+            self.load_git_files();
+        }
         self.update_filtered_files();
+    }
+
+    fn load_git_files(&mut self) {
+        match fuzzy::find_repo_root() {
+            Some(root) => {
+                self.repo_root = Some(root.clone());
+                match fuzzy::list_git_files(&root) {
+                    Ok(files) => {
+                        self.git_files = files;
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Failed to list git files");
+                        self.git_files = Vec::new();
+                    }
+                }
+            }
+            None => {
+                tracing::info!("Not in a git repository");
+                self.repo_root = None;
+                self.git_files = Vec::new();
+            }
+        }
+        self.git_files_loaded = true;
+    }
+
+    fn select_command_palette_item(&mut self) {
+        if let Some(matched) = self
+            .command_palette_filtered
+            .get(self.command_palette_cursor)
+            .cloned()
+        {
+            let path = matched.file.absolute_path.clone();
+            if self.load_file(&path) {
+                self.current_file_path = Some(path);
+                self.current_file = matched.file.relative_path.to_string_lossy().to_string();
+                self.code_cursor_line = 1;
+                self.state_output
+                    .push(format!("Opened file: {}", self.current_file));
+            } else {
+                self.state_output
+                    .push(format!("Could not open: {}", path.display()));
+            }
+        }
+        self.command_palette_open = false;
+    }
+
+    fn get_match_display(&self, matched: &fuzzy::FuzzyMatch) -> String {
+        matched.file.relative_path.display().to_string()
+    }
+
+    fn highlight_matches(&self, text: &str, indices: &[usize], selected: bool) -> Line<'static> {
+        let base_style = if selected {
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+        let highlight_style = base_style.fg(Color::Yellow).add_modifier(Modifier::BOLD);
+        let index_set: HashSet<usize> = indices.iter().copied().collect();
+        let mut spans: Vec<Span<'static>> = Vec::new();
+        let mut current = String::new();
+
+        for (idx, ch) in text.char_indices() {
+            if index_set.contains(&idx) {
+                if !current.is_empty() {
+                    spans.push(Span::styled(current.clone(), base_style));
+                    current.clear();
+                }
+                let mut highlighted = String::new();
+                highlighted.push(ch);
+                spans.push(Span::styled(highlighted, highlight_style));
+            } else {
+                current.push(ch);
+            }
+        }
+
+        if !current.is_empty() {
+            spans.push(Span::styled(current, base_style));
+        }
+
+        Line::from(spans)
+    }
+
+    fn command_palette_empty_message(&self) -> String {
+        if !self.git_files_loaded {
+            "Loading git files...".to_string()
+        } else if self.repo_root.is_none() {
+            "Not in a git repository".to_string()
+        } else if self.git_files.is_empty() {
+            "No files tracked by git".to_string()
+        } else {
+            format!("No matches for: {}", self.command_palette_input)
+        }
     }
 
     fn handle_command_palette_input(&mut self, code: KeyCode) -> io::Result<()> {
@@ -679,16 +778,7 @@ impl App {
                 self.command_palette_open = false;
             }
             KeyCode::Enter => {
-                if let Some(file) = self
-                    .command_palette_filtered
-                    .get(self.command_palette_cursor)
-                    .cloned()
-                {
-                    self.current_file = file.clone();
-                    self.code_cursor_line = 1;
-                    self.state_output.push(format!("Opened file: {}", file));
-                }
-                self.command_palette_open = false;
+                self.select_command_palette_item();
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 if !self.command_palette_filtered.is_empty() {
@@ -926,21 +1016,37 @@ impl App {
             Line::from("-".repeat(palette_width as usize - 2)),
         ];
 
-        for (i, file) in self.command_palette_filtered.iter().enumerate() {
-            let style = if i == self.command_palette_cursor {
-                Style::default().bg(Color::DarkGray).bold()
-            } else {
-                Style::default()
-            };
-            let prefix = if i == self.command_palette_cursor {
-                "> "
-            } else {
-                "  "
-            };
+        if self.command_palette_filtered.is_empty() {
+            let message = self.command_palette_empty_message();
             lines.push(Line::from(Span::styled(
-                format!("{}{}", prefix, file),
-                style,
+                message,
+                Style::default().fg(Color::DarkGray),
             )));
+        } else {
+            for (i, matched) in self.command_palette_filtered.iter().enumerate() {
+                let prefix = if i == self.command_palette_cursor {
+                    "> "
+                } else {
+                    "  "
+                };
+                let selected = i == self.command_palette_cursor;
+                let display = self.get_match_display(matched);
+                let mut line = self.highlight_matches(&display, &matched.matched_indices, selected);
+                line.spans.insert(
+                    0,
+                    Span::styled(
+                        prefix,
+                        if selected {
+                            Style::default()
+                                .bg(Color::DarkGray)
+                                .add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default()
+                        },
+                    ),
+                );
+                lines.push(line);
+            }
         }
 
         frame.render_widget(

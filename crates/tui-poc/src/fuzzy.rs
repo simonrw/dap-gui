@@ -95,15 +95,31 @@ pub fn fuzzy_filter(files: &[TrackedFile], query: &str) -> Vec<FuzzyMatch> {
     let mut matcher = Matcher::new(Config::DEFAULT);
     let mut matches = Vec::new();
 
+    // Allocate buffers for conversion to utf32
+    let mut haystack_buf = Vec::new();
+    let mut needle_buf = Vec::new();
+
     for file in files {
         let path_str = file.relative_path.to_string_lossy();
-        if let Some(score) = matcher.fuzzy_match(&path_str, query) {
-            let indices = matcher.fuzzy_indices(&path_str, query).unwrap_or_default();
+
+        haystack_buf.clear();
+        let haystack = nucleo_matcher::Utf32Str::new(&path_str, &mut haystack_buf);
+
+        needle_buf.clear();
+        let needle = nucleo_matcher::Utf32Str::new(query, &mut needle_buf);
+
+        if let Some(score) = matcher.fuzzy_match(haystack, needle) {
             if score > 0 {
+                let mut indices = Vec::new();
+                matcher.fuzzy_indices(haystack, needle, &mut indices);
+
+                // Convert u32 indices to usize for matched_indices
+                let matched_indices = indices.iter().map(|&i| i as usize).collect();
+
                 matches.push(FuzzyMatch {
                     file: file.clone(),
                     score: score as i64,
-                    matched_indices: indices,
+                    matched_indices,
                 });
             }
         }

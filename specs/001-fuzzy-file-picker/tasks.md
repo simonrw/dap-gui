@@ -58,18 +58,18 @@ Repository uses Rust workspace with multi-crate architecture:
 
 ### Implementation for User Story 1
 
-- [ ] T011 [P] [US1] Add git_files field (Vec<TrackedFile>) to App struct in crates/tui-poc/src/main.rs
-- [ ] T012 [P] [US1] Add git_files_loaded field (bool) to App struct in crates/tui-poc/src/main.rs
-- [ ] T013 [P] [US1] Add repo_root field (Option<PathBuf>) to App struct in crates/tui-poc/src/main.rs
-- [ ] T014 [US1] Change command_palette_filtered type from Vec<String> to Vec<FuzzyMatch> in crates/tui-poc/src/main.rs
-- [ ] T015 [US1] Implement load_git_files() method in App impl in crates/tui-poc/src/main.rs
-- [ ] T016 [US1] Modify open_command_palette() to call load_git_files() if not loaded in crates/tui-poc/src/main.rs
-- [ ] T017 [US1] Replace update_filtered_files() implementation to use fuzzy::fuzzy_filter in crates/tui-poc/src/main.rs
-- [ ] T018 [US1] Modify select_command_palette_item() to use FuzzyMatch and absolute paths in crates/tui-poc/src/main.rs
-- [ ] T019 [US1] Add error handling for file not found in select_command_palette_item in crates/tui-poc/src/main.rs
-- [ ] T020 [US1] Update command palette rendering to display relative paths in crates/tui-poc/src/main.rs
-- [ ] T021 [US1] Implement match highlighting in palette item rendering in crates/tui-poc/src/main.rs
-- [ ] T022 [US1] Add empty state messages (no git repo, no matches, etc.) in crates/tui-poc/src/main.rs
+- [X] T011 [P] [US1] Add git_files field (Vec<TrackedFile>) to App struct in crates/tui-poc/src/main.rs
+- [X] T012 [P] [US1] Add git_files_loaded field (bool) to App struct in crates/tui-poc/src/main.rs
+- [X] T013 [P] [US1] Add repo_root field (Option<PathBuf>) to App struct in crates/tui-poc/src/main.rs
+- [X] T014 [US1] Change command_palette_filtered type from Vec<String> to Vec<FuzzyMatch> in crates/tui-poc/src/main.rs
+- [X] T015 [US1] Implement load_git_files() method in App impl in crates/tui-poc/src/main.rs
+- [X] T016 [US1] Modify open_command_palette() to call load_git_files() if not loaded in crates/tui-poc/src/main.rs
+- [X] T017 [US1] Replace update_filtered_files() implementation to use fuzzy::fuzzy_filter in crates/tui-poc/src/main.rs
+- [X] T018 [US1] Modify select_command_palette_item() to use FuzzyMatch and absolute paths in crates/tui-poc/src/main.rs
+- [X] T019 [US1] Add error handling for file not found in select_command_palette_item in crates/tui-poc/src/main.rs
+- [X] T020 [US1] Update command palette rendering to display relative paths in crates/tui-poc/src/main.rs
+- [X] T021 [US1] Implement match highlighting in palette item rendering in crates/tui-poc/src/main.rs
+- [X] T022 [US1] Add empty state messages (no git repo, no matches, etc.) in crates/tui-poc/src/main.rs
 
 **Checkpoint**: At this point, User Story 1 should be fully functional - can fuzzy find and open any Git-tracked file
 
