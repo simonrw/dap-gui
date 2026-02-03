@@ -319,13 +319,7 @@ where
             }))
             .await?;
 
-        if !response.success {
-            tracing::warn!(?response, "bad response received");
-            return Ok(PausedFrame {
-                frame: frame.clone(),
-                variables: vec![],
-            });
-        }
+        eyre::ensure!(response.success, "bad response received: {response:?}");
 
         let scopes_body: responses::ScopesResponse =
             serde_json::from_value(response.body.unwrap_or_default())
@@ -352,9 +346,7 @@ where
             }))
             .await?;
 
-        if !response.success {
-            return Ok(vec![]);
-        }
+        eyre::ensure!(response.success, "variables request failed");
 
         let body: responses::VariablesResponse =
             serde_json::from_value(response.body.unwrap_or_default())
