@@ -41,3 +41,18 @@ result
 
 state.json
 dap-gui.log
+
+# Rust + universal ignores
+debug/
+release/
+*.rs.bk
+*.rlib
+*.prof*
+*.log
+.env*
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp

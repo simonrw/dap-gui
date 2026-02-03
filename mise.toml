@@ -9,6 +9,7 @@ uv = "latest"
 pre-commit = "latest"
 "pipx:maturin" = "latest"
 "cargo:tokio-console" = "latest"
+"pipx:git+https://github.com/github/spec-kit.git" = "latest"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
