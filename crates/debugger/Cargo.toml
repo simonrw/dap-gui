@@ -16,7 +16,7 @@ transport = { path = "../transport" }
 transport2 = { path = "../transport2" }
 tokio = { version = "1.48", features = ["sync", "rt", "macros"] }
 tokio-util.workspace = true
-tokio-stream = "0.1.12"
+tokio-stream = "0.1.16"
 futures = "0.3.31"
 retry = "2.1.0"
 dirs.workspace = true
