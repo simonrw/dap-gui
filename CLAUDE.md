@@ -182,3 +182,10 @@ Minimum Supported Rust Version: **1.72.0**
 # Code Generation Rules
 - IMPORTANT: Under NO circumstances should you ever use emoji characters in your responses or in any code you generate.
 - Never use emojis in documentation, comments, or commit messages.
+
+## Active Technologies
+- Rust 2024 edition, MSRV 1.72.0 + ratatui 0.30.0, crossterm 0.29.0, tokio 1.48, serde/serde_json (001-fuzzy-file-picker)
+- JSON file via state crate (~/.config/dap-tui/state.json or --state argument) (001-fuzzy-file-picker)
+
+## Recent Changes
+- 001-fuzzy-file-picker: Added Rust 2024 edition, MSRV 1.72.0 + ratatui 0.30.0, crossterm 0.29.0, tokio 1.48, serde/serde_json
