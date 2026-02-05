@@ -117,10 +117,10 @@ Repository uses Rust workspace with multi-crate architecture:
 
 **Purpose**: Final quality checks and validation
 
-- [ ] T033 [P] Run cargo fmt on all modified files
-- [ ] T034 [P] Run cargo clippy and fix any warnings
-- [ ] T035 Run cargo build to verify compilation
-- [ ] T036 Run cargo nextest run -p tui-poc to verify tests pass
+- [X] T033 [P] Run cargo fmt on all modified files
+- [X] T034 [P] Run cargo clippy and fix any warnings (only warnings in other crates)
+- [X] T035 Run cargo build to verify compilation
+- [X] T036 Run cargo nextest run -p tui-poc to verify tests pass (no tests exist)
 - [ ] T037 Manual validation following quickstart.md scenarios
 - [ ] T038 Verify performance targets (<100ms filter, <500ms palette open for 50k files)
 - [ ] T039 Test edge cases from spec.md (no git repo, deleted files, corrupted state)
