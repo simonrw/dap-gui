@@ -85,9 +85,9 @@ Repository uses Rust workspace with multi-crate architecture:
 
 ### Implementation for User Story 2
 
-- [ ] T023 [US2] Verify breakpoint toggle ('b' key) works in files opened via fuzzy finder in crates/tui-poc/src/main.rs
-- [ ] T024 [US2] Verify breakpoint markers display correctly in code view margin for fuzzy-opened files in crates/tui-poc/src/main.rs
-- [ ] T025 [US2] Verify breakpoints panel shows correct file paths for fuzzy-opened files in crates/tui-poc/src/main.rs
+- [X] T023 [US2] Verify breakpoint toggle ('b' key) works in files opened via fuzzy finder in crates/tui-poc/src/main.rs
+- [X] T024 [US2] Verify breakpoint markers display correctly in code view margin for fuzzy-opened files in crates/tui-poc/src/main.rs
+- [X] T025 [US2] Verify breakpoints panel shows correct file paths for fuzzy-opened files in crates/tui-poc/src/main.rs
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently - can find files and place breakpoints
 
@@ -101,13 +101,13 @@ Repository uses Rust workspace with multi-crate architecture:
 
 ### Implementation for User Story 3
 
-- [ ] T026 [P] [US3] Add state_path field (PathBuf) to App struct in crates/tui-poc/src/main.rs
-- [ ] T027 [US3] Implement breakpoints_for_persistence() method in App impl in crates/tui-poc/src/main.rs
-- [ ] T028 [US3] Implement save_breakpoints() method in App impl in crates/tui-poc/src/main.rs
-- [ ] T029 [US3] Add save_breakpoints() call after breakpoint add in crates/tui-poc/src/main.rs
-- [ ] T030 [US3] Add save_breakpoints() call after breakpoint remove in crates/tui-poc/src/main.rs
-- [ ] T031 [US3] Verify state file format matches existing Persistence schema in crates/state/src/lib.rs
-- [ ] T032 [US3] Add error logging for save failures (non-fatal) in crates/tui-poc/src/main.rs
+- [X] T026 [P] [US3] Add state_path field (PathBuf) to App struct in crates/tui-poc/src/main.rs
+- [X] T027 [US3] Implement breakpoints_for_persistence() method in App impl in crates/tui-poc/src/main.rs
+- [X] T028 [US3] Implement save_breakpoints() method in App impl in crates/tui-poc/src/main.rs
+- [X] T029 [US3] Add save_breakpoints() call after breakpoint add in crates/tui-poc/src/main.rs
+- [X] T030 [US3] Add save_breakpoints() call after breakpoint remove in crates/tui-poc/src/main.rs
+- [X] T031 [US3] Verify state file format matches existing Persistence schema in crates/state/src/lib.rs
+- [X] T032 [US3] Add error logging for save failures (non-fatal) in crates/tui-poc/src/main.rs
 
 **Checkpoint**: All user stories should now be independently functional - complete feature implementation
 

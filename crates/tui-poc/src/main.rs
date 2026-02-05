@@ -161,12 +161,18 @@ struct App {
     // Adding breakpoint mode
     adding_breakpoint: bool,
     new_breakpoint_input: String,
+    // State persistence
+    state_path: PathBuf,
     // Async bridge for debugger communication
     async_bridge: AsyncBridge,
 }
 
 impl App {
-    fn new(async_bridge: AsyncBridge, initial_breakpoints: Vec<debugger::Breakpoint>) -> Self {
+    fn new(
+        async_bridge: AsyncBridge,
+        initial_breakpoints: Vec<debugger::Breakpoint>,
+        state_path: PathBuf,
+    ) -> Self {
         let breakpoints: Vec<UiBreakpoint> = initial_breakpoints
             .iter()
             .map(UiBreakpoint::from_debugger_breakpoint)
@@ -197,6 +203,7 @@ impl App {
             repo_root: None,
             adding_breakpoint: false,
             new_breakpoint_input: String::new(),
+            state_path,
             async_bridge,
         }
     }
@@ -491,6 +498,7 @@ impl App {
                     {
                         self.breakpoint_cursor = self.breakpoints.len().saturating_sub(1);
                     }
+                    self.save_breakpoints();
                 }
             }
             _ => {}
@@ -527,6 +535,7 @@ impl App {
                                 .unwrap_or(0);
                             self.state_output
                                 .push(format!("Added breakpoint at line {}", line));
+                            self.save_breakpoints();
                         } else {
                             self.state_output
                                 .push(format!("Breakpoint already exists at line {}", line));
@@ -589,6 +598,7 @@ impl App {
                         }
                         self.state_output
                             .push(format!("Removed breakpoint at line {}", line));
+                        self.save_breakpoints();
                     } else {
                         let bp = UiBreakpoint::new(path, line);
                         // Send to debugger
@@ -598,6 +608,7 @@ impl App {
                         self.breakpoints.sort_by_key(|bp| bp.line);
                         self.state_output
                             .push(format!("Added breakpoint at line {}", line));
+                        self.save_breakpoints();
                     }
                 } else {
                     self.state_output.push("No file selected".to_string());
@@ -856,6 +867,7 @@ impl App {
                             ));
                             self.breakpoints.push(bp);
                             self.breakpoints.sort_by_key(|bp| bp.line);
+                            self.save_breakpoints();
                             format!("Breakpoint set at line {}", n)
                         } else {
                             format!("Breakpoint already exists at line {}", n)
@@ -875,6 +887,7 @@ impl App {
                             self.async_bridge
                                 .send_command(UiCommand::RemoveBreakpoint(id));
                         }
+                        self.save_breakpoints();
                         format!("Breakpoint cleared at line {}", n)
                     } else {
                         format!("No breakpoint at line {}", n)
@@ -936,6 +949,45 @@ impl App {
         self.async_bridge.send_command(UiCommand::Continue);
         self.debug_state = DebugState::Running;
         self.state_output.push("Continuing...".to_string());
+    }
+
+    /// Convert UI breakpoints to debugger breakpoints for persistence.
+    /// Only persists enabled breakpoints.
+    fn breakpoints_for_persistence(&self) -> Vec<debugger::Breakpoint> {
+        self.breakpoints
+            .iter()
+            .filter(|bp| bp.enabled)
+            .map(|bp| debugger::Breakpoint {
+                name: None,
+                path: bp.path.clone(),
+                line: bp.line,
+            })
+            .collect()
+    }
+
+    /// Save current breakpoints to the state file.
+    /// Errors are logged but do not interrupt operation.
+    fn save_breakpoints(&self) {
+        let breakpoints = self.breakpoints_for_persistence();
+
+        // Use the current working directory or repo root as the project path
+        let project_path = self
+            .repo_root
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."));
+
+        let persistence = state::Persistence {
+            version: "0.1.0".to_string(),
+            projects: vec![state::PerFile {
+                path: project_path,
+                breakpoints,
+            }],
+        };
+
+        if let Err(e) = state::save_to(&persistence, &self.state_path) {
+            tracing::warn!(error = %e, path = %self.state_path.display(), "Failed to save breakpoints");
+        }
     }
 
     fn draw(&self, frame: &mut Frame) {
@@ -1479,7 +1531,7 @@ fn main() -> eyre::Result<()> {
     // Create the async bridge with initial breakpoints
     let async_bridge =
         AsyncBridge::with_breakpoints(args.port, init_args, initial_breakpoints.clone())?;
-    let mut app = App::new(async_bridge, initial_breakpoints);
+    let mut app = App::new(async_bridge, initial_breakpoints, state_path);
 
     let mut terminal = ratatui::init();
     let result = app.run(&mut terminal);
