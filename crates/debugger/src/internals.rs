@@ -127,6 +127,8 @@ impl DebuggerInternals {
         Self::with_breakpoints(connection, publisher, message_rx, HashMap::new(), server)
     }
 
+    /// Legacy constructor - use from_split_connection_no_channel instead
+    #[allow(dead_code)]
     pub(crate) fn from_split_connection(
         writer: Arc<Mutex<Box<dyn Write + Send>>>,
         sequence_number: Arc<AtomicI64>,
@@ -148,7 +150,6 @@ impl DebuggerInternals {
     ///
     /// This is used when the background thread owns the reader directly
     /// and doesn't need the message_rx channel.
-    #[allow(dead_code)] // Used in PR 2b
     pub(crate) fn from_split_connection_no_channel(
         writer: Arc<Mutex<Box<dyn Write + Send>>>,
         sequence_number: Arc<AtomicI64>,
@@ -171,7 +172,6 @@ impl DebuggerInternals {
     ///
     /// This sends the request but doesn't wait for a response. The caller
     /// is responsible for tracking the sequence number and matching responses.
-    #[allow(dead_code)] // Used in PR 2b
     pub(crate) fn send_request(&mut self, body: requests::RequestBody) -> eyre::Result<i64> {
         tracing::debug!(?body, "internals.send_request called");
 
