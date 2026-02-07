@@ -481,6 +481,7 @@ impl App {
                     self.state_output
                         .push(format!("Breakpoint at line {} {}", bp.line, status));
                 }
+                self.save_breakpoints();
             }
             KeyCode::Char('a') => {
                 // Add new breakpoint
@@ -977,13 +978,26 @@ impl App {
             .or_else(|| std::env::current_dir().ok())
             .unwrap_or_else(|| PathBuf::from("."));
 
-        let persistence = state::Persistence {
-            version: "0.1.0".to_string(),
-            projects: vec![state::PerFile {
+        // Load existing state so we don't overwrite other projects
+        let mut persistence =
+            state::load_from(&self.state_path).unwrap_or_else(|_| state::Persistence {
+                version: "0.1.0".to_string(),
+                projects: Vec::new(),
+            });
+
+        // Find existing entry for this project and update it, or add a new one
+        if let Some(entry) = persistence
+            .projects
+            .iter_mut()
+            .find(|p| p.path == project_path)
+        {
+            entry.breakpoints = breakpoints;
+        } else {
+            persistence.projects.push(state::PerFile {
                 path: project_path,
                 breakpoints,
-            }],
-        };
+            });
+        }
 
         if let Err(e) = state::save_to(&persistence, &self.state_path) {
             tracing::warn!(error = %e, path = %self.state_path.display(), "Failed to save breakpoints");
