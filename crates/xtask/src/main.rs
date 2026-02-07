@@ -11,6 +11,7 @@ enum Args {
     Doctest,
     InitVenv,
     TuiPoc,
+    Clippy,
 }
 
 macro_rules! run {
@@ -89,6 +90,21 @@ fn main() {
                     "--log",
                     "dap-gui.log",
                 ])
+                .stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .output()
+                .unwrap()
+                .status
+                .success()
+            {
+                panic!("command failed");
+            }
+        }
+        Args::Clippy => {
+            let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+            if !Command::new(cargo)
+                .args(["clippy", "--all-targets", "--all-features"])
                 .stdin(Stdio::inherit())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())

@@ -39,5 +39,20 @@ log.log
 result
 .venv
 
-/state.json
+.DS_Store
+.env*
+.idea/
+.vscode/
+*.log
+*.prof*
+*.rlib
+*.rs.bk
+*.swp
+*.tmp
 /dap-gui.log
+/state.json
+dap-gui.log
+debug/
+release/
+state.json
+Thumbs.db
