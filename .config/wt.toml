@@ -1,0 +1,16 @@
+[post-create]
+mise = "mise trust ."
+tmux = """
+S={{ branch | sanitize }}
+W={{ worktree_path }}
+
+tmux new-session -d -s "$S" -c "$W" -n dev
+echo "✓ Session '$S' — attach with: tmux attach -t $S"
+"""
+python = """
+uv venv --seed
+uv pip install debugpy
+"""
+
+[pre-remove]
+tmux = "tmux kill-session -t {{ branch | sanitize }} 2>/dev/null || true"
