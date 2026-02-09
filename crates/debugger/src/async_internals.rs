@@ -586,3 +586,448 @@ where
         function_breakpoints.clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::*;
+    use serde_json::json;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    /// Create an AsyncDebuggerInternals connected to a MockAdapter for testing.
+    /// Returns (internals, mock_adapter, event_rx).
+    ///
+    /// This also spawns a background task that reads from the client reader and
+    /// forwards responses/events to the internals, mimicking the processor task
+    /// in `AsyncDebugger`.
+    fn setup() -> (
+        Arc<AsyncDebuggerInternals<tokio::io::DuplexStream>>,
+        MockAdapter,
+        mpsc::UnboundedReceiver<Event>,
+    ) {
+        let (client_reader, client_writer, adapter_reader, adapter_writer) =
+            create_test_transports();
+        let mock = MockAdapter::new(adapter_reader, adapter_writer);
+
+        let (event_tx, event_rx) = mpsc::unbounded_channel();
+        let internals = Arc::new(AsyncDebuggerInternals::new(client_writer, event_tx));
+
+        // Spawn a processor task that reads responses from the client reader
+        // and delivers them to the internals, just like AsyncDebugger does.
+        let internals_for_reader = Arc::clone(&internals);
+        tokio::spawn(async move {
+            use futures::StreamExt;
+            let mut reader = client_reader;
+            while let Some(Ok(msg)) = reader.next().await {
+                match msg {
+                    transport2::Message::Response(response) => {
+                        internals_for_reader.handle_response(response).await;
+                    }
+                    transport2::Message::Event(event) => {
+                        let _ = AsyncDebuggerInternals::handle_event(
+                            Arc::clone(&internals_for_reader),
+                            event,
+                        )
+                        .await;
+                    }
+                    _ => {}
+                }
+            }
+        });
+
+        (internals, mock, event_rx)
+    }
+
+    #[tokio::test]
+    async fn handle_response_forwards_to_waiter() {
+        let (internals, _, _event_rx) = setup();
+
+        // Insert a pending request
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        {
+            let mut pending = internals.pending_requests.lock().await;
+            pending.insert(42, tx);
+        }
+
+        let response = transport2::Response {
+            seq: 1,
+            request_seq: 42,
+            success: true,
+            command: "stackTrace".to_string(),
+            message: None,
+            body: None,
+        };
+
+        internals.handle_response(response).await;
+
+        let received = rx.await.unwrap();
+        assert_eq!(received.request_seq, 42);
+        assert!(received.success);
+    }
+
+    #[tokio::test]
+    async fn handle_response_orphaned_response() {
+        let (internals, _, _event_rx) = setup();
+
+        // No pending requests — should not panic
+        let response = transport2::Response {
+            seq: 1,
+            request_seq: 999,
+            success: true,
+            command: "threads".to_string(),
+            message: None,
+            body: None,
+        };
+
+        internals.handle_response(response).await;
+
+        // Verify pending map is still empty
+        let pending = internals.pending_requests.lock().await;
+        assert_eq!(pending.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn handle_event_initialized() {
+        let (internals, _, mut event_rx) = setup();
+
+        let (tx, _rx) = tokio::sync::oneshot::channel();
+        internals.set_initialized_channel(tx).await;
+
+        let event = transport2::Event {
+            seq: 1,
+            event: "initialized".to_string(),
+            body: None,
+        };
+
+        AsyncDebuggerInternals::handle_event(internals, event)
+            .await
+            .unwrap();
+
+        let evt = event_rx.recv().await.unwrap();
+        assert!(matches!(evt, Event::Initialised));
+    }
+
+    #[tokio::test]
+    async fn handle_event_continued() {
+        let (internals, _, mut event_rx) = setup();
+
+        let event = transport2::Event {
+            seq: 1,
+            event: "continued".to_string(),
+            body: Some(json!({"threadId": 1})),
+        };
+
+        AsyncDebuggerInternals::handle_event(internals, event)
+            .await
+            .unwrap();
+
+        let evt = event_rx.recv().await.unwrap();
+        assert!(matches!(evt, Event::Running));
+    }
+
+    #[tokio::test]
+    async fn handle_event_terminated() {
+        let (internals, _, mut event_rx) = setup();
+
+        let event = transport2::Event {
+            seq: 1,
+            event: "terminated".to_string(),
+            body: None,
+        };
+
+        AsyncDebuggerInternals::handle_event(internals, event)
+            .await
+            .unwrap();
+
+        let evt = event_rx.recv().await.unwrap();
+        assert!(matches!(evt, Event::Ended));
+    }
+
+    #[tokio::test]
+    async fn handle_event_unknown_does_not_error() {
+        let (internals, _, _event_rx) = setup();
+
+        let event = transport2::Event {
+            seq: 1,
+            event: "customUnknownEvent".to_string(),
+            body: None,
+        };
+
+        // Should not error on unknown events
+        let result = AsyncDebuggerInternals::handle_event(internals, event).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn evaluate_async_success() {
+        let (internals, mock, _event_rx) = setup();
+
+        let internals_clone = Arc::clone(&internals);
+        let eval_handle =
+            tokio::spawn(async move { internals_clone.evaluate_async("1 + 1", 1).await });
+
+        // Expect the evaluate request
+        let req = mock.expect_request("evaluate").await;
+        mock.send_evaluate_response(req.seq, "2").await;
+
+        let result = eval_handle.await.unwrap().unwrap();
+        assert_eq!(result.output, "2");
+        assert!(!result.error);
+    }
+
+    #[tokio::test]
+    async fn evaluate_async_error_response() {
+        let (internals, mock, _event_rx) = setup();
+
+        let internals_clone = Arc::clone(&internals);
+        let eval_handle =
+            tokio::spawn(async move { internals_clone.evaluate_async("bad_var", 1).await });
+
+        let req = mock.expect_request("evaluate").await;
+        mock.send_error_response(req.seq, "NameError: name 'bad_var' is not defined")
+            .await;
+
+        let result = eval_handle.await.unwrap().unwrap();
+        assert!(result.error);
+        assert!(result.output.contains("NameError"));
+    }
+
+    #[tokio::test]
+    async fn add_breakpoint_sends_set_breakpoints() {
+        let (internals, mock, _event_rx) = setup();
+
+        let bp = Breakpoint {
+            name: None,
+            path: PathBuf::from("/tmp/test.py"),
+            line: 10,
+        };
+
+        let internals_clone = Arc::clone(&internals);
+        let bp_clone = bp.clone();
+        let add_handle =
+            tokio::spawn(async move { internals_clone.add_breakpoint_async(&bp_clone).await });
+
+        let req = mock.expect_request("setBreakpoints").await;
+        mock.send_success_response(req.seq, Some(json!({"breakpoints": [{"verified": true}]})))
+            .await;
+
+        let id = add_handle.await.unwrap().unwrap();
+
+        // Verify breakpoint was stored
+        let breakpoints = internals.breakpoints.read().await;
+        assert_eq!(breakpoints.len(), 1);
+        assert!(breakpoints.contains_key(&id));
+        assert_eq!(breakpoints[&id].line, 10);
+    }
+
+    #[tokio::test]
+    async fn add_and_remove_breakpoint() {
+        let (internals, mock, _event_rx) = setup();
+
+        let bp = Breakpoint {
+            name: None,
+            path: PathBuf::from("/tmp/test.py"),
+            line: 10,
+        };
+
+        // Add breakpoint
+        let internals_clone = Arc::clone(&internals);
+        let bp_clone = bp.clone();
+        let add_handle =
+            tokio::spawn(async move { internals_clone.add_breakpoint_async(&bp_clone).await });
+
+        let req = mock.expect_request("setBreakpoints").await;
+        mock.send_success_response(req.seq, Some(json!({"breakpoints": [{"verified": true}]})))
+            .await;
+
+        let id = add_handle.await.unwrap().unwrap();
+
+        // Remove breakpoint
+        let internals_clone = Arc::clone(&internals);
+        let remove_handle =
+            tokio::spawn(async move { internals_clone.remove_breakpoint_async(id).await });
+
+        let req = mock.expect_request("setBreakpoints").await;
+        mock.send_success_response(req.seq, Some(json!({"breakpoints": []})))
+            .await;
+
+        remove_handle.await.unwrap().unwrap();
+
+        let breakpoints = internals.breakpoints.read().await;
+        assert_eq!(breakpoints.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn remove_nonexistent_breakpoint_errors() {
+        let (internals, _mock, _event_rx) = setup();
+
+        let result = internals.remove_breakpoint_async(999).await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("breakpoint not found")
+        );
+    }
+
+    #[tokio::test]
+    async fn add_function_breakpoint() {
+        let (internals, mock, _event_rx) = setup();
+
+        let internals_clone = Arc::clone(&internals);
+        let handle = tokio::spawn(async move {
+            internals_clone
+                .add_function_breakpoint_async("main".to_string())
+                .await
+        });
+
+        let req = mock.expect_request("setFunctionBreakpoints").await;
+        mock.send_success_response(req.seq, Some(json!({"breakpoints": [{"verified": true}]})))
+            .await;
+
+        handle.await.unwrap().unwrap();
+
+        let fbs = internals.function_breakpoints_async().await;
+        assert_eq!(fbs, vec!["main"]);
+    }
+
+    #[tokio::test]
+    async fn remove_function_breakpoint() {
+        let (internals, mock, _event_rx) = setup();
+
+        // Add first
+        let internals_clone = Arc::clone(&internals);
+        let handle = tokio::spawn(async move {
+            internals_clone
+                .add_function_breakpoint_async("main".to_string())
+                .await
+        });
+        let req = mock.expect_request("setFunctionBreakpoints").await;
+        mock.send_success_response(req.seq, Some(json!({"breakpoints": []})))
+            .await;
+        handle.await.unwrap().unwrap();
+
+        // Remove
+        let internals_clone = Arc::clone(&internals);
+        let handle = tokio::spawn(async move {
+            internals_clone
+                .remove_function_breakpoint_async("main")
+                .await
+        });
+        let req = mock.expect_request("setFunctionBreakpoints").await;
+        mock.send_success_response(req.seq, Some(json!({"breakpoints": []})))
+            .await;
+        handle.await.unwrap().unwrap();
+
+        let fbs = internals.function_breakpoints_async().await;
+        assert!(fbs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn send_and_wait_receives_response() {
+        let (internals, mock, _event_rx) = setup();
+
+        let internals_clone = Arc::clone(&internals);
+        let handle = tokio::spawn(async move {
+            internals_clone
+                .send_and_wait(transport::requests::RequestBody::Threads)
+                .await
+        });
+
+        let req = mock.expect_request("threads").await;
+        mock.send_success_response(
+            req.seq,
+            Some(json!({"threads": [{"id": 1, "name": "main"}]})),
+        )
+        .await;
+
+        let response = handle.await.unwrap().unwrap();
+        assert!(response.success);
+    }
+
+    #[tokio::test]
+    async fn handle_stopped_event_fetches_state() {
+        let (internals, mock, mut event_rx) = setup();
+
+        let event = transport2::Event {
+            seq: 1,
+            event: "stopped".to_string(),
+            body: Some(json!({"reason": "breakpoint", "threadId": 1})),
+        };
+
+        AsyncDebuggerInternals::handle_event(Arc::clone(&internals), event)
+            .await
+            .unwrap();
+
+        // The stopped handler spawns a task that will request stackTrace, scopes, variables
+        let req = mock.expect_request("stackTrace").await;
+        mock.send_stack_trace_response(req.seq, vec![StackFrameData::default()])
+            .await;
+
+        let req = mock.expect_request("scopes").await;
+        mock.send_scopes_response(req.seq, vec![ScopeData::default()])
+            .await;
+
+        let req = mock.expect_request("variables").await;
+        mock.send_variables_response(req.seq, vec![VariableData::default()])
+            .await;
+
+        // Should receive a Paused event
+        let evt = tokio::time::timeout(std::time::Duration::from_secs(5), event_rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(matches!(evt, Event::Paused(_)));
+    }
+
+    #[tokio::test]
+    async fn multiple_breakpoints_same_file() {
+        let (internals, mock, _event_rx) = setup();
+
+        let bp1 = Breakpoint {
+            name: None,
+            path: PathBuf::from("/tmp/test.py"),
+            line: 10,
+        };
+        let bp2 = Breakpoint {
+            name: None,
+            path: PathBuf::from("/tmp/test.py"),
+            line: 20,
+        };
+
+        // Add first breakpoint
+        let internals_clone = Arc::clone(&internals);
+        let bp1_clone = bp1.clone();
+        let handle =
+            tokio::spawn(async move { internals_clone.add_breakpoint_async(&bp1_clone).await });
+        let req = mock.expect_request("setBreakpoints").await;
+        mock.send_success_response(req.seq, Some(json!({"breakpoints": [{"verified": true}]})))
+            .await;
+        handle.await.unwrap().unwrap();
+
+        // Add second breakpoint (same file — should send both)
+        let internals_clone = Arc::clone(&internals);
+        let bp2_clone = bp2.clone();
+        let handle =
+            tokio::spawn(async move { internals_clone.add_breakpoint_async(&bp2_clone).await });
+        let req = mock.expect_request("setBreakpoints").await;
+
+        // Verify the request includes both breakpoints
+        if let Some(args) = &req.arguments {
+            let breakpoints = args.get("breakpoints").unwrap().as_array().unwrap();
+            assert_eq!(breakpoints.len(), 2);
+        }
+
+        mock.send_success_response(
+            req.seq,
+            Some(json!({"breakpoints": [{"verified": true}, {"verified": true}]})),
+        )
+        .await;
+        handle.await.unwrap().unwrap();
+
+        let breakpoints = internals.breakpoints.read().await;
+        assert_eq!(breakpoints.len(), 2);
+    }
+}

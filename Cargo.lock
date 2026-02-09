@@ -5711,6 +5711,7 @@ dependencies = [
  "eyre",
  "serde",
  "serde_json",
+ "tempfile",
  "tracing",
 ]
 

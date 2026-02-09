@@ -133,3 +133,108 @@ pub fn fuzzy_filter(files: &[TrackedFile], query: &str) -> Vec<FuzzyMatch> {
 
     matches
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_files(paths: &[&str]) -> Vec<TrackedFile> {
+        paths
+            .iter()
+            .map(|p| TrackedFile {
+                relative_path: PathBuf::from(p),
+                absolute_path: PathBuf::from("/repo").join(p),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn empty_query_returns_all_files() {
+        let files = make_files(&["src/main.rs", "Cargo.toml", "README.md"]);
+        let results = fuzzy_filter(&files, "");
+        assert_eq!(results.len(), 3);
+        for m in &results {
+            assert_eq!(m.score, 0);
+            assert!(m.matched_indices.is_empty());
+        }
+    }
+
+    #[test]
+    fn empty_files_returns_empty() {
+        let results = fuzzy_filter(&[], "test");
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn no_match_returns_empty() {
+        let files = make_files(&["src/main.rs", "Cargo.toml"]);
+        let results = fuzzy_filter(&files, "zzzzzzzzz");
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn exact_filename_match() {
+        let files = make_files(&["src/main.rs", "src/lib.rs", "Cargo.toml"]);
+        let results = fuzzy_filter(&files, "main.rs");
+        assert!(!results.is_empty());
+        assert_eq!(results[0].file.relative_path, PathBuf::from("src/main.rs"));
+    }
+
+    #[test]
+    fn partial_match() {
+        let files = make_files(&["src/main.rs", "src/lib.rs", "tests/test_main.rs"]);
+        let results = fuzzy_filter(&files, "main");
+        assert!(!results.is_empty());
+        // All results should contain "main" in their path
+        for m in &results {
+            let path = m.file.relative_path.to_string_lossy();
+            assert!(
+                path.contains("main"),
+                "expected path to contain 'main', got: {}",
+                path
+            );
+        }
+    }
+
+    #[test]
+    fn score_ordering_better_matches_first() {
+        let files = make_files(&[
+            "src/something/deeply/nested/main.rs",
+            "main.rs",
+            "src/main_helper.rs",
+        ]);
+        let results = fuzzy_filter(&files, "main.rs");
+        assert!(results.len() >= 2);
+        // Scores should be in descending order
+        for window in results.windows(2) {
+            assert!(
+                window[0].score >= window[1].score,
+                "scores not in descending order: {} < {}",
+                window[0].score,
+                window[1].score
+            );
+        }
+    }
+
+    #[test]
+    fn matched_indices_are_populated() {
+        let files = make_files(&["src/main.rs"]);
+        let results = fuzzy_filter(&files, "main");
+        assert_eq!(results.len(), 1);
+        assert!(
+            !results[0].matched_indices.is_empty(),
+            "matched_indices should be non-empty for a match"
+        );
+    }
+
+    #[test]
+    fn fuzzy_matching_non_contiguous() {
+        let files = make_files(&["src/my_awesome_file.rs", "other.txt"]);
+        let results = fuzzy_filter(&files, "maf");
+        // "maf" should fuzzy-match "my_awesome_file" (m, a, f)
+        assert!(
+            !results.is_empty(),
+            "expected fuzzy match for 'maf' in 'my_awesome_file.rs'"
+        );
+    }
+}

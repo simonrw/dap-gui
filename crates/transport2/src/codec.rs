@@ -231,4 +231,128 @@ mod tests {
         assert!(s.contains("\r\n\r\n"));
         assert!(s.contains(r#""command":"initialize""#));
     }
+
+    #[test]
+    fn encode_content_length_matches_body() {
+        let mut codec = DapCodec::new();
+        let msg = OutgoingMessage::Event(crate::message::OutgoingEvent {
+            seq: 1,
+            event: "initialized".to_string(),
+            body: None,
+        });
+
+        let mut buf = BytesMut::new();
+        codec.encode(msg, &mut buf).unwrap();
+
+        let s = std::str::from_utf8(&buf).unwrap();
+        let parts: Vec<&str> = s.splitn(2, "\r\n\r\n").collect();
+        assert_eq!(parts.len(), 2);
+
+        // Extract the Content-Length value
+        let header = parts[0];
+        let body = parts[1];
+        let cl_value: usize = header
+            .strip_prefix("Content-Length: ")
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert_eq!(cl_value, body.len());
+    }
+
+    #[test]
+    fn decode_roundtrip() {
+        let mut codec = DapCodec::new();
+        let msg = OutgoingMessage::Request(crate::message::Request {
+            seq: 42,
+            command: "stackTrace".to_string(),
+            arguments: Some(serde_json::json!({"threadId": 1})),
+        });
+
+        let mut buf = BytesMut::new();
+        codec.encode(msg, &mut buf).unwrap();
+
+        let decoded = codec.decode(&mut buf).unwrap().unwrap();
+        match decoded {
+            Message::Request(req) => {
+                assert_eq!(req.seq, 42);
+                assert_eq!(req.command, "stackTrace");
+            }
+            _ => panic!("expected request"),
+        }
+    }
+
+    #[test]
+    fn parse_content_length_missing() {
+        let header = b"X-Custom: value";
+        let result = parse_content_length(header);
+        assert!(matches!(result, Err(CodecError::MissingContentLength)));
+    }
+
+    #[test]
+    fn parse_content_length_malformed() {
+        let header = b"Content-Length: not_a_number";
+        let result = parse_content_length(header);
+        assert!(matches!(result, Err(CodecError::MalformedContentLength)));
+    }
+
+    #[test]
+    fn parse_content_length_valid() {
+        let header = b"Content-Length: 42";
+        let result = parse_content_length(header).unwrap();
+        assert_eq!(result, 42);
+    }
+
+    #[test]
+    fn parse_content_length_with_whitespace() {
+        let header = b"Content-Length:   123  ";
+        let result = parse_content_length(header).unwrap();
+        assert_eq!(result, 123);
+    }
+
+    #[test]
+    fn decode_invalid_utf8_header() {
+        let mut codec = DapCodec::new();
+        let mut buf = BytesMut::from(&b"Content-Length: \xff\xff\r\n\r\n"[..]);
+        let result = codec.decode(&mut buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn decode_invalid_json_body() {
+        let mut codec = DapCodec::new();
+        let bad_json = b"not valid json";
+        let mut buf = BytesMut::new();
+        buf.put_slice(format!("Content-Length: {}\r\n\r\n", bad_json.len()).as_bytes());
+        buf.put_slice(bad_json);
+
+        let result = codec.decode(&mut buf);
+        assert!(matches!(result, Err(CodecError::JsonDeserialize(_))));
+    }
+
+    #[test]
+    fn with_max_size_rejects_large_messages() {
+        let mut codec = DapCodec::with_max_size(50);
+        // Claim a body of 100 bytes
+        let mut buf = BytesMut::from("Content-Length: 100\r\n\r\n");
+
+        let result = codec.decode(&mut buf);
+        match result {
+            Err(CodecError::MessageTooLarge { size, max }) => {
+                assert_eq!(size, 100);
+                assert_eq!(max, 50);
+            }
+            other => panic!("expected MessageTooLarge, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn find_header_end_no_separator() {
+        assert!(find_header_end(b"no separator here").is_none());
+    }
+
+    #[test]
+    fn find_header_end_finds_separator() {
+        let buf = b"Content-Length: 10\r\n\r\nbody";
+        assert_eq!(find_header_end(buf), Some(18));
+    }
 }
