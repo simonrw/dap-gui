@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    echo "Usage: $(basename "$0") <process-name> <output-file>" >&2
+    echo "  Captures a screenshot of a running application's window." >&2
+    echo "  Example: $(basename "$0") gui-dioxus screenshot.png" >&2
+    exit 1
+}
+
+[ $# -eq 2 ] || usage
+
+process_name="$1"
+output_file="$2"
+
+# Find the window ID via CoreGraphics
+window_id=$(swift -e "
+import CoreGraphics
+let opts = CGWindowListOption(arrayLiteral: .optionOnScreenOnly, .excludeDesktopElements)
+if let list = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] {
+    for w in list {
+        let owner = w[\"kCGWindowOwnerName\"] as? String ?? \"\"
+        if owner.lowercased().contains(\"${process_name}\".lowercased()) {
+            print(w[\"kCGWindowNumber\"] as? Int ?? 0)
+            break
+        }
+    }
+}
+" 2>/dev/null)
+
+if [ -z "$window_id" ] || [ "$window_id" = "0" ]; then
+    echo "Error: no window found for process '${process_name}'" >&2
+    exit 1
+fi
+
+screencapture -l"$window_id" -x "$output_file"
+echo "Saved screenshot to ${output_file}"
