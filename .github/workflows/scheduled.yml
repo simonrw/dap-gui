@@ -23,6 +23,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      - name: Install system dependencies
+        run: sudo apt-get install -y libwebkit2gtk-4.1-dev
       - uses: taiki-e/install-action@nextest
         with:
           tool: nextest
@@ -62,6 +64,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      - name: Install system dependencies
+        run: sudo apt-get install -y libwebkit2gtk-4.1-dev
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
