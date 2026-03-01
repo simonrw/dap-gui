@@ -296,11 +296,8 @@ fn test_module_args_env_fields() {
 fn test_workspace_module_launch_config() {
     let path = "./testdata/vscode/localstack.code-workspace";
     let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
-        launch_configuration::load_from_path(
-            Some(&"Run LocalStack (host mode)".to_string()),
-            path,
-        )
-        .unwrap()
+        launch_configuration::load_from_path(Some(&"Run LocalStack (host mode)".to_string()), path)
+            .unwrap()
     else {
         panic!("specified launch configuration not found");
     };
@@ -323,11 +320,8 @@ fn test_workspace_module_launch_config() {
 fn test_workspace_module_with_env_file() {
     let path = "./testdata/vscode/localstack.code-workspace";
     let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
-        launch_configuration::load_from_path(
-            Some(&"Run community test".to_string()),
-            path,
-        )
-        .unwrap()
+        launch_configuration::load_from_path(Some(&"Run community test".to_string()), path)
+            .unwrap()
     else {
         panic!("specified launch configuration not found");
     };

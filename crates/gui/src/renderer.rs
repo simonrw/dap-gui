@@ -257,9 +257,8 @@ impl<'s> Renderer<'s> {
             .file_cache
             .entry(display_path.clone())
             .or_insert_with(|| {
-                std::fs::read_to_string(&display_path).unwrap_or_else(|e| {
-                    format!("Error reading file: {e}")
-                })
+                std::fs::read_to_string(&display_path)
+                    .unwrap_or_else(|e| format!("Error reading file: {e}"))
             })
             .clone();
 

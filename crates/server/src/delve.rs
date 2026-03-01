@@ -19,9 +19,7 @@ impl Server for DelveServer {
 
         // Validate dlv binary exists
         which::which("dlv").map_err(|_| {
-            eyre::eyre!(
-                "dlv not found in PATH. Install delve: https://github.com/go-delve/delve"
-            )
+            eyre::eyre!("dlv not found in PATH. Install delve: https://github.com/go-delve/delve")
         })?;
 
         let cwd = std::env::current_dir().context("getting current directory")?;

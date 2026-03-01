@@ -82,9 +82,9 @@ impl TryFrom<LaunchConfiguration> for InitialiseArguments {
                             None => (None, None),
                         };
 
-                        let working_directory = debugpy.cwd.unwrap_or_else(|| {
-                            std::env::current_dir().unwrap_or_default()
-                        });
+                        let working_directory = debugpy
+                            .cwd
+                            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
                         Ok(InitialiseArguments::Attach(AttachArguments {
                             port,
@@ -96,7 +96,9 @@ impl TryFrom<LaunchConfiguration> for InitialiseArguments {
                         }))
                     }
                     other => {
-                        eyre::bail!("unsupported debugpy request type: '{other}' (expected 'launch' or 'attach')")
+                        eyre::bail!(
+                            "unsupported debugpy request type: '{other}' (expected 'launch' or 'attach')"
+                        )
                     }
                 }
             }
@@ -108,7 +110,9 @@ impl TryFrom<LaunchConfiguration> for InitialiseArguments {
                     eyre::bail!("LLDB attach mode is not yet supported")
                 }
                 other => {
-                    eyre::bail!("unsupported LLDB request type: '{other}' (expected 'launch' or 'attach')")
+                    eyre::bail!(
+                        "unsupported LLDB request type: '{other}' (expected 'launch' or 'attach')"
+                    )
                 }
             },
         }

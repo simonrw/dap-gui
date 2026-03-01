@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
-use eyre::WrapErr;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use eyre::WrapErr;
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Layout, Rect},

@@ -40,8 +40,8 @@ pub(crate) fn show(ctx: &Context, state: &mut DebuggerAppState) -> FilePickerRes
         }
         if i.key_pressed(Key::ArrowDown) {
             if !state.file_picker_results.is_empty() {
-                state.file_picker_cursor = (state.file_picker_cursor + 1)
-                    .min(state.file_picker_results.len() - 1);
+                state.file_picker_cursor =
+                    (state.file_picker_cursor + 1).min(state.file_picker_results.len() - 1);
             }
         }
         if i.key_pressed(Key::ArrowUp) {
