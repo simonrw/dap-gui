@@ -38,7 +38,9 @@ jobs:
         with:
           submodules: true
       - name: Install system dependencies
-        run: sudo apt-get install -y libwebkit2gtk-4.1-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev
       - name: Install ${{ matrix.toolchain }}
         uses: dtolnay/rust-toolchain@master
         with:
@@ -58,7 +60,9 @@ jobs:
         with:
           submodules: true
       - name: Install system dependencies
-        run: sudo apt-get install -y libwebkit2gtk-4.1-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev
       - name: Install nightly
         uses: dtolnay/rust-toolchain@nightly
       - uses: rui314/setup-mold@v1
@@ -75,7 +79,9 @@ jobs:
         with:
           submodules: true
       - name: Install system dependencies
-        run: sudo apt-get install -y libwebkit2gtk-4.1-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
       - uses: rui314/setup-mold@v1
