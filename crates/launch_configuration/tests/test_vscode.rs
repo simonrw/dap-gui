@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use launch_configuration::{ChosenLaunchConfiguration, LaunchConfiguration, PathMapping};
 
 #[ctor::ctor]
@@ -235,5 +237,131 @@ fn test_workspace_to_be_chosen() {
             assert!(!names.is_empty());
         }
         _ => panic!("expected ToBeChosen for workspace without specified name"),
+    }
+}
+
+#[test]
+fn test_module_args_env_fields() {
+    let input = br#"{
+        "version": "0.2.0",
+        "configurations": [
+            {
+                "name": "Run with module",
+                "type": "debugpy",
+                "request": "launch",
+                "module": "pytest",
+                "args": ["tests/", "-v", "--tb=short"],
+                "cwd": "/home/user/project",
+                "env": {
+                    "PYTHONPATH": "/home/user/project",
+                    "DEBUG": "1"
+                },
+                "justMyCode": false,
+                "stopOnEntry": true
+            }
+        ]
+    }"# as &[u8];
+
+    let result = launch_configuration::load(Some(&"Run with module".to_string()), input);
+    let config = result.unwrap();
+    match config {
+        ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(debugpy)) => {
+            assert_eq!(debugpy.name, "Run with module");
+            assert_eq!(debugpy.request, "launch");
+            assert!(debugpy.program.is_none());
+            assert_eq!(debugpy.module, Some("pytest".to_string()));
+            assert_eq!(
+                debugpy.args,
+                Some(vec![
+                    "tests/".to_string(),
+                    "-v".to_string(),
+                    "--tb=short".to_string()
+                ])
+            );
+            let expected_env: HashMap<String, String> = [
+                ("PYTHONPATH".to_string(), "/home/user/project".to_string()),
+                ("DEBUG".to_string(), "1".to_string()),
+            ]
+            .into_iter()
+            .collect();
+            assert_eq!(debugpy.env, Some(expected_env));
+            assert_eq!(debugpy.just_my_code, Some(false));
+            assert_eq!(debugpy.stop_on_entry, Some(true));
+        }
+        _ => panic!("expected Specific Debugpy"),
+    }
+}
+
+#[test]
+fn test_workspace_module_launch_config() {
+    let path = "./testdata/vscode/localstack.code-workspace";
+    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
+        launch_configuration::load_from_path(
+            Some(&"Run LocalStack (host mode)".to_string()),
+            path,
+        )
+        .unwrap()
+    else {
+        panic!("specified launch configuration not found");
+    };
+
+    assert_eq!(config.name, "Run LocalStack (host mode)");
+    assert_eq!(config.request, "launch");
+    assert!(config.program.is_none());
+    assert_eq!(config.module, Some("localstack.cli.main".to_string()));
+    assert_eq!(
+        config.args,
+        Some(vec!["start".to_string(), "--host".to_string()])
+    );
+    assert!(config.env.is_some());
+    let env = config.env.unwrap();
+    assert_eq!(env.get("CONFIG_PROFILE"), Some(&"dev,test".to_string()));
+    assert_eq!(config.just_my_code, Some(false));
+}
+
+#[test]
+fn test_workspace_module_with_env_file() {
+    let path = "./testdata/vscode/localstack.code-workspace";
+    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
+        launch_configuration::load_from_path(
+            Some(&"Run community test".to_string()),
+            path,
+        )
+        .unwrap()
+    else {
+        panic!("specified launch configuration not found");
+    };
+
+    assert_eq!(config.name, "Run community test");
+    assert_eq!(config.module, Some("pytest".to_string()));
+    assert!(config.env_file.is_some());
+    assert!(config.args.is_some());
+}
+
+#[test]
+fn test_env_file_parsing() {
+    let input = br#"{
+        "version": "0.2.0",
+        "configurations": [
+            {
+                "name": "With env file",
+                "type": "debugpy",
+                "request": "launch",
+                "module": "myapp",
+                "envFile": "/path/to/.env"
+            }
+        ]
+    }"# as &[u8];
+
+    let result = launch_configuration::load(Some(&"With env file".to_string()), input);
+    let config = result.unwrap();
+    match config {
+        ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(debugpy)) => {
+            assert_eq!(
+                debugpy.env_file,
+                Some(std::path::PathBuf::from("/path/to/.env"))
+            );
+        }
+        _ => panic!("expected Specific Debugpy"),
     }
 }

@@ -305,7 +305,7 @@ where
         // Send Launch or Attach request (fire-and-forget, don't wait for response)
         if let Some(launch_args) = launch_args {
             self.internals
-                .send_request(launch_args.to_request())
+                .send_request(launch_args.to_request()?)
                 .await?;
         } else if let Some(attach_args) = attach_args {
             self.internals
@@ -378,7 +378,7 @@ where
         if let Some(launch_args) = launch_args {
             tracing::debug!("sending launch request");
             self.internals
-                .send_request(launch_args.to_request())
+                .send_request(launch_args.to_request()?)
                 .await?;
             tracing::debug!("launch request sent");
         } else if let Some(attach_args) = attach_args {

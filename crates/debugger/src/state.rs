@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use transport::{
     DEFAULT_DAP_PORT,
@@ -85,22 +85,28 @@ pub struct AttachArguments {
     /// Debugger port to connect to (defaults to 5678)
     pub port: Option<u16>,
 
+    /// Host to connect to (defaults to "localhost")
+    pub host: Option<String>,
+
     /// Programming language of the debugee
     pub language: Language,
 
     /// Custom mappings from the running code (e.g. in a Docker container) to local source checkout
     pub path_mappings: Option<Vec<requests::PathMapping>>,
+
+    /// Only debug user code, not library code
+    pub just_my_code: Option<bool>,
 }
 
 impl AttachArguments {
     pub fn to_request(self) -> requests::RequestBody {
         requests::RequestBody::Attach(requests::Attach {
             connect: requests::ConnectInfo {
-                host: "localhost".to_string(),
+                host: self.host.unwrap_or_else(|| "localhost".to_string()),
                 port: self.port.unwrap_or(DEFAULT_DAP_PORT),
             },
             path_mappings: self.path_mappings.unwrap_or_default(),
-            just_my_code: false,
+            just_my_code: self.just_my_code.unwrap_or(false),
             workspace_folder: self.working_directory,
         })
     }
@@ -109,57 +115,90 @@ impl AttachArguments {
 /// Arguments for launching a new process
 #[derive(Debug, Clone)]
 pub struct LaunchArguments {
-    /// Program to run
-    pub program: PathBuf,
+    /// Program to run (mutually exclusive with `module`)
+    pub program: Option<PathBuf>,
+
+    /// Python module to run instead of a program file (e.g. "pytest")
+    pub module: Option<String>,
+
+    /// Command-line arguments to the program
+    pub args: Option<Vec<String>>,
+
+    /// Environment variables for the launched process
+    pub env: Option<HashMap<String, String>>,
 
     /// Current working directory for the launched process
     pub working_directory: Option<PathBuf>,
 
     /// Language used to create the process
     pub language: Language,
+
+    /// Only debug user code, not library code
+    pub just_my_code: Option<bool>,
+
+    /// Stop at the first line of user code
+    pub stop_on_entry: Option<bool>,
 }
 
 impl LaunchArguments {
     pub fn from_path(program: impl Into<PathBuf>, language: Language) -> Self {
         let program = program.into();
-        let working_directory = program.parent().unwrap().to_path_buf();
+        let working_directory = program.parent().map(|p| p.to_path_buf());
 
         Self {
-            program,
-            working_directory: Some(working_directory),
+            program: Some(program),
+            module: None,
+            args: None,
+            env: None,
+            working_directory,
             language,
+            just_my_code: None,
+            stop_on_entry: None,
         }
     }
 }
 
 impl LaunchArguments {
-    pub fn to_request(self) -> requests::RequestBody {
+    pub fn to_request(self) -> eyre::Result<requests::RequestBody> {
         let program = self
             .program
-            .canonicalize()
-            .expect("launch target not a valid path");
-        let cwd = self
-            .working_directory
-            .unwrap_or_else(|| program.parent().unwrap().to_path_buf());
+            .map(|p| p.canonicalize())
+            .transpose()
+            .map_err(|e| eyre::eyre!("launch target not a valid path: {e}"))?;
+
+        let cwd = self.working_directory.unwrap_or_else(|| {
+            program
+                .as_ref()
+                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
+        });
+
+        let just_my_code = self.just_my_code.unwrap_or(true);
+        let stop_on_entry = self.stop_on_entry.unwrap_or(false);
 
         match self.language {
-            Language::DebugPy => requests::RequestBody::Launch(requests::Launch {
+            Language::DebugPy => Ok(requests::RequestBody::Launch(requests::Launch {
                 program,
+                module: self.module,
+                args: self.args,
+                env: self.env,
                 launch_arguments: Some(transport::requests::LaunchArguments::Debugpy(
                     DebugpyLaunchArguments {
-                        just_my_code: true,
+                        just_my_code,
                         cwd,
                         show_return_value: true,
                         debug_options: vec![
                             "DebugStdLib".to_string(),
                             "ShowReturnValue".to_string(),
                         ],
-                        stop_on_entry: false,
+                        stop_on_entry,
                         is_output_redirected: false,
                     },
                 )),
-            }),
-            Language::Delve => todo!(),
+            })),
+            Language::Delve => {
+                eyre::bail!("Delve launch mode is not yet supported")
+            }
         }
     }
 }

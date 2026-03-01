@@ -196,9 +196,11 @@ impl DebuggerApp {
                     "attach" => {
                         let launch_arguments = AttachArguments {
                             working_directory: debug_root_dir.to_owned().to_path_buf(),
-                            port: connect.map(|c| c.port),
+                            port: connect.as_ref().map(|c| c.port),
+                            host: connect.map(|c| c.host),
                             language: debugger::Language::DebugPy,
                             path_mappings,
+                            just_my_code: None,
                         };
 
                         tracing::debug!(?launch_arguments, "generated launch configuration");
@@ -210,9 +212,14 @@ impl DebuggerApp {
                             eyre::bail!("'program' is a required setting");
                         };
                         let launch_arguments = LaunchArguments {
-                            program: program.clone(),
+                            program: Some(program.clone()),
+                            module: None,
+                            args: None,
+                            env: None,
                             working_directory: Some(debug_root_dir.to_owned().to_path_buf()),
                             language: debugger::Language::DebugPy,
+                            just_my_code: None,
+                            stop_on_entry: None,
                         };
 
                         tracing::debug!(?launch_arguments, "generated launch configuration");

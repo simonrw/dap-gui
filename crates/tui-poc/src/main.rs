@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
+use eyre::WrapErr;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{
     DefaultTerminal, Frame,
@@ -1525,7 +1526,9 @@ fn main() -> eyre::Result<()> {
     }
 
     // Convert to InitialiseArguments
-    let init_args: debugger::InitialiseArguments = config.into();
+    let init_args: debugger::InitialiseArguments = config
+        .try_into()
+        .context("converting launch configuration")?;
 
     // Extract the language to launch the debug adapter
     let language = match &init_args {

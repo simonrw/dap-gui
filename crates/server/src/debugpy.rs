@@ -1,10 +1,7 @@
 use std::{
-    io::{BufRead, BufReader},
     os::unix::process::CommandExt,
     path::Path,
     process::{Child, Stdio},
-    sync::mpsc,
-    thread,
 };
 
 use eyre::WrapErr;
@@ -55,7 +52,7 @@ impl Server for DebugpyServer {
         let port = port.into();
 
         tracing::debug!(port = ?port, "starting server process");
-        let cwd = std::env::current_dir().unwrap();
+        let cwd = std::env::current_dir().context("getting current directory")?;
 
         let python = best_interpreter().context("finding best interpreter")?;
         let python_str = python.display().to_string();
@@ -82,7 +79,7 @@ impl Server for DebugpyServer {
                 })
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
-                .current_dir(cwd.join("..").canonicalize().unwrap())
+                .current_dir(&cwd)
                 .spawn()
                 .context("spawning background process")?
         };
@@ -90,20 +87,13 @@ impl Server for DebugpyServer {
         // wait until server is ready
         tracing::debug!("waiting until server is ready");
         let stderr = child.stderr.take().unwrap();
-        let reader = BufReader::new(stderr);
-
-        let (tx, rx) = mpsc::channel();
-        thread::spawn(move || {
-            let mut should_signal = true;
-            for line in reader.lines() {
-                let line = line.unwrap();
-                if should_signal && line.contains("Listening for incoming Client connections") {
-                    should_signal = false;
-                    let _ = tx.send(());
-                }
-            }
-        });
-        let _ = rx.recv();
+        crate::wait_for_ready(
+            stderr,
+            "Listening for incoming Client connections",
+            crate::SERVER_READY_TIMEOUT,
+            &mut child,
+        )
+        .context("waiting for debugpy server readiness")?;
 
         tracing::debug!("server ready");
         Ok(Self { child })

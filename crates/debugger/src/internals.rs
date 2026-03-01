@@ -395,7 +395,7 @@ impl DebuggerInternals {
         match arguments {
             InitialiseArguments::Launch(launch_arguments) => {
                 // send launch event
-                let req = launch_arguments.to_request();
+                let req = launch_arguments.to_request().context("building launch request")?;
                 self.execute(req).context("sending launch request")?;
             }
             InitialiseArguments::Attach(attach_arguments) => {

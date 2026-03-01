@@ -2,7 +2,10 @@
 //!
 //! This crate handles parsing the launch configurations, primarily of VS Code.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use eyre::Context;
 use serde::Deserialize;
@@ -94,8 +97,12 @@ fn from_str(name: Option<&String>, contents: &str) -> eyre::Result<ChosenLaunchC
                                 return Ok(ChosenLaunchConfiguration::Specific(configuration));
                             }
                         }
-                        LaunchConfiguration::LLDB(LLDB { .. }) => {
-                            todo!()
+                        LaunchConfiguration::LLDB(LLDB {
+                            name: config_name, ..
+                        }) => {
+                            if config_name == name {
+                                return Ok(ChosenLaunchConfiguration::Specific(configuration));
+                            }
                         }
                     }
                 }
@@ -186,8 +193,13 @@ pub struct Debugpy {
     pub request: String,
     pub connect: Option<ConnectionDetails>,
     pub program: Option<PathBuf>,
+    pub module: Option<String>,
+    pub args: Option<Vec<String>>,
+    pub env: Option<HashMap<String, String>>,
+    pub env_file: Option<PathBuf>,
     pub path_mappings: Option<Vec<PathMapping>>,
     pub just_my_code: Option<bool>,
+    pub stop_on_entry: Option<bool>,
     pub cwd: Option<PathBuf>,
 }
 

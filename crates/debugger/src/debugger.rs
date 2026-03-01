@@ -49,37 +49,101 @@ impl From<state::AttachArguments> for InitialiseArguments {
     }
 }
 
-impl From<LaunchConfiguration> for InitialiseArguments {
-    fn from(value: LaunchConfiguration) -> Self {
+impl TryFrom<LaunchConfiguration> for InitialiseArguments {
+    type Error = eyre::Error;
+
+    fn try_from(value: LaunchConfiguration) -> eyre::Result<Self> {
         match value {
             LaunchConfiguration::Debugpy(debugpy) | LaunchConfiguration::Python(debugpy) => {
                 match debugpy.request.as_str() {
-                    "launch" => InitialiseArguments::Launch(LaunchArguments {
-                        program: debugpy.program.expect("program must be specified"),
-                        working_directory: None,
-                        language: crate::Language::DebugPy,
-                    }),
-                    "attach" => InitialiseArguments::Attach(AttachArguments {
-                        port: debugpy.connect.map(|c| c.port),
-                        language: Language::DebugPy,
-                        path_mappings: debugpy.path_mappings,
-                        working_directory: debugpy.cwd.expect("TODO: cwd must be specified"),
-                    }),
-                    other => todo!("{other}"),
+                    "launch" => {
+                        eyre::ensure!(
+                            debugpy.program.is_some() || debugpy.module.is_some(),
+                            "either 'program' or 'module' must be specified in launch configuration"
+                        );
+
+                        // Load env_file and merge with explicit env
+                        let env = load_env(debugpy.env, debugpy.env_file.as_deref())?;
+
+                        Ok(InitialiseArguments::Launch(LaunchArguments {
+                            program: debugpy.program,
+                            module: debugpy.module,
+                            args: debugpy.args,
+                            env,
+                            working_directory: debugpy.cwd,
+                            language: crate::Language::DebugPy,
+                            just_my_code: debugpy.just_my_code,
+                            stop_on_entry: debugpy.stop_on_entry,
+                        }))
+                    }
+                    "attach" => {
+                        let (host, port) = match debugpy.connect {
+                            Some(c) => (Some(c.host), Some(c.port)),
+                            None => (None, None),
+                        };
+
+                        let working_directory = debugpy.cwd.unwrap_or_else(|| {
+                            std::env::current_dir().unwrap_or_default()
+                        });
+
+                        Ok(InitialiseArguments::Attach(AttachArguments {
+                            port,
+                            host,
+                            language: Language::DebugPy,
+                            path_mappings: debugpy.path_mappings,
+                            working_directory,
+                            just_my_code: debugpy.just_my_code,
+                        }))
+                    }
+                    other => {
+                        eyre::bail!("unsupported debugpy request type: '{other}' (expected 'launch' or 'attach')")
+                    }
                 }
             }
             LaunchConfiguration::LLDB(lldb) => match lldb.request.as_str() {
-                "launch" =>
-                {
-                    #[allow(unreachable_code)]
-                    InitialiseArguments::Launch(LaunchArguments {
-                        working_directory: None,
-                        language: crate::Language::DebugPy,
-                        program: todo!(),
-                    })
+                "launch" => {
+                    eyre::bail!("LLDB launch mode is not yet supported")
                 }
-                other => todo!("{other}"),
+                "attach" => {
+                    eyre::bail!("LLDB attach mode is not yet supported")
+                }
+                other => {
+                    eyre::bail!("unsupported LLDB request type: '{other}' (expected 'launch' or 'attach')")
+                }
             },
+        }
+    }
+}
+
+/// Load environment variables from an env file and merge with explicit env vars.
+/// Explicit env vars take precedence over env file vars.
+fn load_env(
+    explicit_env: Option<std::collections::HashMap<String, String>>,
+    env_file: Option<&std::path::Path>,
+) -> eyre::Result<Option<std::collections::HashMap<String, String>>> {
+    match (explicit_env, env_file) {
+        (None, None) => Ok(None),
+        (Some(env), None) => Ok(Some(env)),
+        (explicit, Some(path)) => {
+            let contents = std::fs::read_to_string(path)
+                .wrap_err_with(|| format!("reading env file: {}", path.display()))?;
+
+            let mut env = std::collections::HashMap::new();
+            for line in contents.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                if let Some((key, value)) = line.split_once('=') {
+                    env.insert(key.trim().to_string(), value.trim().to_string());
+                }
+            }
+
+            // Explicit env vars override env file vars
+            if let Some(explicit) = explicit {
+                env.extend(explicit);
+            }
+            Ok(Some(env))
         }
     }
 }
@@ -137,11 +201,13 @@ impl Debugger {
             InitialiseArguments::Launch(state::LaunchArguments {
                 program, language, ..
             }) => {
-                eyre::ensure!(
-                    program.is_file(),
-                    "Program {} does not exist",
-                    program.display()
-                );
+                if let Some(program) = program {
+                    eyre::ensure!(
+                        program.is_file(),
+                        "Program {} does not exist",
+                        program.display()
+                    );
+                }
 
                 // let implementation = language.into();
                 let implementation: Implementation = match language {
@@ -432,7 +498,12 @@ impl Debugger {
         let config = launch_configuration::load_from_path(Some(&name), configuration_path)
             .context("loading launch configuration")?;
         match config {
-            ChosenLaunchConfiguration::Specific(config) => Debugger::new(config),
+            ChosenLaunchConfiguration::Specific(config) => {
+                let args: InitialiseArguments = config
+                    .try_into()
+                    .wrap_err("converting launch configuration")?;
+                Debugger::new(args)
+            }
             _ => Err(eyre::eyre!("specified configuration {name} not found")),
         }
     }
@@ -723,9 +794,14 @@ mod tests {
 
         let port = get_random_tcp_port().expect("getting free port");
         let launch_args = LaunchArguments {
-            program: non_existent_program.clone(),
+            program: Some(non_existent_program.clone()),
+            module: None,
+            args: None,
+            env: None,
             working_directory: None,
             language: Language::DebugPy,
+            just_my_code: None,
+            stop_on_entry: None,
         };
 
         let result = Debugger::on_port(port, launch_args);

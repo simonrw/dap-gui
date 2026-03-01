@@ -170,8 +170,10 @@ fn test_remote_attach() -> eyre::Result<()> {
     let launch_args = debugger::AttachArguments {
         working_directory: cwd.clone(),
         port: Some(port),
+        host: None,
         language: debugger::Language::DebugPy,
         path_mappings: None,
+        just_my_code: None,
     };
 
     let debugger = Debugger::on_port(port, launch_args).context("creating debugger")?;
@@ -264,9 +266,14 @@ fn test_debugger() -> eyre::Result<()> {
 
     let launch_args = debugger::LaunchArguments {
         // tests are run from the test subdirectory
-        program: file_path.clone(),
+        program: Some(file_path.clone()),
+        module: None,
+        args: None,
+        env: None,
         working_directory: None,
         language: debugger::Language::DebugPy,
+        just_my_code: None,
+        stop_on_entry: None,
     };
     let debugger = Debugger::on_port(port, launch_args).context("creating debugger")?;
     let mut harness = DebuggerTestHarness::new(debugger);

@@ -247,9 +247,14 @@ impl App {
 
                         // Create launch arguments
                         let launch_args = debugger::LaunchArguments {
-                            program: program.clone(),
+                            program: Some(program.clone()),
+                            module: None,
+                            args: None,
+                            env: None,
                             working_directory: Some(debug_root_dir),
                             language: debugger::Language::DebugPy,
+                            just_my_code: None,
+                            stop_on_entry: None,
                         };
 
                         // Connect to the debugger

@@ -1,5 +1,8 @@
 //! Requests you can send to a DAP server
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -204,7 +207,17 @@ pub enum LaunchArguments {
 #[derive(Default, Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Launch {
-    pub program: PathBuf,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub program: Option<PathBuf>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub module: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub args: Option<Vec<String>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub env: Option<HashMap<String, String>>,
 
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     pub launch_arguments: Option<LaunchArguments>,
@@ -251,7 +264,10 @@ mod tests {
     #[test]
     fn launch_arguments() {
         let body = RequestBody::Launch(Launch {
-            program: PathBuf::from("/"),
+            program: Some(PathBuf::from("/")),
+            module: None,
+            args: None,
+            env: None,
             launch_arguments: Some(LaunchArguments::Debugpy(DebugpyLaunchArguments {
                 just_my_code: true,
                 // console: "integratedTerminal".to_string(),

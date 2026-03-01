@@ -70,7 +70,10 @@ fn test_loop() -> Result<()> {
     // launch
     client
         .execute(requests::RequestBody::Launch(Launch {
-            program: test_file_path,
+            program: Some(test_file_path),
+            module: None,
+            args: None,
+            env: None,
             launch_arguments: Some(LaunchArguments::Debugpy(DebugpyLaunchArguments {
                 just_my_code: true,
                 // console: "integratedTerminal".to_string(),
