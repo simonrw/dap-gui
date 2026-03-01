@@ -18,7 +18,7 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 
 mod async_bridge;
 pub use async_bridge::{AsyncBridge, StateUpdate, UiCommand};
-mod fuzzy;
+use fuzzy;
 
 /// Terminal UI debugger using the Debug Adapter Protocol (DAP)
 #[derive(Parser)]

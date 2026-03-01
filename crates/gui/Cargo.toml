@@ -22,6 +22,7 @@ state = { path = "../state" }
 dirs.workspace = true
 launch_configuration = { path = "../launch_configuration" }
 dark-light.workspace = true
+fuzzy = { path = "../fuzzy" }
 
 [features]
 sentry = ["dep:sentry"]

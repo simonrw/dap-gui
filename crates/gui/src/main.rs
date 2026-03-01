@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    collections::HashMap,
     fs::create_dir_all,
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -89,7 +90,7 @@ impl From<debugger::Event> for State {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 enum TabState {
     Variables,
     Repl,
@@ -106,6 +107,20 @@ struct DebuggerAppState {
     repl_input: RefCell<String>,
     repl_output: RefCell<String>,
     jump: bool,
+
+    // File picker state
+    file_picker_open: bool,
+    file_picker_input: String,
+    file_picker_cursor: usize,
+    file_picker_results: Vec<fuzzy::FuzzyMatch>,
+    git_files: Vec<fuzzy::TrackedFile>,
+    git_files_loaded: bool,
+
+    // File override (when user manually opens a file via picker)
+    file_override: Option<PathBuf>,
+
+    // File content cache to avoid repeated disk reads
+    file_cache: HashMap<PathBuf, String>,
 }
 
 impl DebuggerAppState {
@@ -131,6 +146,7 @@ impl DebuggerAppState {
             (&mut self.state, &self.previous_state)
         {
             self.jump = true;
+            self.file_override = None;
         }
 
         Ok(())
@@ -291,6 +307,14 @@ impl DebuggerApp {
             tab: RefCell::new(TabState::Variables),
             repl_input: RefCell::new(String::new()),
             repl_output: RefCell::new(String::new()),
+            file_picker_open: false,
+            file_picker_input: String::new(),
+            file_picker_cursor: 0,
+            file_picker_results: Vec::new(),
+            git_files: Vec::new(),
+            git_files_loaded: false,
+            file_override: None,
+            file_cache: HashMap::new(),
         };
 
         let inner = Arc::new(Mutex::new(temp_state));
@@ -319,7 +343,7 @@ impl eframe::App for DebuggerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |_ui| {
             let mut inner = self.inner.lock().unwrap();
-            let mut user_interface = crate::renderer::Renderer::new(&inner);
+            let mut user_interface = crate::renderer::Renderer::new(&mut inner);
             user_interface.render_ui(ctx);
             if inner.jump {
                 inner.jump = false;

@@ -1,34 +1,55 @@
-use std::{collections::HashSet, ops::Deref};
+use std::collections::HashSet;
+use std::path::PathBuf;
 
 use debugger::{EvaluateResult, PausedFrame};
-use eframe::egui::{self, Context, Key, Ui};
+use eframe::egui::{self, Context, Key, Modifiers, Ui};
 use transport::types::StackFrame;
 
 use crate::{
     DebuggerAppState, State, TabState,
     code_view::CodeView,
-    ui::{breakpoints::Breakpoints, call_stack::CallStack},
+    ui::{
+        breakpoints::Breakpoints,
+        call_stack::CallStack,
+        file_picker::{self, FilePickerResult},
+    },
 };
 
 pub(crate) struct Renderer<'a> {
-    state: &'a DebuggerAppState,
+    state: &'a mut DebuggerAppState,
 }
 
 impl<'s> Renderer<'s> {
-    pub(crate) fn new(state: &'s DebuggerAppState) -> Self {
+    pub(crate) fn new(state: &'s mut DebuggerAppState) -> Self {
         Self { state }
     }
 
     pub(crate) fn render_ui(&mut self, ctx: &Context) {
-        match &self.state.state {
+        // Handle Ctrl+P to toggle file picker
+        if ctx.input(|i| i.key_pressed(Key::P) && i.modifiers.matches_exact(Modifiers::CTRL)) {
+            self.state.file_picker_open = !self.state.file_picker_open;
+            if !self.state.file_picker_open {
+                self.state.file_picker_input.clear();
+                self.state.file_picker_cursor = 0;
+            }
+        }
+
+        // Render file picker overlay if open
+        if self.state.file_picker_open {
+            if let FilePickerResult::Selected(path) = file_picker::show(ctx, self.state) {
+                self.state.file_override = Some(path);
+            }
+        }
+
+        let current_state = self.state.state.clone();
+        match current_state {
             State::Initialising => {}
             State::Running => {
-                let DebuggerAppState { previous_state, .. } = &self.state;
                 if let Some(State::Paused {
                     stack,
                     paused_frame,
                     breakpoints,
-                }) = previous_state.clone()
+                }) = self.state.previous_state.clone()
                 {
                     self.render_paused_or_running_ui(
                         ctx,
@@ -44,7 +65,7 @@ impl<'s> Renderer<'s> {
                 paused_frame,
                 breakpoints,
             } => {
-                self.render_paused_or_running_ui(ctx, stack, paused_frame, breakpoints, true);
+                self.render_paused_or_running_ui(ctx, &stack, &paused_frame, &breakpoints, true);
             }
             State::Terminated => {
                 egui::CentralPanel::default().show(ctx, |ui| {
@@ -133,7 +154,8 @@ impl<'s> Renderer<'s> {
                 ui.selectable_value(&mut *tab, TabState::Repl, "Repl");
             });
         }
-        match self.state.tab.borrow().deref() {
+        let current_tab = *self.state.tab.borrow();
+        match current_tab {
             TabState::Variables => self.render_variables(ctx, ui, paused_frame, show_details),
             TabState::Repl => self.render_repl(ctx, ui),
         }
@@ -205,26 +227,53 @@ impl<'s> Renderer<'s> {
         paused_frame: &PausedFrame,
         original_breakpoints: &[debugger::Breakpoint],
     ) {
-        // let DebuggerAppState { ref mut jump, .. } = self.state;
         let frame = &paused_frame.frame;
-        let file_path = frame
+        let debugger_path: PathBuf = frame
             .source
             .as_ref()
             .and_then(|s| s.path.as_ref())
-            .expect("no file source given");
-        let contents =
-            std::fs::read_to_string(file_path).expect("reading source from given file path");
+            .expect("no file source given")
+            .clone();
+
+        // Determine which file to display
+        let (display_path, highlight_line, current_line) =
+            if let Some(ref override_path) = self.state.file_override {
+                (override_path.clone(), false, 1)
+            } else {
+                (debugger_path, true, frame.line)
+            };
+
+        // File breadcrumb
+        let display_name = display_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| display_path.to_string_lossy().to_string());
+        ui.label(&display_name);
+        ui.separator();
+
+        // Read file contents with caching
+        let contents = self
+            .state
+            .file_cache
+            .entry(display_path.clone())
+            .or_insert_with(|| {
+                std::fs::read_to_string(&display_path).unwrap_or_else(|e| {
+                    format!("Error reading file: {e}")
+                })
+            })
+            .clone();
+
         let mut breakpoints = HashSet::from_iter(
             original_breakpoints
                 .iter()
-                .filter(|b| file_path.as_path() == b.path)
+                .filter(|b| display_path.as_path() == b.path)
                 .cloned(),
         );
 
         ui.add(CodeView::new(
             &contents,
-            frame.line,
-            true,
+            current_line,
+            highlight_line,
             &mut breakpoints,
             &self.state.jump,
         ));
