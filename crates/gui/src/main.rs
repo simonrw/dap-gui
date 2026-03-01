@@ -4,20 +4,22 @@ use std::{
     fs::create_dir_all,
     path::PathBuf,
     sync::{Arc, Mutex},
-    thread,
 };
 
 use clap::Parser;
-use debugger::{AttachArguments, Debugger, LaunchArguments, PausedFrame, ProgramState};
+use debugger::{PausedFrame, ProgramState};
 use eframe::egui::{self, Visuals};
 use eyre::WrapErr;
 use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
 use state::StateManager;
 use transport::types::{StackFrame, StackFrameId};
 
+mod async_bridge;
 mod code_view;
 mod renderer;
 mod ui;
+
+use async_bridge::AsyncBridge;
 
 #[derive(Parser)]
 struct Args {
@@ -98,7 +100,7 @@ enum TabState {
 
 struct DebuggerAppState {
     state: State,
-    debugger: Debugger,
+    bridge: AsyncBridge,
     previous_state: Option<State>,
     current_frame_id: Option<StackFrameId>,
 
@@ -121,13 +123,21 @@ struct DebuggerAppState {
 
     // File content cache to avoid repeated disk reads
     file_cache: HashMap<PathBuf, String>,
+
+    // Cache for child variables fetched via variablesReference
+    variables_cache: HashMap<i64, Vec<transport::types::Variable>>,
+
+    // Status bar state
+    status: crate::ui::status_bar::StatusState,
 }
 
 impl DebuggerAppState {
     pub(crate) fn change_scope(&self, stack_frame_id: StackFrameId) -> eyre::Result<()> {
-        self.debugger
-            .change_scope(stack_frame_id)
-            .wrap_err("changing scope")
+        self.bridge
+            .send_sync(|reply| async_bridge::UiCommand::ChangeScope {
+                frame_id: stack_frame_id,
+                reply,
+            })
     }
 
     #[tracing::instrument(skip(self), level = "trace")]
@@ -147,6 +157,7 @@ impl DebuggerAppState {
         {
             self.jump = true;
             self.file_override = None;
+            self.variables_cache.clear();
         }
 
         Ok(())
@@ -196,76 +207,110 @@ impl DebuggerApp {
 
         let mut debug_root_dir = std::env::current_dir().unwrap();
 
-        let debugger = match config {
-            LaunchConfiguration::Debugpy(Debugpy {
-                request,
-                cwd,
-                connect,
-                path_mappings,
-                program,
-                ..
-            }) => {
-                if let Some(dir) = cwd {
-                    debug_root_dir = debugger::utils::normalise_path(&dir).into_owned();
-                }
-                let debugger = match request.as_str() {
-                    "attach" => {
-                        let launch_arguments = AttachArguments {
-                            working_directory: debug_root_dir.to_owned().to_path_buf(),
-                            port: connect.as_ref().map(|c| c.port),
-                            host: connect.map(|c| c.host),
-                            language: debugger::Language::DebugPy,
-                            path_mappings,
-                            just_my_code: None,
-                        };
+        // Create a tokio runtime for async initialization
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(2)
+            .build()
+            .map_err(|e| eyre::eyre!("failed to create tokio runtime: {e}"))?;
 
-                        tracing::debug!(?launch_arguments, "generated launch configuration");
-
-                        Debugger::new(launch_arguments).context("creating internal debugger")?
+        let (mut debugger, initial_breakpoints) = rt.block_on(async {
+            match config {
+                LaunchConfiguration::Debugpy(Debugpy {
+                    request,
+                    cwd,
+                    connect,
+                    path_mappings,
+                    program,
+                    ..
+                }) => {
+                    if let Some(dir) = cwd {
+                        debug_root_dir = debugger::utils::normalise_path(&dir).into_owned();
                     }
-                    "launch" => {
-                        let Some(program) = program else {
-                            eyre::bail!("'program' is a required setting");
-                        };
-                        let launch_arguments = LaunchArguments {
-                            program: Some(program.clone()),
-                            module: None,
-                            args: None,
-                            env: None,
-                            working_directory: Some(debug_root_dir.to_owned().to_path_buf()),
-                            language: debugger::Language::DebugPy,
-                            just_my_code: None,
-                            stop_on_entry: None,
-                        };
 
-                        tracing::debug!(?launch_arguments, "generated launch configuration");
-                        let debugger = debugger::Debugger::new(launch_arguments)
-                            .context("creating internal debugger")?;
-
-                        for line in args.breakpoints {
-                            let breakpoint = debugger::Breakpoint {
-                                path: program.clone(),
-                                line,
-                                ..Default::default()
+                    match request.as_str() {
+                        "attach" => {
+                            let attach_args = debugger::AttachArguments {
+                                working_directory: debug_root_dir.to_owned(),
+                                port: connect.as_ref().map(|c| c.port),
+                                host: connect.map(|c| c.host),
+                                language: debugger::Language::DebugPy,
+                                path_mappings,
+                                just_my_code: None,
                             };
-                            debugger
-                                .add_breakpoint(&breakpoint)
-                                .context("adding breakpoint")?;
+
+                            tracing::debug!(?attach_args, "generated attach configuration");
+
+                            let port = attach_args.port.unwrap_or(transport::DEFAULT_DAP_PORT);
+                            let debugger = debugger::TcpAsyncDebugger::attach_staged(
+                                port,
+                                debugger::Language::DebugPy,
+                                &attach_args,
+                            )
+                            .await
+                            .context("creating async debugger (attach)")?;
+
+                            Ok::<_, eyre::Report>((debugger, vec![]))
                         }
+                        "launch" => {
+                            let Some(program) = program else {
+                                eyre::bail!("'program' is a required setting");
+                            };
 
-                        debugger
+                            let port = transport::DEFAULT_DAP_PORT;
+                            let _server = server::for_implementation_on_port(
+                                server::Implementation::Debugpy,
+                                port,
+                            )
+                            .context("creating background server process")?;
+
+                            // Small delay to let the server start
+                            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+                            let launch_args = debugger::LaunchArguments {
+                                program: Some(program.clone()),
+                                module: None,
+                                args: None,
+                                env: None,
+                                working_directory: Some(debug_root_dir.to_owned()),
+                                language: debugger::Language::DebugPy,
+                                just_my_code: None,
+                                stop_on_entry: None,
+                            };
+
+                            tracing::debug!(?launch_args, "generated launch configuration");
+
+                            let debugger = debugger::TcpAsyncDebugger::connect_staged(
+                                port,
+                                debugger::Language::DebugPy,
+                                &launch_args,
+                                false,
+                            )
+                            .await
+                            .context("creating async debugger (launch)")?;
+
+                            // Collect breakpoints from CLI args
+                            let initial_bps: Vec<debugger::Breakpoint> = args
+                                .breakpoints
+                                .iter()
+                                .map(|&line| debugger::Breakpoint {
+                                    path: program.clone(),
+                                    line,
+                                    ..Default::default()
+                                })
+                                .collect();
+
+                            Ok((debugger, initial_bps))
+                        }
+                        other => eyre::bail!("unsupported request type: {other}"),
                     }
-                    _ => todo!(),
-                };
-                debugger
+                }
+                other => eyre::bail!("unsupported configuration: {other:?}"),
             }
-            other => todo!("{other:?}"),
-        };
+        })?;
 
-        let events = debugger.events();
-
-        debugger.wait_for_event(|e| matches!(e, debugger::Event::Initialised));
-
+        // Configure breakpoints (from CLI and persisted state) before starting
+        let mut all_breakpoints = initial_breakpoints;
         if let Some(project_state) = state_manager
             .current()
             .projects
@@ -274,34 +319,51 @@ impl DebuggerApp {
         {
             tracing::debug!("got project state");
             for breakpoint in &project_state.breakpoints {
-                {
-                    let breakpoint_path = debugger::utils::normalise_path(&breakpoint.path);
-                    if !breakpoint_path.starts_with(&debug_root_dir) {
-                        continue;
-                    }
-                    tracing::debug!(?breakpoint, "adding breakpoint from state file");
-
-                    let mut breakpoint = breakpoint.clone();
-                    breakpoint.path = debugger::utils::normalise_path(&breakpoint.path)
-                        .into_owned()
-                        .to_path_buf();
-
-                    debugger
-                        .add_breakpoint(&breakpoint)
-                        .context("adding breakpoint")?;
+                let breakpoint_path = debugger::utils::normalise_path(&breakpoint.path);
+                if !breakpoint_path.starts_with(&debug_root_dir) {
+                    continue;
                 }
+                tracing::debug!(?breakpoint, "adding breakpoint from state file");
+                let mut bp = breakpoint.clone();
+                bp.path = debugger::utils::normalise_path(&bp.path)
+                    .into_owned()
+                    .to_path_buf();
+                all_breakpoints.push(bp);
             }
         } else {
             tracing::warn!("missing project state");
         }
 
-        tracing::debug!("launching debugee");
-        debugger.start().context("launching debugee")?;
+        rt.block_on(async {
+            debugger
+                .configure_breakpoints(&all_breakpoints)
+                .await
+                .context("configuring breakpoints")?;
+
+            tracing::debug!("launching debugee");
+            debugger.start().await.context("launching debugee")
+        })?;
+
+        // Set up event forwarding from async debugger to GUI thread
+        let (event_tx, event_rx) = crossbeam_channel::unbounded();
+        let event_receiver = debugger.take_events();
+
+        let egui_context = cc.egui_ctx.clone();
+
+        // Create the async bridge which takes ownership of the debugger
+        let bridge = AsyncBridge::spawn(
+            debugger,
+            event_receiver,
+            event_tx.clone(),
+            egui_context.clone(),
+            rt,
+        )
+        .context("creating async bridge")?;
 
         let temp_state = DebuggerAppState {
             state: State::Initialising,
             previous_state: None,
-            debugger,
+            bridge,
             current_frame_id: None,
             jump: false,
             tab: RefCell::new(TabState::Variables),
@@ -315,15 +377,16 @@ impl DebuggerApp {
             git_files_loaded: false,
             file_override: None,
             file_cache: HashMap::new(),
+            variables_cache: HashMap::new(),
+            status: Default::default(),
         };
 
         let inner = Arc::new(Mutex::new(temp_state));
         let background_inner = Arc::clone(&inner);
-        let egui_context = cc.egui_ctx.clone();
 
-        thread::spawn(move || {
+        std::thread::spawn(move || {
             loop {
-                if let Ok(event) = events.recv() {
+                if let Ok(event) = event_rx.recv() {
                     if let Err(e) = background_inner.lock().unwrap().handle_event(&event) {
                         tracing::warn!(error = %e, "handling debugger event");
                     }
@@ -343,6 +406,14 @@ impl eframe::App for DebuggerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |_ui| {
             let mut inner = self.inner.lock().unwrap();
+
+            // Drain any async command errors into the status bar
+            for err in inner.bridge.drain_errors() {
+                inner
+                    .status
+                    .push_error(format!("{} failed: {}", err.operation, err.error));
+            }
+
             let mut user_interface = crate::renderer::Renderer::new(&mut inner);
             user_interface.render_ui(ctx);
             if inner.jump {
@@ -372,7 +443,8 @@ fn main() -> eyre::Result<()> {
                 ..Default::default()
             };
             cc.egui_ctx.set_style(style);
-            let app = DebuggerApp::new(args, cc).expect("creating main application");
+            let app = DebuggerApp::new(args, cc)
+                .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e.to_string()))?;
             Ok(Box::new(app))
         }),
     )

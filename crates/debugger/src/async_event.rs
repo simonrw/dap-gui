@@ -11,6 +11,12 @@ impl AsyncEventReceiver {
         Self { rx }
     }
 
+    /// Create an empty receiver (used when the receiver is moved out)
+    pub fn empty() -> Self {
+        let (_tx, rx) = mpsc::unbounded_channel();
+        Self { rx }
+    }
+
     /// Receive next event asynchronously
     pub async fn recv(&mut self) -> Option<Event> {
         self.rx.recv().await

@@ -549,6 +549,12 @@ where
         &mut self.event_rx
     }
 
+    /// Take ownership of the event receiver, replacing it with an empty one.
+    /// This is useful when the event receiver needs to be moved to another task.
+    pub fn take_events(&mut self) -> AsyncEventReceiver {
+        std::mem::replace(&mut self.event_rx, AsyncEventReceiver::empty())
+    }
+
     /// Start the debugging session (send ConfigurationDone)
     pub async fn start(&self) -> eyre::Result<()> {
         let response = self

@@ -1,9 +1,8 @@
 use std::collections::HashSet;
-use std::path::PathBuf;
 
 use debugger::{EvaluateResult, PausedFrame};
 use eframe::egui::{self, Context, Key, Modifiers, Ui};
-use transport::types::StackFrame;
+use transport::types::{StackFrame, Variable};
 
 use crate::{
     DebuggerAppState, State, TabState,
@@ -12,6 +11,7 @@ use crate::{
         breakpoints::Breakpoints,
         call_stack::CallStack,
         file_picker::{self, FilePickerResult},
+        status_bar::StatusBar,
     },
 };
 
@@ -92,6 +92,12 @@ impl<'s> Renderer<'s> {
         egui::SidePanel::left("left-panel").show(ctx, |ui| {
             self.render_sidepanel(ctx, ui, stack, original_breakpoints, show_details);
         });
+        egui::TopBottomPanel::bottom("status-bar")
+            .exact_height(24.0)
+            .show(ctx, |ui| {
+                let state_label = if show_details { "Paused" } else { "Running" };
+                ui.add(StatusBar::new(state_label, &mut self.state.status));
+            });
         egui::TopBottomPanel::bottom("bottom-panel")
             .min_height(200.0)
             .show(ctx, |ui| {
@@ -110,16 +116,24 @@ impl<'s> Renderer<'s> {
 
             ui.horizontal(|ui| {
                 if ui.button("▶ Continue").clicked() {
-                    self.state.debugger.r#continue().unwrap();
+                    self.state
+                        .bridge
+                        .send(crate::async_bridge::UiCommand::Continue);
                 }
                 if ui.button("⏭ Step Over").clicked() {
-                    self.state.debugger.step_over().unwrap();
+                    self.state
+                        .bridge
+                        .send(crate::async_bridge::UiCommand::StepOver);
                 }
                 if ui.button("⏬ Step Into").clicked() {
-                    self.state.debugger.step_in().unwrap();
+                    self.state
+                        .bridge
+                        .send(crate::async_bridge::UiCommand::StepIn);
                 }
                 if ui.button("⏫ Step Out").clicked() {
-                    self.state.debugger.step_out().unwrap();
+                    self.state
+                        .bridge
+                        .send(crate::async_bridge::UiCommand::StepOut);
                 }
             });
         });
@@ -173,14 +187,26 @@ impl<'s> Renderer<'s> {
             if ui.text_edit_singleline(repl_input).lost_focus()
                 && ui.input(|i| i.key_pressed(Key::Enter))
             {
-                // TODO: handle the error case
-                if let Ok(Some(EvaluateResult {
-                    output,
-                    error: _error,
-                })) = self.state.debugger.evaluate(repl_input, frame_id)
-                {
-                    *repl_output += &("\n".to_string() + repl_input + "\n=> " + &output + "\n");
-                    repl_input.clear();
+                let expr = repl_input.clone();
+                match self.state.bridge.send_sync(|reply| {
+                    crate::async_bridge::UiCommand::Evaluate {
+                        expression: expr,
+                        frame_id,
+                        reply,
+                    }
+                }) {
+                    Ok(EvaluateResult { output, error }) => {
+                        if error {
+                            *repl_output += &format!("\n{repl_input}\n!! {output}\n");
+                        } else {
+                            *repl_output += &format!("\n{repl_input}\n=> {output}\n");
+                        }
+                        repl_input.clear();
+                    }
+                    Err(e) => {
+                        self.state.status.push_error(format!("Eval failed: {e}"));
+                        repl_input.clear();
+                    }
                 }
             }
         }
@@ -206,19 +232,58 @@ impl<'s> Renderer<'s> {
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.heading("Variables");
             if show_details {
-                for var in &paused_frame.variables {
-                    let value = var.value.clone().unwrap_or_default();
-                    match &var.r#type {
-                        Some(t) => {
-                            ui.label(format!("{name}: {typ} = {value}", name = var.name, typ = t,));
-                        }
-                        None => {
-                            ui.label(format!("{name} = {value}", name = var.name,));
-                        }
-                    }
+                let variables = paused_frame.variables.clone();
+                for var in &variables {
+                    self.render_variable(ui, var, 0);
                 }
             }
         });
+    }
+
+    fn render_variable(&mut self, ui: &mut Ui, var: &Variable, depth: usize) {
+        let value = var.value.clone().unwrap_or_default();
+        let label = match &var.r#type {
+            Some(t) => format!("{}: {} = {}", var.name, t, value),
+            None => format!("{} = {}", var.name, value),
+        };
+
+        let has_children = var.variables_reference.is_some_and(|r| r != 0);
+
+        if has_children {
+            let var_ref = var.variables_reference.unwrap();
+            let id = ui.make_persistent_id(format!("var_{}_{}", depth, var.name));
+            egui::CollapsingHeader::new(label)
+                .id_salt(id)
+                .show(ui, |ui| {
+                    // Fetch children on first expand
+                    if !self.state.variables_cache.contains_key(&var_ref) {
+                        match self.state.bridge.send_sync(|reply| {
+                            crate::async_bridge::UiCommand::FetchVariables {
+                                reference: var_ref,
+                                reply,
+                            }
+                        }) {
+                            Ok(children) => {
+                                self.state.variables_cache.insert(var_ref, children);
+                            }
+                            Err(e) => {
+                                self.state
+                                    .status
+                                    .push_error(format!("Failed to fetch variables: {e}"));
+                                return;
+                            }
+                        }
+                    }
+
+                    if let Some(children) = self.state.variables_cache.get(&var_ref).cloned() {
+                        for child in &children {
+                            self.render_variable(ui, child, depth + 1);
+                        }
+                    }
+                });
+        } else {
+            ui.label(label);
+        }
     }
     fn render_code_viewer(
         &mut self,
@@ -228,12 +293,11 @@ impl<'s> Renderer<'s> {
         original_breakpoints: &[debugger::Breakpoint],
     ) {
         let frame = &paused_frame.frame;
-        let debugger_path: PathBuf = frame
-            .source
-            .as_ref()
-            .and_then(|s| s.path.as_ref())
-            .expect("no file source given")
-            .clone();
+        let Some(debugger_path) = frame.source.as_ref().and_then(|s| s.path.as_ref()).cloned()
+        else {
+            ui.label("No source file available for current frame");
+            return;
+        };
 
         // Determine which file to display
         let (display_path, highlight_line, current_line) =
@@ -269,12 +333,40 @@ impl<'s> Renderer<'s> {
                 .cloned(),
         );
 
+        let breakpoints_before = breakpoints.clone();
+        let is_dark = ui.visuals().dark_mode;
+
         ui.add(CodeView::new(
             &contents,
             current_line,
             highlight_line,
             &mut breakpoints,
             &self.state.jump,
+            display_path,
+            is_dark,
         ));
+
+        // Detect breakpoint changes from gutter clicks and sync with debugger
+        for added in breakpoints.difference(&breakpoints_before) {
+            let bp = added.clone();
+            match self.state.bridge.send_sync(|reply| {
+                crate::async_bridge::UiCommand::AddBreakpoint {
+                    breakpoint: bp,
+                    reply,
+                }
+            }) {
+                Ok(_id) => {}
+                Err(e) => {
+                    self.state
+                        .status
+                        .push_error(format!("Failed to add breakpoint: {e}"));
+                }
+            }
+        }
+        for removed in breakpoints_before.difference(&breakpoints) {
+            tracing::debug!(?removed, "breakpoint removed via gutter click");
+            // Note: removal by Breakpoint struct (not by ID) requires looking up the ID.
+            // For now we rely on the next pause event to refresh breakpoint state.
+        }
     }
 }
