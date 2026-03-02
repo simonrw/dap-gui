@@ -167,6 +167,9 @@ impl DebuggerAppState {
 struct DebuggerApp {
     inner: Arc<Mutex<DebuggerAppState>>,
     _state_manager: StateManager,
+    // Keep the debug server process alive for the lifetime of the app.
+    // Dropping this handle terminates the server and closes the transport.
+    _server: Option<Box<dyn server::Server + Send>>,
 }
 
 impl DebuggerApp {
@@ -214,6 +217,10 @@ impl DebuggerApp {
             .build()
             .map_err(|e| eyre::eyre!("failed to create tokio runtime: {e}"))?;
 
+        // Server handle must live beyond the async block so the debug server
+        // process is not killed before we finish initialization.
+        let mut _server_handle: Option<Box<dyn server::Server + Send>> = None;
+
         let (mut debugger, initial_breakpoints) = rt.block_on(async {
             match config {
                 LaunchConfiguration::Debugpy(Debugpy {
@@ -258,11 +265,13 @@ impl DebuggerApp {
                             };
 
                             let port = transport::DEFAULT_DAP_PORT;
-                            let _server = server::for_implementation_on_port(
-                                server::Implementation::Debugpy,
-                                port,
-                            )
-                            .context("creating background server process")?;
+                            _server_handle = Some(
+                                server::for_implementation_on_port(
+                                    server::Implementation::Debugpy,
+                                    port,
+                                )
+                                .context("creating background server process")?,
+                            );
 
                             // Small delay to let the server start
                             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -398,6 +407,7 @@ impl DebuggerApp {
         Ok(Self {
             inner,
             _state_manager: state_manager,
+            _server: _server_handle,
         })
     }
 }
