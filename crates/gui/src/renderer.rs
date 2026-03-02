@@ -43,7 +43,13 @@ impl<'s> Renderer<'s> {
 
         let current_state = self.state.state.clone();
         match current_state {
-            State::Initialising => {}
+            State::Initialising => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.centered_and_justified(|ui| {
+                        ui.label("Initialising debugger...");
+                    });
+                });
+            }
             State::Running => {
                 if let Some(State::Paused {
                     stack,
@@ -58,6 +64,12 @@ impl<'s> Renderer<'s> {
                         &breakpoints,
                         false,
                     );
+                } else {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.centered_and_justified(|ui| {
+                            ui.label("Program running...");
+                        });
+                    });
                 }
             }
             State::Paused {

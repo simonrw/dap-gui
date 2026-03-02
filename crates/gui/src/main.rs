@@ -404,22 +404,20 @@ impl DebuggerApp {
 
 impl eframe::App for DebuggerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |_ui| {
-            let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap();
 
-            // Drain any async command errors into the status bar
-            for err in inner.bridge.drain_errors() {
-                inner
-                    .status
-                    .push_error(format!("{} failed: {}", err.operation, err.error));
-            }
+        // Drain any async command errors into the status bar
+        for err in inner.bridge.drain_errors() {
+            inner
+                .status
+                .push_error(format!("{} failed: {}", err.operation, err.error));
+        }
 
-            let mut user_interface = crate::renderer::Renderer::new(&mut inner);
-            user_interface.render_ui(ctx);
-            if inner.jump {
-                inner.jump = false;
-            }
-        });
+        let mut user_interface = crate::renderer::Renderer::new(&mut inner);
+        user_interface.render_ui(ctx);
+        if inner.jump {
+            inner.jump = false;
+        }
     }
 }
 
