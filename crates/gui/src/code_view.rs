@@ -201,15 +201,23 @@ impl egui::Widget for CodeView<'_> {
         // handle jumping to the breakpoint
         if *self.jump {
             let mut state = response.state;
-            let num_lines = self.content.lines().count();
-            let position_fractional = self.current_line as f32 / num_lines as f32;
+            let num_lines = self.content.lines().count().max(1) as f32;
+            let viewport_height = response.inner_rect.height();
+            let row_height = response.content_size.y / num_lines;
+            let target_y = self.current_line.saturating_sub(1) as f32 * row_height;
 
-            let window_centre_pos = (position_fractional * response.content_size.y) as i32;
-            let window_pos = (window_centre_pos - ((response.inner_rect.max.y / 2.0) as i32))
-                .max(0)
-                .min((response.content_size.y - response.inner_rect.max.y) as i32);
+            // Only scroll if the target line is outside the visible area (with margin)
+            let current_top = state.offset.y;
+            let current_bottom = current_top + viewport_height;
+            let margin = row_height * 3.0;
 
-            state.offset.y = window_pos as f32;
+            if target_y < current_top + margin || target_y + row_height > current_bottom - margin {
+                // Center the target line in the viewport
+                let scroll_y = (target_y - viewport_height / 2.0 + row_height / 2.0)
+                    .max(0.0)
+                    .min((response.content_size.y - viewport_height).max(0.0));
+                state.offset.y = scroll_y;
+            }
             state.store(ui.ctx(), response.id);
         }
 
