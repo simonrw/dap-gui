@@ -262,16 +262,21 @@ impl CodeView<'_> {
             return;
         }
 
-        let breakpoint = debugger::Breakpoint {
-            path: self.file_path.clone(),
-            line,
-            name: None,
-        };
+        // Match by path+line only (ignore name field) for proper toggle behavior
+        let existing = self
+            .breakpoints
+            .iter()
+            .find(|b| b.path == self.file_path && b.line == line)
+            .cloned();
 
-        if self.breakpoints.contains(&breakpoint) {
-            self.breakpoints.remove(&breakpoint);
+        if let Some(bp) = existing {
+            self.breakpoints.remove(&bp);
         } else {
-            self.breakpoints.insert(breakpoint);
+            self.breakpoints.insert(debugger::Breakpoint {
+                path: self.file_path.clone(),
+                line,
+                name: None,
+            });
         }
     }
 }

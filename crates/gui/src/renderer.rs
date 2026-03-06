@@ -54,16 +54,10 @@ impl<'s> Renderer<'s> {
                 if let Some(State::Paused {
                     stack,
                     paused_frame,
-                    breakpoints,
+                    ..
                 }) = self.state.previous_state.clone()
                 {
-                    self.render_paused_or_running_ui(
-                        ctx,
-                        &stack,
-                        &paused_frame,
-                        &breakpoints,
-                        false,
-                    );
+                    self.render_paused_or_running_ui(ctx, &stack, &paused_frame, false);
                 } else {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.centered_and_justified(|ui| {
@@ -75,9 +69,9 @@ impl<'s> Renderer<'s> {
             State::Paused {
                 stack,
                 paused_frame,
-                breakpoints,
+                ..
             } => {
-                self.render_paused_or_running_ui(ctx, &stack, &paused_frame, &breakpoints, true);
+                self.render_paused_or_running_ui(ctx, &stack, &paused_frame, true);
             }
             State::Terminated => {
                 egui::CentralPanel::default().show(ctx, |ui| {
@@ -98,11 +92,10 @@ impl<'s> Renderer<'s> {
         ctx: &Context,
         stack: &[StackFrame],
         paused_frame: &PausedFrame,
-        original_breakpoints: &[debugger::Breakpoint],
         show_details: bool,
     ) {
         egui::SidePanel::left("left-panel").show(ctx, |ui| {
-            self.render_sidepanel(ctx, ui, stack, original_breakpoints, show_details);
+            self.render_sidepanel(ctx, ui, stack, show_details);
         });
         egui::TopBottomPanel::bottom("status-bar")
             .exact_height(24.0)
@@ -117,7 +110,7 @@ impl<'s> Renderer<'s> {
             });
         self.render_controls_window(ctx);
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.render_code_panel(ctx, ui, paused_frame, original_breakpoints);
+            self.render_code_panel(ctx, ui, paused_frame);
         });
     }
 
@@ -156,13 +149,13 @@ impl<'s> Renderer<'s> {
         _ctx: &Context,
         ui: &mut Ui,
         stack: &[StackFrame],
-        original_breakpoints: &[debugger::Breakpoint],
         show_details: bool,
     ) {
+        let bp_list: Vec<_> = self.state.ui_breakpoints.iter().cloned().collect();
         ui.vertical(|ui| {
             ui.add(CallStack::new(stack, show_details, self.state));
             ui.separator();
-            ui.add(Breakpoints::new(original_breakpoints, show_details));
+            ui.add(Breakpoints::new(&bp_list, show_details));
         });
     }
 
@@ -224,14 +217,8 @@ impl<'s> Renderer<'s> {
         }
     }
 
-    fn render_code_panel(
-        &mut self,
-        ctx: &Context,
-        ui: &mut Ui,
-        paused_frame: &PausedFrame,
-        original_breakpoints: &[debugger::Breakpoint],
-    ) {
-        self.render_code_viewer(ctx, ui, paused_frame, original_breakpoints);
+    fn render_code_panel(&mut self, ctx: &Context, ui: &mut Ui, paused_frame: &PausedFrame) {
+        self.render_code_viewer(ctx, ui, paused_frame);
     }
 
     fn render_variables(
@@ -297,13 +284,7 @@ impl<'s> Renderer<'s> {
             ui.label(label);
         }
     }
-    fn render_code_viewer(
-        &mut self,
-        _ctx: &Context,
-        ui: &mut Ui,
-        paused_frame: &PausedFrame,
-        original_breakpoints: &[debugger::Breakpoint],
-    ) {
+    fn render_code_viewer(&mut self, _ctx: &Context, ui: &mut Ui, paused_frame: &PausedFrame) {
         let frame = &paused_frame.frame;
         let Some(debugger_path) = frame.source.as_ref().and_then(|s| s.path.as_ref()).cloned()
         else {
@@ -338,29 +319,32 @@ impl<'s> Renderer<'s> {
             })
             .clone();
 
-        let mut breakpoints = HashSet::from_iter(
-            original_breakpoints
-                .iter()
-                .filter(|b| display_path.as_path() == b.path)
-                .cloned(),
-        );
+        // Filter ui_breakpoints to current file for the code view
+        let mut file_breakpoints: HashSet<_> = self
+            .state
+            .ui_breakpoints
+            .iter()
+            .filter(|b| b.path == display_path.as_path())
+            .cloned()
+            .collect();
 
-        let breakpoints_before = breakpoints.clone();
+        let breakpoints_before = file_breakpoints.clone();
         let is_dark = ui.visuals().dark_mode;
 
         ui.add(CodeView::new(
             &contents,
             current_line,
             highlight_line,
-            &mut breakpoints,
+            &mut file_breakpoints,
             &self.state.jump,
             display_path,
             is_dark,
         ));
 
         // Detect breakpoint changes from gutter clicks and sync with debugger
-        for added in breakpoints.difference(&breakpoints_before) {
+        for added in file_breakpoints.difference(&breakpoints_before) {
             let bp = added.clone();
+            self.state.ui_breakpoints.insert(bp.clone());
             match self.state.bridge.send_sync(|reply| {
                 crate::async_bridge::UiCommand::AddBreakpoint {
                     breakpoint: bp,
@@ -375,10 +359,9 @@ impl<'s> Renderer<'s> {
                 }
             }
         }
-        for removed in breakpoints_before.difference(&breakpoints) {
+        for removed in breakpoints_before.difference(&file_breakpoints) {
+            self.state.ui_breakpoints.remove(removed);
             tracing::debug!(?removed, "breakpoint removed via gutter click");
-            // Note: removal by Breakpoint struct (not by ID) requires looking up the ID.
-            // For now we rely on the next pause event to refresh breakpoint state.
         }
     }
 }

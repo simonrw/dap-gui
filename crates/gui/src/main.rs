@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::create_dir_all,
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -127,6 +127,9 @@ struct DebuggerAppState {
     // Cache for child variables fetched via variablesReference
     variables_cache: HashMap<i64, Vec<transport::types::Variable>>,
 
+    // Persistent breakpoint state for the UI (survives across frames)
+    ui_breakpoints: HashSet<debugger::Breakpoint>,
+
     // Status bar state
     status: crate::ui::status_bar::StatusState,
 }
@@ -145,8 +148,15 @@ impl DebuggerAppState {
         tracing::debug!("handling event");
         self.previous_state = Some(self.state.clone());
         self.state = event.clone().into();
-        if let State::Paused { paused_frame, .. } = &self.state {
+        if let State::Paused {
+            paused_frame,
+            breakpoints,
+            ..
+        } = &self.state
+        {
             self.current_frame_id = Some(paused_frame.frame.id);
+            // Refresh UI breakpoints from the debugger's authoritative state
+            self.ui_breakpoints = breakpoints.iter().cloned().collect();
         } else if let State::Running = &self.state {
             self.current_frame_id = None;
         }
@@ -387,6 +397,7 @@ impl DebuggerApp {
             file_override: None,
             file_cache: HashMap::new(),
             variables_cache: HashMap::new(),
+            ui_breakpoints: HashSet::new(),
             status: Default::default(),
         };
 
