@@ -195,7 +195,11 @@ impl egui::Widget for CodeView<'_> {
         };
 
         let response = egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.add(TextEdit::multiline(&mut self.content).layouter(&mut layouter))
+            ui.add(
+                TextEdit::multiline(&mut self.content)
+                    .desired_width(f32::INFINITY)
+                    .layouter(&mut layouter),
+            )
         });
 
         // handle jumping to the breakpoint
