@@ -5489,6 +5489,7 @@ dependencies = [
  "criterion",
  "crossbeam-channel",
  "ctor",
+ "dap-types",
  "eyre",
  "oneshot",
  "retry",

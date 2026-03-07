@@ -49,13 +49,22 @@ fn test_sync_transport_send_and_receive() {
     // Client sends a request
     let request_body = requests::RequestBody::Initialize(requests::Initialize {
         adapter_id: "test".to_string(),
-        lines_start_at_one: true,
-        path_format: requests::PathFormat::Path,
-        supports_start_debugging_request: false,
-        supports_variable_type: false,
-        supports_variable_paging: false,
-        supports_progress_reporting: false,
-        supports_memory_event: false,
+        client_id: None,
+        client_name: None,
+        columns_start_at1: None,
+        lines_start_at1: Some(true),
+        locale: None,
+        path_format: Some("path".to_string()),
+        supports_ansi_styling: None,
+        supports_args_can_be_interpreted_by_shell: None,
+        supports_invalidated_event: None,
+        supports_memory_event: Some(false),
+        supports_memory_references: None,
+        supports_progress_reporting: Some(false),
+        supports_run_in_terminal_request: None,
+        supports_start_debugging_request: Some(false),
+        supports_variable_paging: Some(false),
+        supports_variable_type: Some(false),
     });
 
     let seq = client
@@ -87,41 +96,7 @@ fn test_sync_transport_send_and_receive() {
         body: Some(responses::ResponseBody::Initialize(
             responses::Capabilities {
                 supports_configuration_done_request: Some(true),
-                supports_function_breakpoints: Some(false),
-                supports_conditional_breakpoints: Some(false),
-                supports_hit_conditional_breakpoints: Some(false),
-                supports_evaluate_for_hovers: Some(false),
-                supports_step_back: Some(false),
-                supports_set_variable: Some(false),
-                supports_restart_frame: Some(false),
-                supports_goto_targets_request: Some(false),
-                supports_step_in_targets_request: Some(false),
-                supports_completions_request: Some(false),
-                completion_trigger_characters: None,
-                supports_modules_request: Some(false),
-                supports_restart_request: Some(false),
-                supports_exception_options: Some(false),
-                supports_value_formatting_options: Some(false),
-                supports_exception_info_request: Some(false),
-                support_terminate_debuggee: Some(false),
-                support_suspend_debuggee: Some(false),
-                supports_delayed_stack_trace_loading: Some(false),
-                supports_loaded_sources_request: Some(false),
-                supports_log_points: Some(false),
-                supports_terminate_threads_request: Some(false),
-                supports_set_expression: Some(false),
-                supports_terminate_request: Some(false),
-                supports_data_breakpoints: Some(false),
-                supports_read_memory_request: Some(false),
-                supports_write_memory_request: Some(false),
-                supports_disassemble_request: Some(false),
-                supports_cancel_request: Some(false),
-                supports_breakpoint_locations_request: Some(false),
-                supports_clipboard_context: Some(false),
-                supports_stepping_granularity: Some(false),
-                supports_instruction_breakpoints: Some(false),
-                supports_exception_filter_options: Some(false),
-                supports_single_thread_execution_requests: Some(false),
+                ..Default::default()
             },
         )),
     };
@@ -170,7 +145,7 @@ fn test_sync_transport_execute() {
     // Client sends an execute (fire-and-forget) request
     let request_body = requests::RequestBody::Continue(requests::Continue {
         thread_id: 1,
-        single_thread: false,
+        single_thread: Some(false),
     });
 
     client

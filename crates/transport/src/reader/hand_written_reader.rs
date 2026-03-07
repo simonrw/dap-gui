@@ -372,7 +372,7 @@ mod tests {
     fn single_message() -> eyre::Result<()> {
         let body = "Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}";
 
-        execute_test!(body => Message::Event(events::Event::Terminated));
+        execute_test!(body => Message::Event(events::Event::Terminated(_)));
 
         Ok(())
     }
@@ -382,7 +382,7 @@ mod tests {
         execute_test!(
             "Content-Length: 37\r\n\r\n{\"ty",
             "pe\":\"event\",\"event\":\"terminated\"}" =>
-        Message::Event(events::Event::Terminated));
+        Message::Event(events::Event::Terminated(_)));
 
         Ok(())
     }
@@ -391,7 +391,7 @@ mod tests {
     fn multiple_messages() -> eyre::Result<()> {
         let body = "Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}Content-Length: 37\r\n\r\n{\"type\":\"event\",\"event\":\"terminated\"}";
 
-        execute_test!(body => Message::Event(events::Event::Terminated), Message::Event(events::Event::Terminated));
+        execute_test!(body => Message::Event(events::Event::Terminated(_)), Message::Event(events::Event::Terminated(_)));
 
         Ok(())
     }
@@ -476,7 +476,7 @@ mod tests {
         match result {
             // PollResult::Message(Message::Event(events::Event::Terminated)) => {}
             PollResult::Message(message)
-                if matches!(*message, Message::Event(events::Event::Terminated)) => {}
+                if matches!(*message, Message::Event(events::Event::Terminated(_))) => {}
             other => panic!("unexpected result: {:?}", other),
         }
 
@@ -552,7 +552,7 @@ mod tests {
         let result = reader.try_poll_message(Duration::from_secs(1))?;
         match result {
             PollResult::Message(message)
-                if matches!(*message, Message::Event(events::Event::Terminated)) => {}
+                if matches!(*message, Message::Event(events::Event::Terminated(_))) => {}
             other => panic!("expected Terminated event, got {:?}", other),
         }
 

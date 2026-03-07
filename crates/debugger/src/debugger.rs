@@ -571,6 +571,10 @@ impl Debugger {
             expression: input.to_string(),
             frame_id: Some(frame_id),
             context: Some("repl".to_string()),
+            column: None,
+            format: None,
+            line: None,
+            source: None,
         });
         let res = self.send_request(req).context("sending evaluate request")?;
         match res {
@@ -611,7 +615,7 @@ impl Debugger {
 
         self.send_execute(requests::RequestBody::Continue(requests::Continue {
             thread_id,
-            single_thread: false,
+            single_thread: Some(false),
         }))
         .context("sending continue request")
     }
@@ -624,8 +628,12 @@ impl Debugger {
                 .ok_or_else(|| eyre::eyre!("logic error: no current thread id"))
         })?;
 
-        self.send_execute(requests::RequestBody::Next(requests::Next { thread_id }))
-            .context("sending step_over request")
+        self.send_execute(requests::RequestBody::Next(requests::Next {
+            thread_id,
+            granularity: None,
+            single_thread: None,
+        }))
+        .context("sending step_over request")
     }
 
     /// Step into a statement
@@ -638,6 +646,9 @@ impl Debugger {
 
         self.send_execute(requests::RequestBody::StepIn(requests::StepIn {
             thread_id,
+            granularity: None,
+            single_thread: None,
+            target_id: None,
         }))
         .context("sending step_in request")
     }
@@ -652,6 +663,8 @@ impl Debugger {
 
         self.send_execute(requests::RequestBody::StepOut(requests::StepOut {
             thread_id,
+            granularity: None,
+            single_thread: None,
         }))
         .context("sending step_out request")
     }
@@ -740,7 +753,9 @@ impl Drop for Debugger {
     fn drop(&mut self) {
         tracing::debug!("dropping debugger");
         if let Err(e) = self.execute(requests::RequestBody::Disconnect(Disconnect {
-            terminate_debugee: true,
+            terminate_debuggee: Some(true),
+            restart: None,
+            suspend_debuggee: None,
         })) {
             tracing::warn!(error = %e, "failed to disconnect debugger during drop");
         }

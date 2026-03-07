@@ -242,14 +242,15 @@ where
         body: transport::events::StoppedEventBody,
     ) -> eyre::Result<()> {
         tracing::debug!("locking current thread id");
+        let thread_id = body.thread_id.expect("stopped event missing thread_id");
         {
             // scope to enforce lock drop
-            *self.current_thread_id.write().await = Some(body.thread_id);
+            *self.current_thread_id.write().await = Some(thread_id);
         }
 
         // Fetch full program state
-        tracing::debug!(?body.thread_id, "fetching stack trace");
-        let stack = self.fetch_stack_trace(body.thread_id).await?;
+        tracing::debug!(?thread_id, "fetching stack trace");
+        let stack = self.fetch_stack_trace(thread_id).await?;
         tracing::debug!("building paused stack frame");
         let paused_frame = self.build_paused_frame(&stack).await?;
         tracing::debug!(?paused_frame, "locking breakpoints");
@@ -272,7 +273,9 @@ where
         let response = self
             .send_and_wait(requests::RequestBody::StackTrace(requests::StackTrace {
                 thread_id,
-                ..Default::default()
+                levels: None,
+                format: None,
+                start_frame: None,
             }))
             .await?;
 
@@ -343,6 +346,10 @@ where
         let response = self
             .send_and_wait(requests::RequestBody::Variables(requests::Variables {
                 variables_reference,
+                count: None,
+                filter: None,
+                format: None,
+                start: None,
             }))
             .await?;
 
@@ -366,6 +373,10 @@ where
                 expression: expression.to_string(),
                 frame_id: Some(frame_id),
                 context: Some("repl".to_string()),
+                column: None,
+                format: None,
+                line: None,
+                source: None,
             }))
             .await?;
 
@@ -405,7 +416,11 @@ where
                 .filter(|bp| bp.path == breakpoint.path)
                 .map(|bp| SourceBreakpoint {
                     line: bp.line,
-                    ..Default::default()
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                    mode: None,
                 })
                 .collect();
         }
@@ -424,7 +439,8 @@ where
                         ..Default::default()
                     },
                     breakpoints: Some(source_breakpoints),
-                    ..Default::default()
+                    lines: None,
+                    source_modified: None,
                 },
             ))
             .await?;
@@ -458,7 +474,11 @@ where
                 .filter(|bp| bp.path == file_path)
                 .map(|bp| SourceBreakpoint {
                     line: bp.line,
-                    ..Default::default()
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                    mode: None,
                 })
                 .collect();
         }
@@ -476,7 +496,8 @@ where
                         ..Default::default()
                     },
                     breakpoints: Some(source_breakpoints),
-                    ..Default::default()
+                    lines: None,
+                    source_modified: None,
                 },
             ))
             .await?;
@@ -529,9 +550,13 @@ where
         function_breakpoints.push(function_name.clone());
 
         // Send all function breakpoints to debug adapter
-        let breakpoints: Vec<requests::Breakpoint> = function_breakpoints
+        let breakpoints: Vec<requests::FunctionBreakpoint> = function_breakpoints
             .iter()
-            .map(|name| requests::Breakpoint { name: name.clone() })
+            .map(|name| requests::FunctionBreakpoint {
+                name: name.clone(),
+                condition: None,
+                hit_condition: None,
+            })
             .collect();
 
         let response = self
@@ -559,9 +584,13 @@ where
         function_breakpoints.retain(|name| name != function_name);
 
         // Send updated function breakpoints to debug adapter
-        let breakpoints: Vec<requests::Breakpoint> = function_breakpoints
+        let breakpoints: Vec<requests::FunctionBreakpoint> = function_breakpoints
             .iter()
-            .map(|name| requests::Breakpoint { name: name.clone() })
+            .map(|name| requests::FunctionBreakpoint {
+                name: name.clone(),
+                condition: None,
+                hit_condition: None,
+            })
             .collect();
 
         let response = self

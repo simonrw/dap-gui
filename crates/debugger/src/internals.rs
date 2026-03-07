@@ -11,7 +11,7 @@ use std::{
 };
 use transport::{
     TransportConnection,
-    requests::{self, Initialize, PathFormat},
+    requests::{self, Initialize},
     responses::{self, ResponseBody},
     types::{
         BreakpointLocation, Source, SourceBreakpoint, StackFrame, StackFrameId, ThreadId, Variable,
@@ -61,8 +61,9 @@ impl FollowUpRequest {
                 context: _,
             } => requests::RequestBody::StackTrace(requests::StackTrace {
                 thread_id: *thread_id,
-                levels: levels.map(|l| l as usize),
-                ..Default::default()
+                levels: *levels,
+                format: None,
+                start_frame: None,
             }),
             FollowUpRequest::Scopes { frame_id } => {
                 requests::RequestBody::Scopes(requests::Scopes {
@@ -73,6 +74,10 @@ impl FollowUpRequest {
                 variables_reference,
             } => requests::RequestBody::Variables(requests::Variables {
                 variables_reference: *variables_reference,
+                count: None,
+                filter: None,
+                format: None,
+                start: None,
             }),
         }
     }
@@ -286,13 +291,16 @@ impl DebuggerInternals {
             body:
                 Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
                     stack_frames,
+                    ..
                 })),
             success: true,
             ..
         } = self
             .send(requests::RequestBody::StackTrace(requests::StackTrace {
                 thread_id: current_thread_id,
-                ..Default::default()
+                levels: None,
+                format: None,
+                start_frame: None,
             }))
             .unwrap()
         else {
@@ -348,6 +356,10 @@ impl DebuggerInternals {
     pub(crate) fn variables(&mut self, variables_reference: i64) -> eyre::Result<Vec<Variable>> {
         let req = requests::RequestBody::Variables(requests::Variables {
             variables_reference,
+            count: None,
+            filter: None,
+            format: None,
+            start: None,
         });
         match self.send(req).context("sending variables request") {
             Ok(responses::Response {
@@ -379,13 +391,22 @@ impl DebuggerInternals {
         tracing::debug!("initialising debugger internals");
         let req = requests::RequestBody::Initialize(Initialize {
             adapter_id: "dap gui".to_string(),
-            lines_start_at_one: false,
-            path_format: PathFormat::Path,
-            supports_start_debugging_request: true,
-            supports_variable_type: true,
-            supports_variable_paging: true,
-            supports_progress_reporting: true,
-            supports_memory_event: true,
+            client_id: None,
+            client_name: None,
+            columns_start_at1: None,
+            lines_start_at1: Some(false),
+            locale: None,
+            path_format: Some("path".to_string()),
+            supports_ansi_styling: None,
+            supports_args_can_be_interpreted_by_shell: None,
+            supports_invalidated_event: None,
+            supports_memory_event: Some(true),
+            supports_memory_references: None,
+            supports_progress_reporting: Some(true),
+            supports_run_in_terminal_request: None,
+            supports_start_debugging_request: Some(true),
+            supports_variable_paging: Some(true),
+            supports_variable_type: Some(true),
         });
 
         // TODO: deal with capabilities from the response
@@ -467,13 +488,15 @@ impl DebuggerInternals {
                 thread_id,
                 ..
             }) => {
+                let thread_id = thread_id.expect("stopped event missing thread_id");
                 self.current_thread_id = Some(thread_id);
                 // determine where we are in the source code
                 let response =
                     match self.send(requests::RequestBody::StackTrace(requests::StackTrace {
                         thread_id,
                         levels: Some(1),
-                        ..Default::default()
+                        format: None,
+                        start_frame: None,
                     })) {
                         Ok(r) => r,
                         Err(e) => {
@@ -487,6 +510,7 @@ impl DebuggerInternals {
                         body:
                             Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
                                 stack_frames,
+                                ..
                             })),
                         success: true,
                         ..
@@ -524,7 +548,9 @@ impl DebuggerInternals {
                 let response =
                     match self.send(requests::RequestBody::StackTrace(requests::StackTrace {
                         thread_id,
-                        ..Default::default()
+                        levels: None,
+                        format: None,
+                        start_frame: None,
                     })) {
                         Ok(r) => r,
                         Err(e) => {
@@ -538,6 +564,7 @@ impl DebuggerInternals {
                         body:
                             Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
                                 stack_frames,
+                                ..
                             })),
                         success: true,
                         ..
@@ -573,7 +600,7 @@ impl DebuggerInternals {
                 self.set_state(DebuggerState::Running);
             }
             // transport::events::Event::Thread(_) => todo!(),
-            transport::events::Event::Exited(_) | transport::events::Event::Terminated => {
+            transport::events::Event::Exited(_) | transport::events::Event::Terminated(_) => {
                 self.set_state(DebuggerState::Ended);
             }
             // transport::events::Event::DebugpyWaitingForServer { host, port } => todo!(),
@@ -621,17 +648,21 @@ impl DebuggerInternals {
                     path: Some(source.clone()),
                     ..Default::default()
                 },
-                lines: Some(breakpoints.iter().map(|b| b.line).collect()),
+                lines: Some(breakpoints.iter().map(|b| b.line as i64).collect()),
                 breakpoints: Some(
                     breakpoints
                         .iter()
                         .map(|b| SourceBreakpoint {
                             line: b.line,
-                            ..Default::default()
+                            column: None,
+                            condition: None,
+                            hit_condition: None,
+                            log_message: None,
+                            mode: None,
                         })
                         .collect(),
                 ),
-                ..Default::default()
+                source_modified: None,
             });
 
             tracing::debug!("sending broadcast breakpoints message");
@@ -661,7 +692,10 @@ impl DebuggerInternals {
                 path: Some(file.into()),
                 ..Default::default()
             },
-            ..Default::default()
+            line: 0,
+            column: None,
+            end_column: None,
+            end_line: None,
         });
 
         let res = self
@@ -708,6 +742,7 @@ impl DebuggerInternals {
                 thread_id,
                 ..
             }) => {
+                let thread_id = thread_id.expect("stopped event missing thread_id");
                 self.current_thread_id = Some(thread_id);
                 // Request initial stack trace to get current location
                 vec![FollowUpRequest::StackTrace {
@@ -722,7 +757,7 @@ impl DebuggerInternals {
                 self.set_state(DebuggerState::Running);
                 Vec::new()
             }
-            transport::events::Event::Exited(_) | transport::events::Event::Terminated => {
+            transport::events::Event::Exited(_) | transport::events::Event::Terminated(_) => {
                 self.set_state(DebuggerState::Ended);
                 Vec::new()
             }
@@ -767,6 +802,7 @@ impl DebuggerInternals {
                 body:
                     Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
                         stack_frames,
+                        ..
                     })),
                 success: true,
                 ..

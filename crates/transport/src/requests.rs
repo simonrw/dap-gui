@@ -6,9 +6,28 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::{
-    Seq, Source, SourceBreakpoint, StackFrameFormat, StackFrameId, ThreadId, VariablesReference,
-};
+// Re-export spec argument types under their old names for backwards compatibility
+pub use dap_types::BreakpointLocationsArguments as BreakpointLocations;
+pub use dap_types::ContinueArguments as Continue;
+pub use dap_types::DisconnectArguments as Disconnect;
+pub use dap_types::EvaluateArguments as Evaluate;
+pub use dap_types::FunctionBreakpoint;
+pub use dap_types::InitializeRequestArguments as Initialize;
+pub use dap_types::NextArguments as Next;
+pub use dap_types::ScopesArguments as Scopes;
+pub use dap_types::SetBreakpointsArguments as SetBreakpoints;
+pub use dap_types::SetExceptionBreakpointsArguments as SetExceptionBreakpoints;
+pub use dap_types::SetFunctionBreakpointsArguments as SetFunctionBreakpoints;
+pub use dap_types::StackTraceArguments as StackTrace;
+pub use dap_types::StepInArguments as StepIn;
+pub use dap_types::StepOutArguments as StepOut;
+pub use dap_types::TerminateArguments as Terminate;
+pub use dap_types::VariablesArguments as Variables;
+
+pub type Seq = i64;
+pub type ThreadId = i64;
+pub type StackFrameId = i64;
+pub type VariablesReference = i64;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -45,40 +64,7 @@ pub enum RequestBody {
     Evaluate(Evaluate),
 }
 
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Next {
-    pub thread_id: ThreadId,
-}
-
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct StepIn {
-    pub thread_id: ThreadId,
-}
-
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct StepOut {
-    pub thread_id: ThreadId,
-}
-
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Evaluate {
-    pub expression: String,
-    pub frame_id: Option<StackFrameId>,
-    pub context: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct StackTrace {
-    pub thread_id: ThreadId,
-    pub start_frame: Option<usize>,
-    pub levels: Option<usize>,
-    pub format: Option<StackFrameFormat>,
-}
+// Types not in the spec (custom to this crate)
 
 #[derive(Default, Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -86,55 +72,6 @@ pub enum PathFormat {
     #[default]
     Path,
     Uri,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Initialize {
-    #[serde(rename = "adapterID")]
-    pub adapter_id: String,
-    pub path_format: PathFormat,
-
-    #[serde(rename = "linesStartAt1")]
-    pub lines_start_at_one: bool,
-    pub supports_start_debugging_request: bool,
-    pub supports_variable_type: bool,
-    pub supports_variable_paging: bool,
-    pub supports_progress_reporting: bool,
-    pub supports_memory_event: bool,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Continue {
-    pub thread_id: ThreadId,
-    pub single_thread: bool,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Breakpoint {
-    pub name: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct SetFunctionBreakpoints {
-    pub breakpoints: Vec<Breakpoint>,
-}
-
-#[derive(Debug, Default, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct SetBreakpoints {
-    pub source: Source,
-    pub breakpoints: Option<Vec<SourceBreakpoint>>,
-    pub lines: Option<Vec<usize>>,
-    pub source_modified: Option<bool>,
-}
-
-#[derive(Debug, Default, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct SetExceptionBreakpoints {
-    pub filters: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -175,6 +112,13 @@ impl PathMapping {
                 .replace("${workspaceFolder}", &format!("{}", root.display()));
         }
     }
+}
+
+/// Custom breakpoint type for function breakpoints used in the old API.
+/// The spec uses `FunctionBreakpoint` with fields: name, condition, hit_condition.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Breakpoint {
+    pub name: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -221,40 +165,6 @@ pub struct Launch {
 
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     pub launch_arguments: Option<LaunchArguments>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Scopes {
-    pub frame_id: StackFrameId,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Variables {
-    pub variables_reference: VariablesReference,
-}
-
-#[derive(Default, Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct BreakpointLocations {
-    pub source: Source,
-    pub line: Option<usize>,
-    pub column: Option<usize>,
-    pub end_line: Option<usize>,
-    pub end_column: Option<usize>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Terminate {
-    pub restart: Option<bool>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Disconnect {
-    pub terminate_debugee: bool,
 }
 
 #[cfg(test)]

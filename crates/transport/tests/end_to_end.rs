@@ -6,7 +6,7 @@ use tracing_subscriber::EnvFilter;
 use transport::{
     bindings::get_random_tcp_port,
     events,
-    requests::{self, DebugpyLaunchArguments, Initialize, Launch, LaunchArguments, PathFormat},
+    requests::{self, DebugpyLaunchArguments, Initialize, Launch, LaunchArguments},
     responses,
 };
 
@@ -57,13 +57,22 @@ fn test_loop() -> Result<()> {
     // initialize
     let req = requests::RequestBody::Initialize(Initialize {
         adapter_id: "dap gui".to_string(),
-        lines_start_at_one: false,
-        path_format: PathFormat::Path,
-        supports_start_debugging_request: true,
-        supports_variable_type: true,
-        supports_variable_paging: true,
-        supports_progress_reporting: true,
-        supports_memory_event: true,
+        client_id: None,
+        client_name: None,
+        columns_start_at1: None,
+        lines_start_at1: Some(false),
+        locale: None,
+        path_format: Some("path".to_string()),
+        supports_ansi_styling: None,
+        supports_args_can_be_interpreted_by_shell: None,
+        supports_invalidated_event: None,
+        supports_memory_event: Some(true),
+        supports_memory_references: None,
+        supports_progress_reporting: Some(true),
+        supports_run_in_terminal_request: None,
+        supports_start_debugging_request: Some(true),
+        supports_variable_paging: Some(true),
+        supports_variable_type: Some(true),
     });
     client.send(req).unwrap();
 
@@ -94,8 +103,10 @@ fn test_loop() -> Result<()> {
 
     // set function breakpoints
     let req = requests::RequestBody::SetFunctionBreakpoints(requests::SetFunctionBreakpoints {
-        breakpoints: vec![requests::Breakpoint {
+        breakpoints: vec![requests::FunctionBreakpoint {
             name: "main".to_string(),
+            condition: None,
+            hit_condition: None,
         }],
     });
     let _ = client.send(req).unwrap();
@@ -116,6 +127,7 @@ fn test_loop() -> Result<()> {
     else {
         unreachable!();
     };
+    let thread_id = thread_id.expect("stopped event missing thread_id");
 
     tracing::debug!(
         ?reason,
@@ -131,11 +143,16 @@ fn test_loop() -> Result<()> {
     // fetch stack info
     let req = requests::RequestBody::StackTrace(requests::StackTrace {
         thread_id,
-        ..Default::default()
+        levels: None,
+        format: None,
+        start_frame: None,
     });
     let responses::Response {
         body:
-            Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse { stack_frames })),
+            Some(responses::ResponseBody::StackTrace(responses::StackTraceResponse {
+                stack_frames,
+                ..
+            })),
         success: true,
         ..
     } = client.send(req).unwrap()
@@ -160,6 +177,10 @@ fn test_loop() -> Result<()> {
         for scope in scopes {
             let req = requests::RequestBody::Variables(requests::Variables {
                 variables_reference: scope.variables_reference,
+                count: None,
+                filter: None,
+                format: None,
+                start: None,
             });
 
             let _ = client.send(req).unwrap();
@@ -169,7 +190,7 @@ fn test_loop() -> Result<()> {
     // continue
     let req = requests::RequestBody::Continue(requests::Continue {
         thread_id,
-        single_thread: false,
+        single_thread: Some(false),
     });
     tracing::debug!(?req, "sending continue request");
     let _ = client.send(req).unwrap();
@@ -179,7 +200,7 @@ fn test_loop() -> Result<()> {
     });
 
     wait_for_event("terminated", &rx, |e| {
-        matches!(e, events::Event::Terminated)
+        matches!(e, events::Event::Terminated(_))
     });
 
     // terminate
@@ -190,7 +211,9 @@ fn test_loop() -> Result<()> {
 
     // disconnect
     let req = requests::RequestBody::Disconnect(requests::Disconnect {
-        terminate_debugee: true,
+        terminate_debuggee: Some(true),
+        restart: None,
+        suspend_debuggee: None,
     });
     let _ = client.send(req).unwrap();
     Ok(())

@@ -37,7 +37,7 @@ mod tests {
         }"#;
         let var: Variable = serde_json::from_str(json).unwrap();
         assert_eq!(var.name, "x");
-        assert_eq!(var.value, "42");
+        assert_eq!(var.value, Some("42".to_string()));
         assert_eq!(var.r#type.as_deref(), Some("int"));
     }
 

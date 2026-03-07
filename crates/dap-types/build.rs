@@ -22,6 +22,8 @@ fn main() {
         (("StackFrame", "endColumn"), "Option<usize>"),
         (("SourceBreakpoint", "line"), "usize"),
         (("SourceBreakpoint", "column"), "Option<usize>"),
+        (("Variable", "value"), "Option<String>"),
+        (("Variable", "variablesReference"), "Option<i64>"),
     ]);
 
     // Base protocol types to skip (we don't generate these)
@@ -470,6 +472,13 @@ fn generate_struct_from_object(
                 if !serde_attr.is_empty() {
                     writeln!(output, "    {serde_attr}").unwrap();
                 }
+                if override_type.starts_with("Option<") {
+                    writeln!(
+                        output,
+                        "    #[serde(skip_serializing_if = \"Option::is_none\")]"
+                    )
+                    .unwrap();
+                }
                 writeln!(output, "    pub {rust_field}: {override_type},").unwrap();
                 continue;
             }
@@ -479,6 +488,13 @@ fn generate_struct_from_object(
             let serde_attr = serde_rename_attr(field_name, &rust_field);
             if !serde_attr.is_empty() {
                 writeln!(output, "    {serde_attr}").unwrap();
+            }
+            if !is_required {
+                writeln!(
+                    output,
+                    "    #[serde(skip_serializing_if = \"Option::is_none\")]"
+                )
+                .unwrap();
             }
             writeln!(output, "    pub {rust_field}: {rust_type},").unwrap();
         }
@@ -588,6 +604,13 @@ fn generate_composed_struct(
         let serde_attr = serde_rename_attr(field_name, &rust_field);
         if !serde_attr.is_empty() {
             writeln!(output, "    {serde_attr}").unwrap();
+        }
+        if !is_required {
+            writeln!(
+                output,
+                "    #[serde(skip_serializing_if = \"Option::is_none\")]"
+            )
+            .unwrap();
         }
         writeln!(output, "    pub {rust_field}: {rust_type},").unwrap();
     }
@@ -772,11 +795,44 @@ fn generate_event_enum(output: &mut String, event_map: &BTreeMap<String, Option<
     .unwrap();
     writeln!(
         output,
-        "        match serde_json::from_value::<EventHelper>(value) {{"
+        "        match serde_json::from_value::<EventHelper>(value.clone()) {{"
     )
     .unwrap();
     writeln!(output, "            Ok(helper) => Ok(helper.into()),").unwrap();
-    writeln!(output, "            Err(_) => Ok(Event::Unknown),").unwrap();
+    writeln!(output, "            Err(_) => {{").unwrap();
+    writeln!(
+        output,
+        "                // If body is missing, try with an empty body object"
+    )
+    .unwrap();
+    writeln!(output, "                // (some events have all-optional body fields and adapters may omit the body entirely)").unwrap();
+    writeln!(
+        output,
+        "                if let Some(obj) = value.as_object() {{"
+    )
+    .unwrap();
+    writeln!(
+        output,
+        "                    if !obj.contains_key(\"body\") {{"
+    )
+    .unwrap();
+    writeln!(
+        output,
+        "                        let mut patched = obj.clone();"
+    )
+    .unwrap();
+    writeln!(output, "                        patched.insert(\"body\".to_string(), serde_json::Value::Object(Default::default()));").unwrap();
+    writeln!(output, "                        if let Ok(helper) = serde_json::from_value::<EventHelper>(serde_json::Value::Object(patched)) {{").unwrap();
+    writeln!(
+        output,
+        "                            return Ok(helper.into());"
+    )
+    .unwrap();
+    writeln!(output, "                        }}").unwrap();
+    writeln!(output, "                    }}").unwrap();
+    writeln!(output, "                }}").unwrap();
+    writeln!(output, "                Ok(Event::Unknown)").unwrap();
+    writeln!(output, "            }}").unwrap();
     writeln!(output, "        }}").unwrap();
     writeln!(output, "    }}").unwrap();
     writeln!(output, "}}").unwrap();
