@@ -78,8 +78,7 @@ impl egui::Widget for CodeView<'_> {
 
         // Read hovered gutter line from previous frame (stored after scroll area renders)
         let hover_id = egui::Id::new("code_view_hovered_gutter_line");
-        let hovered_gutter_line: Option<usize> =
-            ui.data(|d| d.get_temp::<usize>(hover_id));
+        let hovered_gutter_line: Option<usize> = ui.data(|d| d.get_temp::<usize>(hover_id));
 
         // Set up syntax highlighting
         let syntax = detect_syntax(&self.file_path);
@@ -104,7 +103,9 @@ impl egui::Widget for CodeView<'_> {
             let mut layout_job = LayoutJob::default();
             let indent = 4.0;
             let bullet_format = |color| TextFormat {
-                font_id: egui::FontId::monospace(ui.style().text_styles[&egui::TextStyle::Body].size),
+                font_id: egui::FontId::monospace(
+                    ui.style().text_styles[&egui::TextStyle::Body].size,
+                ),
                 color,
                 ..Default::default()
             };

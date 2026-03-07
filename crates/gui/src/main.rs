@@ -244,12 +244,11 @@ impl DebuggerApp {
                     ..
                 }) => {
                     if let Some(dir) = cwd {
-                        debug_root_dir = std::fs::canonicalize(
-                            debugger::utils::normalise_path(&dir).as_ref(),
-                        )
-                        .unwrap_or_else(|_| {
-                            debugger::utils::normalise_path(&dir).into_owned()
-                        });
+                        debug_root_dir =
+                            std::fs::canonicalize(debugger::utils::normalise_path(&dir).as_ref())
+                                .unwrap_or_else(|_| {
+                                    debugger::utils::normalise_path(&dir).into_owned()
+                                });
                     }
 
                     match request.as_str() {
@@ -283,8 +282,7 @@ impl DebuggerApp {
 
                             // Canonicalize so breakpoint paths match what the
                             // debug adapter returns in frame.source.path.
-                            let program = std::fs::canonicalize(&program)
-                                .unwrap_or(program);
+                            let program = std::fs::canonicalize(&program).unwrap_or(program);
 
                             let port = transport::DEFAULT_DAP_PORT;
                             _server_handle = Some(

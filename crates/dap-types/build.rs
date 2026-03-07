@@ -88,9 +88,17 @@ fn main() {
     }
 
     let mut output = String::with_capacity(64 * 1024);
-    writeln!(output, "// Auto-generated from DAP specification. Do not edit.").unwrap();
+    writeln!(
+        output,
+        "// Auto-generated from DAP specification. Do not edit."
+    )
+    .unwrap();
     writeln!(output).unwrap();
-    writeln!(output, "use serde::{{Deserialize, Deserializer, Serialize}};").unwrap();
+    writeln!(
+        output,
+        "use serde::{{Deserialize, Deserializer, Serialize}};"
+    )
+    .unwrap();
     writeln!(output).unwrap();
 
     // Generate string enums
@@ -144,12 +152,16 @@ fn is_concrete_request(name: &str, def: &Value) -> bool {
 }
 
 fn is_concrete_response(name: &str, def: &Value) -> bool {
-    name.ends_with("Response") && name != "Response" && name != "ErrorResponse" && def.get("allOf").is_some() && {
-        let all_of = def["allOf"].as_array().unwrap();
-        all_of.iter().any(|item| {
-            item.get("$ref").and_then(|r| r.as_str()) == Some("#/definitions/Response")
-        })
-    }
+    name.ends_with("Response")
+        && name != "Response"
+        && name != "ErrorResponse"
+        && def.get("allOf").is_some()
+        && {
+            let all_of = def["allOf"].as_array().unwrap();
+            all_of.iter().any(|item| {
+                item.get("$ref").and_then(|r| r.as_str()) == Some("#/definitions/Response")
+            })
+        }
 }
 
 fn is_concrete_event(name: &str, def: &Value) -> bool {
@@ -168,9 +180,7 @@ fn is_type_composition(def: &Value) -> bool {
             if let Some(r) = item.get("$ref").and_then(|r| r.as_str()) {
                 matches!(
                     r,
-                    "#/definitions/Request"
-                        | "#/definitions/Response"
-                        | "#/definitions/Event"
+                    "#/definitions/Request" | "#/definitions/Response" | "#/definitions/Event"
                 )
             } else {
                 false
@@ -218,16 +228,11 @@ enum ResponseBodyInfo {
 
 fn extract_response_info(name: &str, def: &Value) -> (String, Option<ResponseBodyInfo>) {
     let all_of = def["allOf"].as_array().unwrap();
-    let extra = all_of
-        .iter()
-        .find(|item| item.get("properties").is_some());
+    let extra = all_of.iter().find(|item| item.get("properties").is_some());
 
     let Some(extra) = extra else {
         // Some responses have no extra properties section (just ref to Response)
-        let cmd = name
-            .strip_suffix("Response")
-            .unwrap()
-            .to_string();
+        let cmd = name.strip_suffix("Response").unwrap().to_string();
         let cmd = pascal_to_camel(&cmd);
         return (cmd, None);
     };
@@ -258,9 +263,7 @@ enum EventBodyInfo {
 
 fn extract_event_info(name: &str, def: &Value) -> (String, Option<EventBodyInfo>) {
     let all_of = def["allOf"].as_array().unwrap();
-    let extra = all_of
-        .iter()
-        .find(|item| item.get("properties").is_some());
+    let extra = all_of.iter().find(|item| item.get("properties").is_some());
 
     let Some(extra) = extra else {
         let evt = name.strip_suffix("Event").unwrap().to_string();
@@ -307,9 +310,7 @@ fn generate_string_enum(output: &mut String, name: &str, def: &Value) {
         return;
     }
 
-    let descriptions = def
-        .get("enumDescriptions")
-        .and_then(|d| d.as_array());
+    let descriptions = def.get("enumDescriptions").and_then(|d| d.as_array());
 
     if is_open {
         // Open enum with Other(String) variant
@@ -339,8 +340,11 @@ fn generate_string_enum(output: &mut String, name: &str, def: &Value) {
         for val in values {
             let s = val.as_str().unwrap();
             let variant = enum_variant_name(s);
-            writeln!(output, "            {name}::{variant} => serializer.serialize_str({s:?}),")
-                .unwrap();
+            writeln!(
+                output,
+                "            {name}::{variant} => serializer.serialize_str({s:?}),"
+            )
+            .unwrap();
         }
         writeln!(
             output,
@@ -433,9 +437,7 @@ fn generate_struct_from_object(
         && def["additionalProperties"] != Value::Bool(false);
 
     let all_optional = properties
-        .map(|props| {
-            props.keys().all(|k| !required.contains(k.as_str()))
-        })
+        .map(|props| props.keys().all(|k| !required.contains(k.as_str())))
         .unwrap_or(true)
         && !has_additional_properties;
 
@@ -483,11 +485,7 @@ fn generate_struct_from_object(
     }
 
     if has_additional_properties {
-        writeln!(
-            output,
-            "    #[serde(flatten)]"
-        )
-        .unwrap();
+        writeln!(output, "    #[serde(flatten)]").unwrap();
         writeln!(
             output,
             "    pub additional_properties: Option<serde_json::Map<String, serde_json::Value>>,"
@@ -553,9 +551,7 @@ fn generate_composed_struct(
         write_doc_comment(output, desc, "");
     }
 
-    let all_optional = all_properties
-        .keys()
-        .all(|k| !all_required.contains(k));
+    let all_optional = all_properties.keys().all(|k| !all_required.contains(k));
 
     if all_optional {
         writeln!(
@@ -605,11 +601,7 @@ fn generate_request_arguments_enum(
     command_map: &BTreeMap<String, Option<String>>,
 ) {
     writeln!(output, "/// Dispatch enum for all DAP request types.").unwrap();
-    writeln!(
-        output,
-        "#[derive(Serialize, Deserialize, Debug, Clone)]"
-    )
-    .unwrap();
+    writeln!(output, "#[derive(Serialize, Deserialize, Debug, Clone)]").unwrap();
     writeln!(
         output,
         "#[serde(tag = \"command\", content = \"arguments\", rename_all = \"camelCase\")]"
@@ -639,11 +631,7 @@ fn generate_response_body_enum(
     response_map: &BTreeMap<String, Option<ResponseBodyInfo>>,
 ) {
     writeln!(output, "/// Dispatch enum for all DAP response body types.").unwrap();
-    writeln!(
-        output,
-        "#[derive(Serialize, Deserialize, Debug, Clone)]"
-    )
-    .unwrap();
+    writeln!(output, "#[derive(Serialize, Deserialize, Debug, Clone)]").unwrap();
     writeln!(
         output,
         "#[serde(tag = \"command\", content = \"body\", rename_all = \"camelCase\")]"
@@ -741,11 +729,7 @@ fn generate_event_enum(output: &mut String, event_map: &BTreeMap<String, Option<
 
     // Generate From<EventHelper> for Event
     writeln!(output, "impl From<EventHelper> for Event {{").unwrap();
-    writeln!(
-        output,
-        "    fn from(helper: EventHelper) -> Self {{"
-    )
-    .unwrap();
+    writeln!(output, "    fn from(helper: EventHelper) -> Self {{").unwrap();
     writeln!(output, "        match helper {{").unwrap();
     for (evt, body_info) in event_map {
         let variant = to_pascal_case(evt);
