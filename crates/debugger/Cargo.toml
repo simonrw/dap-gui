@@ -14,7 +14,7 @@ serde.workspace = true
 serde_json.workspace = true
 transport = { path = "../transport" }
 transport2 = { path = "../transport2" }
-tokio = { version = "1.48", features = ["sync", "rt", "macros"] }
+tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 tokio-util.workspace = true
 tokio-stream = "0.1.16"
 futures = "0.3.31"
