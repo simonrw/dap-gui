@@ -132,9 +132,23 @@ struct DebuggerAppState {
 
     // Status bar state
     status: crate::ui::status_bar::StatusState,
+
+    // Persistence
+    state_manager: StateManager,
+    debug_root_dir: PathBuf,
 }
 
 impl DebuggerAppState {
+    pub(crate) fn persist_breakpoints(&mut self) {
+        let breakpoints: Vec<_> = self.ui_breakpoints.iter().cloned().collect();
+        if let Err(e) = self
+            .state_manager
+            .set_project_breakpoints(self.debug_root_dir.clone(), breakpoints)
+        {
+            tracing::warn!(error = %e, "failed to persist breakpoints");
+        }
+    }
+
     pub(crate) fn change_scope(&self, stack_frame_id: StackFrameId) -> eyre::Result<()> {
         self.bridge
             .send_sync(|reply| async_bridge::UiCommand::ChangeScope {
@@ -176,7 +190,6 @@ impl DebuggerAppState {
 
 struct DebuggerApp {
     inner: Arc<Mutex<DebuggerAppState>>,
-    _state_manager: StateManager,
     // Keep the debug server process alive for the lifetime of the app.
     // Dropping this handle terminates the server and closes the transport.
     _server: Option<Box<dyn server::Server + Send>>,
@@ -192,10 +205,8 @@ impl DebuggerApp {
         if !state_path.parent().unwrap().is_dir() {
             create_dir_all(state_path.parent().unwrap()).context("creating state directory")?;
         }
-        let state_manager = StateManager::new(state_path)
-            .wrap_err("loading state")?
-            .save()
-            .wrap_err("saving state")?;
+        let state_manager = StateManager::new(state_path).wrap_err("loading state")?;
+        state_manager.save().wrap_err("saving state")?;
         let persisted_state = state_manager.current();
         tracing::trace!(state = ?persisted_state, "loaded state");
 
@@ -408,6 +419,8 @@ impl DebuggerApp {
             variables_cache: HashMap::new(),
             ui_breakpoints: all_breakpoints.into_iter().collect(),
             status: Default::default(),
+            state_manager,
+            debug_root_dir,
         };
 
         let inner = Arc::new(Mutex::new(temp_state));
@@ -426,7 +439,6 @@ impl DebuggerApp {
 
         Ok(Self {
             inner,
-            _state_manager: state_manager,
             _server: _server_handle,
         })
     }

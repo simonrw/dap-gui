@@ -43,15 +43,36 @@ impl StateManager {
         }
     }
 
-    pub fn load(mut self) -> eyre::Result<Self> {
+    pub fn load(&mut self) -> eyre::Result<()> {
         let state = crate::load_from(&self.save_path).wrap_err("loading state")?;
         self.current = state;
-        Ok(self)
+        Ok(())
     }
 
-    pub fn save(self) -> eyre::Result<Self> {
+    pub fn save(&self) -> eyre::Result<()> {
         crate::save_to(&self.current, &self.save_path).wrap_err("saving state")?;
-        Ok(self)
+        Ok(())
+    }
+
+    pub fn set_project_breakpoints(
+        &mut self,
+        project: PathBuf,
+        breakpoints: Vec<debugger::Breakpoint>,
+    ) -> eyre::Result<()> {
+        if let Some(entry) = self
+            .current
+            .projects
+            .iter_mut()
+            .find(|p| p.path == project)
+        {
+            entry.breakpoints = breakpoints;
+        } else {
+            self.current.projects.push(PerFile {
+                path: project,
+                breakpoints,
+            });
+        }
+        self.save()
     }
 
     pub fn current(&self) -> &Persistence {
@@ -195,11 +216,11 @@ mod tests {
         let path = dir.path().join("state.json");
 
         // Create manager (creates default file)
-        let manager = StateManager::new(&path).unwrap();
-        let manager = manager.save().unwrap();
+        let mut manager = StateManager::new(&path).unwrap();
+        manager.save().unwrap();
 
         // Reload from disk
-        let manager = manager.load().unwrap();
+        manager.load().unwrap();
         assert!(manager.current().projects.is_empty());
     }
 

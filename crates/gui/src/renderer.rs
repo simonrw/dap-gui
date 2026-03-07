@@ -364,5 +364,9 @@ impl<'s> Renderer<'s> {
             self.state.ui_breakpoints.remove(removed);
             tracing::debug!(?removed, "breakpoint removed via gutter click");
         }
+
+        if file_breakpoints != breakpoints_before {
+            self.state.persist_breakpoints();
+        }
     }
 }
