@@ -59,12 +59,7 @@ impl StateManager {
         project: PathBuf,
         breakpoints: Vec<debugger::Breakpoint>,
     ) -> eyre::Result<()> {
-        if let Some(entry) = self
-            .current
-            .projects
-            .iter_mut()
-            .find(|p| p.path == project)
-        {
+        if let Some(entry) = self.current.projects.iter_mut().find(|p| p.path == project) {
             entry.breakpoints = breakpoints;
         } else {
             self.current.projects.push(PerFile {
