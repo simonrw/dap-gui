@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use eframe::{
-    egui::{self, Response, TextEdit, TextFormat},
+    egui::{self, TextEdit, TextFormat},
     epaint::{Color32, text::LayoutJob},
 };
 use syntect::highlighting::{self, ThemeSet};
@@ -76,6 +76,11 @@ impl egui::Widget for CodeView<'_> {
     fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
         let breakpoint_positions = self.breakpoint_positions();
 
+        // Read hovered gutter line from previous frame (stored after scroll area renders)
+        let hover_id = egui::Id::new("code_view_hovered_gutter_line");
+        let hovered_gutter_line: Option<usize> =
+            ui.data(|d| d.get_temp::<usize>(hover_id));
+
         // Set up syntax highlighting
         let syntax = detect_syntax(&self.file_path);
         let theme_name = if self.is_dark {
@@ -91,10 +96,18 @@ impl egui::Widget for CodeView<'_> {
 
         let highlight_line = self.highlight_line;
         let current_line = self.current_line;
+
+        let bullet = "•";
+
         // closure that defines the layout job
         let mut layouter = |ui: &egui::Ui, s: &dyn egui::TextBuffer, _wrap_width: f32| {
             let mut layout_job = LayoutJob::default();
-            let indent = 16.0;
+            let indent = 4.0;
+            let bullet_format = |color| TextFormat {
+                font_id: egui::FontId::monospace(ui.style().text_styles[&egui::TextStyle::Body].size),
+                color,
+                ..Default::default()
+            };
 
             if let Some((syn, theme)) = &highlighter {
                 let mut highlight_state = syntect::highlighting::HighlightState::new(
@@ -104,17 +117,16 @@ impl egui::Widget for CodeView<'_> {
                 let mut parse_state = syntect::parsing::ParseState::new(syn);
 
                 for (i, line) in s.as_str().lines().enumerate() {
-                    // Breakpoint marker
-                    if breakpoint_positions.contains(&(i + 1)) {
-                        layout_job.append(
-                            "•",
-                            0.0,
-                            TextFormat {
-                                color: Color32::from_rgb(255, 0, 0),
-                                ..Default::default()
-                            },
-                        );
-                    }
+                    let line_num = i + 1;
+                    // Always render bullet to reserve space
+                    let bullet_color = if breakpoint_positions.contains(&line_num) {
+                        Color32::from_rgb(255, 0, 0)
+                    } else if hovered_gutter_line == Some(line_num) {
+                        Color32::from_rgba_unmultiplied(255, 0, 0, 80)
+                    } else {
+                        Color32::TRANSPARENT
+                    };
+                    layout_job.append(bullet, 0.0, bullet_format(bullet_color));
 
                     let line_with_newline = format!("{line}\n");
                     let ops = parse_state
@@ -165,16 +177,16 @@ impl egui::Widget for CodeView<'_> {
             } else {
                 // Fallback: no syntax highlighting
                 for (i, line) in s.as_str().lines().enumerate() {
-                    if breakpoint_positions.contains(&(i + 1)) {
-                        layout_job.append(
-                            "•",
-                            0.0,
-                            TextFormat {
-                                color: Color32::from_rgb(255, 0, 0),
-                                ..Default::default()
-                            },
-                        );
-                    }
+                    let line_num = i + 1;
+                    let bullet_color = if breakpoint_positions.contains(&line_num) {
+                        Color32::from_rgb(255, 0, 0)
+                    } else if hovered_gutter_line == Some(line_num) {
+                        Color32::from_rgba_unmultiplied(255, 0, 0, 80)
+                    } else {
+                        Color32::TRANSPARENT
+                    };
+                    layout_job.append(bullet, 0.0, bullet_format(bullet_color));
+
                     if highlight_line && i == current_line.wrapping_sub(1) {
                         layout_job.append(
                             line,
@@ -187,7 +199,7 @@ impl egui::Widget for CodeView<'_> {
                     } else {
                         layout_job.append(line, indent, TextFormat::default());
                     }
-                    layout_job.append("\n", indent, TextFormat::default());
+                    layout_job.append("\n", 0.0, TextFormat::default());
                 }
             }
 
@@ -195,12 +207,33 @@ impl egui::Widget for CodeView<'_> {
         };
 
         let response = egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.add(
-                TextEdit::multiline(&mut self.content)
-                    .desired_width(f32::INFINITY)
-                    .layouter(&mut layouter),
-            )
+            TextEdit::multiline(&mut self.content)
+                .desired_width(f32::INFINITY)
+                .layouter(&mut layouter)
+                .show(ui)
         });
+
+        let galley_pos = response.inner.galley_pos;
+        let galley = &response.inner.galley;
+        let text = self.content;
+
+        // Helper: map a screen-space y coordinate to a 1-indexed line number
+        // galley_pos is in screen space (accounts for scroll), so no offset needed
+        let line_at_screen_y = |screen_y: f32| -> Option<usize> {
+            let galley_y = screen_y - galley_pos.y;
+            let cursor = galley.cursor_from_pos(egui::vec2(0.0, galley_y));
+            let line = text[..cursor.index.min(text.len())]
+                .chars()
+                .filter(|&c| c == '\n')
+                .count()
+                + 1;
+            let num_lines = text.lines().count().max(1);
+            if line >= 1 && line <= num_lines {
+                Some(line)
+            } else {
+                None
+            }
+        };
 
         // handle jumping to the breakpoint
         if *self.jump {
@@ -225,62 +258,60 @@ impl egui::Widget for CodeView<'_> {
             state.store(ui.ctx(), response.id);
         }
 
-        self.update_breakpoints(&response);
+        // Detect gutter hover and store for next frame's layouter
+        {
+            let pointer_pos = ui.input(|i| i.pointer.hover_pos());
+            let gutter_right = response.inner_rect.left() + 16.0;
 
-        response.inner
-    }
-}
+            let new_hovered: Option<usize> = pointer_pos.and_then(|pos| {
+                if pos.x > gutter_right || !response.inner_rect.contains(pos) {
+                    return None;
+                }
+                line_at_screen_y(pos.y)
+            });
 
-impl CodeView<'_> {
-    fn update_breakpoints(
-        &mut self,
-        scroll_response: &egui::scroll_area::ScrollAreaOutput<Response>,
-    ) {
-        let text_response = &scroll_response.inner;
-        if !text_response.clicked_by(egui::PointerButton::Primary) {
-            return;
-        }
+            if new_hovered.is_some() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            }
 
-        let Some(screen_pos) = text_response.interact_pointer_pos() else {
-            return;
-        };
-
-        // Check if the click is in the gutter region (left 16px of the visible area)
-        let gutter_right = scroll_response.inner_rect.left() + 16.0;
-        if screen_pos.x > gutter_right {
-            return;
-        }
-
-        // Calculate the row height from the font
-        let row_height =
-            scroll_response.content_size.y / self.content.lines().count().max(1) as f32;
-
-        // Convert screen position to content position
-        let content_y =
-            (screen_pos.y - scroll_response.inner_rect.top()) + scroll_response.state.offset.y;
-
-        // Calculate 1-indexed line number
-        let line = (content_y / row_height).floor() as usize + 1;
-        let num_lines = self.content.lines().count();
-        if line < 1 || line > num_lines {
-            return;
-        }
-
-        // Match by path+line only (ignore name field) for proper toggle behavior
-        let existing = self
-            .breakpoints
-            .iter()
-            .find(|b| b.path == self.file_path && b.line == line)
-            .cloned();
-
-        if let Some(bp) = existing {
-            self.breakpoints.remove(&bp);
-        } else {
-            self.breakpoints.insert(debugger::Breakpoint {
-                path: self.file_path.clone(),
-                line,
-                name: None,
+            ui.data_mut(|d| {
+                if let Some(line) = new_hovered {
+                    d.insert_temp(hover_id, line);
+                } else {
+                    d.remove_temp::<usize>(hover_id);
+                }
             });
         }
+
+        // Handle breakpoint click
+        {
+            let text_response = &response.inner.response;
+            if text_response.clicked_by(egui::PointerButton::Primary) {
+                if let Some(screen_pos) = text_response.interact_pointer_pos() {
+                    let gutter_right = response.inner_rect.left() + 16.0;
+                    if screen_pos.x <= gutter_right {
+                        if let Some(line) = line_at_screen_y(screen_pos.y) {
+                            let existing = self
+                                .breakpoints
+                                .iter()
+                                .find(|b| b.path == self.file_path && b.line == line)
+                                .cloned();
+
+                            if let Some(bp) = existing {
+                                self.breakpoints.remove(&bp);
+                            } else {
+                                self.breakpoints.insert(debugger::Breakpoint {
+                                    path: self.file_path.clone(),
+                                    line,
+                                    name: None,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        response.inner.response
     }
 }
