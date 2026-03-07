@@ -13,8 +13,9 @@ usage() {
 process_name="$1"
 output_file="$2"
 
-# Find the window ID via CoreGraphics
-window_id=$(swift -e "
+capture_macos() {
+    # Find the window ID via CoreGraphics
+    window_id=$(swift -e "
 import CoreGraphics
 let opts = CGWindowListOption(arrayLiteral: .optionOnScreenOnly, .excludeDesktopElements)
 if let list = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] {
@@ -28,10 +29,124 @@ if let list = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: An
 }
 " 2>/dev/null)
 
-if [ -z "$window_id" ] || [ "$window_id" = "0" ]; then
-    echo "Error: no window found for process '${process_name}'" >&2
-    exit 1
-fi
+    if [ -z "$window_id" ] || [ "$window_id" = "0" ]; then
+        echo "Error: no window found for process '${process_name}'" >&2
+        exit 1
+    fi
 
-screencapture -l"$window_id" -x "$output_file"
+    screencapture -l"$window_id" -x "$output_file"
+}
+
+capture_linux_wayland() {
+    # Detect compositor by checking if its IPC is reachable, not just if the binary exists
+    if swaymsg -t get_tree &>/dev/null; then
+        command -v grim &>/dev/null || { echo "Error: 'grim' required (apt install grim)" >&2; exit 1; }
+        # Sway: get window geometry by app_id or title
+        geometry=$(swaymsg -t get_tree | jq -r \
+            ".. | objects | select(.app_id? // .name? | tostring | ascii_downcase | contains(\"${process_name}\")) | .rect | \"\(.x),\(.y) \(.width)x\(.height)\"" \
+            2>/dev/null | head -n1)
+        if [ -n "$geometry" ]; then
+            grim -g "$geometry" "$output_file"
+        else
+            echo "Error: no window found for '${process_name}' via swaymsg" >&2
+            exit 1
+        fi
+    elif hyprctl clients -j &>/dev/null; then
+        command -v grim &>/dev/null || { echo "Error: 'grim' required (apt install grim)" >&2; exit 1; }
+        # Hyprland: get window geometry by class or title
+        geometry=$(hyprctl clients -j | jq -r \
+            ".[] | select(.class // .title | ascii_downcase | contains(\"${process_name}\")) | \"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])\"" \
+            2>/dev/null | head -n1)
+        if [ -n "$geometry" ]; then
+            grim -g "$geometry" "$output_file"
+        else
+            echo "Error: no window found for '${process_name}' via hyprctl" >&2
+            exit 1
+        fi
+    else
+        # GNOME or other compositor: focus the window via D-Bus, then capture with gnome-screenshot
+        command -v gnome-screenshot &>/dev/null || { echo "Error: 'gnome-screenshot' required (apt install gnome-screenshot)" >&2; exit 1; }
+        activate_window_dbus
+        sleep 0.3
+        gnome-screenshot -w -f "$output_file"
+    fi
+}
+
+# Focus a window by finding its D-Bus service name via busctl and calling Activate
+activate_window_dbus() {
+    if ! command -v busctl &>/dev/null; then
+        echo "Warning: 'busctl' not found, capturing whichever window is focused" >&2
+        return
+    fi
+
+    # busctl --user list columns: SERVICE PID PROCESS USER ...
+    # Find a well-known service name (not starting with :) whose process name matches
+    local service
+    service=$(busctl --user list --no-legend --no-pager 2>/dev/null \
+        | awk -v name="$process_name" \
+            'tolower($3) ~ tolower(name) && $1 !~ /^:/ { print $1; exit }')
+
+    if [ -z "$service" ]; then
+        echo "Warning: no D-Bus service found for '${process_name}', capturing whichever window is focused" >&2
+        return
+    fi
+
+    # Derive the object path from the service name (e.g. com.foo.Bar -> /com/foo/Bar)
+    local object_path
+    object_path="/${service//\.//}"
+
+    gdbus call --session \
+        --dest "$service" \
+        --object-path "$object_path" \
+        --method org.freedesktop.Application.Activate \
+        '{}' &>/dev/null || \
+    gdbus call --session \
+        --dest "$service" \
+        --object-path "$object_path" \
+        --method org.gtk.Application.Activate \
+        '{}' &>/dev/null || \
+        echo "Warning: could not activate '${service}' via D-Bus, capturing whichever window is focused" >&2
+}
+
+capture_linux_x11() {
+    if ! command -v xdotool &>/dev/null; then
+        echo "Error: 'xdotool' is required for X11 screenshots (apt install xdotool)" >&2
+        exit 1
+    fi
+
+    window_id=$(xdotool search --name "$process_name" 2>/dev/null | head -n1)
+    if [ -z "$window_id" ]; then
+        echo "Error: no window found for process '${process_name}'" >&2
+        exit 1
+    fi
+
+    if command -v import &>/dev/null; then
+        import -window "$window_id" "$output_file"
+    elif command -v scrot &>/dev/null; then
+        xdotool windowactivate "$window_id"
+        sleep 0.3
+        scrot -u "$output_file"
+    else
+        echo "Error: need 'import' (imagemagick) or 'scrot' for X11 screenshots" >&2
+        exit 1
+    fi
+}
+
+case "$(uname -s)" in
+    Darwin)
+        capture_macos
+        ;;
+    Linux)
+        if [ "${XDG_SESSION_TYPE:-}" = "wayland" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
+            capture_linux_wayland
+        else
+            capture_linux_x11
+        fi
+        ;;
+    *)
+        echo "Error: unsupported platform '$(uname -s)'" >&2
+        exit 1
+        ;;
+esac
+
 echo "Saved screenshot to ${output_file}"
