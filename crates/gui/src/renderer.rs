@@ -37,7 +37,8 @@ impl<'s> Renderer<'s> {
         // Render file picker overlay if open
         if self.state.file_picker_open {
             if let FilePickerResult::Selected(path) = file_picker::show(ctx, self.state) {
-                self.state.file_override = Some(path);
+                self.state.file_override =
+                    Some(std::fs::canonicalize(&path).unwrap_or(path));
             }
         }
 
@@ -291,6 +292,8 @@ impl<'s> Renderer<'s> {
             ui.label("No source file available for current frame");
             return;
         };
+        let debugger_path =
+            std::fs::canonicalize(&debugger_path).unwrap_or(debugger_path);
 
         // Determine which file to display
         let (display_path, highlight_line, current_line) =

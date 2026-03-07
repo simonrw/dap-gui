@@ -218,7 +218,9 @@ impl DebuggerApp {
                 }
             };
 
-        let mut debug_root_dir = std::env::current_dir().unwrap();
+        let mut debug_root_dir = std::env::current_dir()
+            .and_then(|p| std::fs::canonicalize(&p))
+            .unwrap();
 
         // Create a tokio runtime for async initialization
         let rt = tokio::runtime::Builder::new_multi_thread()
@@ -242,7 +244,12 @@ impl DebuggerApp {
                     ..
                 }) => {
                     if let Some(dir) = cwd {
-                        debug_root_dir = debugger::utils::normalise_path(&dir).into_owned();
+                        debug_root_dir = std::fs::canonicalize(
+                            debugger::utils::normalise_path(&dir).as_ref(),
+                        )
+                        .unwrap_or_else(|_| {
+                            debugger::utils::normalise_path(&dir).into_owned()
+                        });
                     }
 
                     match request.as_str() {
@@ -273,6 +280,11 @@ impl DebuggerApp {
                             let Some(program) = program else {
                                 eyre::bail!("'program' is a required setting");
                             };
+
+                            // Canonicalize so breakpoint paths match what the
+                            // debug adapter returns in frame.source.path.
+                            let program = std::fs::canonicalize(&program)
+                                .unwrap_or(program);
 
                             let port = transport::DEFAULT_DAP_PORT;
                             _server_handle = Some(
@@ -344,9 +356,8 @@ impl DebuggerApp {
                 }
                 tracing::debug!(?breakpoint, "adding breakpoint from state file");
                 let mut bp = breakpoint.clone();
-                bp.path = debugger::utils::normalise_path(&bp.path)
-                    .into_owned()
-                    .to_path_buf();
+                let normalised = debugger::utils::normalise_path(&bp.path).into_owned();
+                bp.path = std::fs::canonicalize(&normalised).unwrap_or(normalised);
                 all_breakpoints.push(bp);
             }
         } else {
@@ -397,7 +408,7 @@ impl DebuggerApp {
             file_override: None,
             file_cache: HashMap::new(),
             variables_cache: HashMap::new(),
-            ui_breakpoints: HashSet::new(),
+            ui_breakpoints: all_breakpoints.into_iter().collect(),
             status: Default::default(),
         };
 
