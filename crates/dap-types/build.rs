@@ -38,18 +38,19 @@ fn main() {
     // Classify definitions
     let mut structs: BTreeMap<&str, &Value> = BTreeMap::new();
     let mut string_enums: BTreeMap<&str, &Value> = BTreeMap::new();
-    // command name -> arguments type name (if any)
-    let mut command_map: BTreeMap<String, Option<String>> = BTreeMap::new();
-    // command name -> response body info
-    let mut response_map: BTreeMap<String, Option<ResponseBodyInfo>> = BTreeMap::new();
-    // event name -> event body info
-    let mut event_map: BTreeMap<String, Option<EventBodyInfo>> = BTreeMap::new();
+    // command name -> (arguments type name, description)
+    let mut command_map: BTreeMap<String, (Option<String>, Option<String>)> = BTreeMap::new();
+    // command name -> (response body info, description)
+    let mut response_map: BTreeMap<String, (Option<ResponseBodyInfo>, Option<String>)> =
+        BTreeMap::new();
+    // event name -> (event body info, description)
+    let mut event_map: BTreeMap<String, (Option<EventBodyInfo>, Option<String>)> = BTreeMap::new();
     // allOf type composition (not request/response/event)
     let mut composed_types: BTreeMap<&str, &Value> = BTreeMap::new();
-    // response body structs to generate inline
-    let mut inline_response_bodies: BTreeMap<String, Value> = BTreeMap::new();
-    // event body structs to generate inline
-    let mut inline_event_bodies: BTreeMap<String, Value> = BTreeMap::new();
+    // response body structs to generate inline (with optional description)
+    let mut inline_response_bodies: BTreeMap<String, (Value, Option<String>)> = BTreeMap::new();
+    // event body structs to generate inline (with optional description)
+    let mut inline_event_bodies: BTreeMap<String, (Value, Option<String>)> = BTreeMap::new();
 
     for (name, def) in definitions {
         if skip_types.contains(name.as_str()) {
@@ -57,23 +58,28 @@ fn main() {
         }
 
         if is_concrete_request(name, def) {
-            let (cmd, args_type) = extract_request_info(def);
-            command_map.insert(cmd, args_type);
+            let (cmd, args_type, desc) = extract_request_info(def);
+            command_map.insert(cmd, (args_type, desc));
         } else if is_concrete_response(name, def) {
-            let (cmd, body_info) = extract_response_info(name, def);
+            let (cmd, body_info, desc) = extract_response_info(name, def);
             if let Some(ResponseBodyInfo::Inline(ref body_def)) = body_info {
                 let struct_name = format!("{}Body", name.strip_suffix("Response").unwrap_or(name));
-                let struct_name = format!("{struct_name}");
-                inline_response_bodies.insert(struct_name, body_def.clone());
+                let body_desc = desc
+                    .as_deref()
+                    .map(|d| format!("Body for the `{cmd}` response.\n\n{d}"));
+                inline_response_bodies.insert(struct_name, (body_def.clone(), body_desc));
             }
-            response_map.insert(cmd, body_info);
+            response_map.insert(cmd, (body_info, desc));
         } else if is_concrete_event(name, def) {
-            let (evt, body_info) = extract_event_info(name, def);
+            let (evt, body_info, desc) = extract_event_info(name, def);
             if let Some(EventBodyInfo::Inline(ref body_def)) = body_info {
                 let struct_name = format!("{}Body", name);
-                inline_event_bodies.insert(struct_name, body_def.clone());
+                let body_desc = desc
+                    .as_deref()
+                    .map(|d| format!("Body for the `{evt}` event.\n\n{d}"));
+                inline_event_bodies.insert(struct_name, (body_def.clone(), body_desc));
             }
-            event_map.insert(evt, body_info);
+            event_map.insert(evt, (body_info, desc));
         } else if is_type_composition(def) {
             composed_types.insert(name, def);
         } else if is_string_enum(def) {
@@ -119,12 +125,18 @@ fn main() {
     }
 
     // Generate inline response body structs
-    for (name, body_def) in &inline_response_bodies {
+    for (name, (body_def, desc)) in &inline_response_bodies {
+        if let Some(desc) = desc {
+            write_doc_comment(&mut output, desc, "");
+        }
         generate_struct_from_object(&mut output, name, body_def, &overrides, definitions);
     }
 
     // Generate inline event body structs
-    for (name, body_def) in &inline_event_bodies {
+    for (name, (body_def, desc)) in &inline_event_bodies {
+        if let Some(desc) = desc {
+            write_doc_comment(&mut output, desc, "");
+        }
         generate_struct_from_object(&mut output, name, body_def, &overrides, definitions);
     }
 
@@ -200,7 +212,7 @@ fn is_string_enum(def: &Value) -> bool {
 
 // --- Extraction helpers ---
 
-fn extract_request_info(def: &Value) -> (String, Option<String>) {
+fn extract_request_info(def: &Value) -> (String, Option<String>, Option<String>) {
     let all_of = def["allOf"].as_array().unwrap();
     let extra = all_of
         .iter()
@@ -219,7 +231,13 @@ fn extract_request_info(def: &Value) -> (String, Option<String>) {
         .and_then(|r| r.as_str())
         .map(|r| ref_to_type_name(r));
 
-    (command, args_type)
+    let description = def
+        .get("description")
+        .or_else(|| extra.get("description"))
+        .and_then(|d| d.as_str())
+        .map(|s| s.to_string());
+
+    (command, args_type, description)
 }
 
 #[derive(Clone)]
@@ -228,15 +246,24 @@ enum ResponseBodyInfo {
     Inline(Value),
 }
 
-fn extract_response_info(name: &str, def: &Value) -> (String, Option<ResponseBodyInfo>) {
+fn extract_response_info(
+    name: &str,
+    def: &Value,
+) -> (String, Option<ResponseBodyInfo>, Option<String>) {
     let all_of = def["allOf"].as_array().unwrap();
     let extra = all_of.iter().find(|item| item.get("properties").is_some());
+
+    let description = def
+        .get("description")
+        .or_else(|| extra.and_then(|e| e.get("description")))
+        .and_then(|d| d.as_str())
+        .map(|s| s.to_string());
 
     let Some(extra) = extra else {
         // Some responses have no extra properties section (just ref to Response)
         let cmd = name.strip_suffix("Response").unwrap().to_string();
         let cmd = pascal_to_camel(&cmd);
-        return (cmd, None);
+        return (cmd, None, description);
     };
 
     // Derive command name from the response name
@@ -254,7 +281,7 @@ fn extract_response_info(name: &str, def: &Value) -> (String, Option<ResponseBod
             }
         });
 
-    (cmd, body_info)
+    (cmd, body_info, description)
 }
 
 #[derive(Clone)]
@@ -263,14 +290,20 @@ enum EventBodyInfo {
     Inline(Value),
 }
 
-fn extract_event_info(name: &str, def: &Value) -> (String, Option<EventBodyInfo>) {
+fn extract_event_info(name: &str, def: &Value) -> (String, Option<EventBodyInfo>, Option<String>) {
     let all_of = def["allOf"].as_array().unwrap();
     let extra = all_of.iter().find(|item| item.get("properties").is_some());
+
+    let description = def
+        .get("description")
+        .or_else(|| extra.and_then(|e| e.get("description")))
+        .and_then(|d| d.as_str())
+        .map(|s| s.to_string());
 
     let Some(extra) = extra else {
         let evt = name.strip_suffix("Event").unwrap().to_string();
         let evt = pascal_to_camel(&evt);
-        return (evt, None);
+        return (evt, None, description);
     };
 
     let event_name = extra["properties"]["event"]["enum"][0]
@@ -289,7 +322,7 @@ fn extract_event_info(name: &str, def: &Value) -> (String, Option<EventBodyInfo>
             }
         });
 
-    (event_name, body_info)
+    (event_name, body_info, description)
 }
 
 // --- Code generation ---
@@ -621,7 +654,7 @@ fn generate_composed_struct(
 
 fn generate_request_arguments_enum(
     output: &mut String,
-    command_map: &BTreeMap<String, Option<String>>,
+    command_map: &BTreeMap<String, (Option<String>, Option<String>)>,
 ) {
     writeln!(output, "/// Dispatch enum for all DAP request types.").unwrap();
     writeln!(output, "#[derive(Serialize, Deserialize, Debug, Clone)]").unwrap();
@@ -632,7 +665,10 @@ fn generate_request_arguments_enum(
     .unwrap();
     writeln!(output, "pub enum RequestArguments {{").unwrap();
 
-    for (cmd, args_type) in command_map {
+    for (cmd, (args_type, desc)) in command_map {
+        if let Some(desc) = desc {
+            write_doc_comment(output, desc, "    ");
+        }
         let variant = to_pascal_case(cmd);
         let serde_attr = request_variant_serde_attr(cmd, &variant);
         if !serde_attr.is_empty() {
@@ -651,7 +687,7 @@ fn generate_request_arguments_enum(
 
 fn generate_response_body_enum(
     output: &mut String,
-    response_map: &BTreeMap<String, Option<ResponseBodyInfo>>,
+    response_map: &BTreeMap<String, (Option<ResponseBodyInfo>, Option<String>)>,
 ) {
     writeln!(output, "/// Dispatch enum for all DAP response body types.").unwrap();
     writeln!(output, "#[derive(Serialize, Deserialize, Debug, Clone)]").unwrap();
@@ -662,7 +698,10 @@ fn generate_response_body_enum(
     .unwrap();
     writeln!(output, "pub enum ResponseBody {{").unwrap();
 
-    for (cmd, body_info) in response_map {
+    for (cmd, (body_info, desc)) in response_map {
+        if let Some(desc) = desc {
+            write_doc_comment(output, desc, "    ");
+        }
         let variant = to_pascal_case(cmd);
         let serde_attr = request_variant_serde_attr(cmd, &variant);
         if !serde_attr.is_empty() {
@@ -686,7 +725,10 @@ fn generate_response_body_enum(
     writeln!(output).unwrap();
 }
 
-fn generate_event_enum(output: &mut String, event_map: &BTreeMap<String, Option<EventBodyInfo>>) {
+fn generate_event_enum(
+    output: &mut String,
+    event_map: &BTreeMap<String, (Option<EventBodyInfo>, Option<String>)>,
+) {
     // Generate EventHelper (for serde tag-based deserialization)
     writeln!(output, "#[derive(Debug, Clone, Deserialize)]").unwrap();
     writeln!(
@@ -695,7 +737,7 @@ fn generate_event_enum(output: &mut String, event_map: &BTreeMap<String, Option<
     )
     .unwrap();
     writeln!(output, "enum EventHelper {{").unwrap();
-    for (evt, body_info) in event_map {
+    for (evt, (body_info, _desc)) in event_map {
         let variant = to_pascal_case(evt);
         let serde_attr = request_variant_serde_attr(evt, &variant);
         if !serde_attr.is_empty() {
@@ -726,7 +768,10 @@ fn generate_event_enum(output: &mut String, event_map: &BTreeMap<String, Option<
     )
     .unwrap();
     writeln!(output, "pub enum Event {{").unwrap();
-    for (evt, body_info) in event_map {
+    for (evt, (body_info, desc)) in event_map {
+        if let Some(desc) = desc {
+            write_doc_comment(output, desc, "    ");
+        }
         let variant = to_pascal_case(evt);
         let serde_attr = request_variant_serde_attr(evt, &variant);
         if !serde_attr.is_empty() {
@@ -754,7 +799,7 @@ fn generate_event_enum(output: &mut String, event_map: &BTreeMap<String, Option<
     writeln!(output, "impl From<EventHelper> for Event {{").unwrap();
     writeln!(output, "    fn from(helper: EventHelper) -> Self {{").unwrap();
     writeln!(output, "        match helper {{").unwrap();
-    for (evt, body_info) in event_map {
+    for (evt, (body_info, _desc)) in event_map {
         let variant = to_pascal_case(evt);
         match body_info {
             Some(_) => {

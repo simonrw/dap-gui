@@ -1,14 +1,40 @@
+//! Auto-generated Rust types for the [Debug Adapter Protocol](https://microsoft.github.io/debug-adapter-protocol/) (DAP).
+//!
+//! This crate provides strongly-typed representations of every type defined in the
+//! DAP specification, generated directly from the official JSON schema. All types
+//! implement [`serde::Serialize`] and [`serde::Deserialize`] with correct `camelCase`
+//! field renaming so they can be used directly for DAP JSON message serialisation.
+//!
+//! # Dispatch enums
+//!
+//! Three top-level enums cover the protocol message space:
+//!
+//! - [`RequestArguments`] — all request commands and their argument types.
+//! - [`ResponseBody`] — all response commands and their body types.
+//! - [`Event`] — all event types and their body types.
+//!
+//! Unknown events are represented by [`Event::Unknown`] so that forward-compatibility
+//! with newer adapters is maintained.
+
 #[allow(clippy::all)]
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 }
 pub use generated::*;
 
+/// Sequence number used to correlate requests, responses, and events.
 pub type Seq = i64;
+/// Unique identifier for a thread in the debuggee.
 pub type ThreadId = i64;
+/// Unique identifier for a breakpoint.
 pub type BreakpointId = i64;
+/// Unique identifier for a stack frame.
 pub type StackFrameId = i64;
+/// Reference to a variable container (scope, variable, etc.). A value of 0 means the
+/// variable has no children.
 pub type VariablesReference = i64;
+/// Reference to a source. A value greater than 0 means the source contents must be
+/// retrieved via the `source` request.
 pub type SourceReference = i64;
 
 #[cfg(test)]
