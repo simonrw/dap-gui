@@ -1,8 +1,10 @@
+use bytes::BytesMut;
 use etherparse::{SlicedPacket, TransportSlice};
 use eyre::WrapErr;
 use pcap_file::pcapng::{PcapNgParser, blocks::enhanced_packet::EnhancedPacketBlock};
-use std::{io::BufReader, path::Path};
-use transport::{Message, Reader};
+use std::path::Path;
+use tokio_util::codec::Decoder;
+use transport2::{DapCodec, Message};
 
 pub fn extract_messages(path: impl AsRef<Path>, port: u16) -> eyre::Result<Vec<Message>> {
     let path = path.as_ref();
@@ -80,9 +82,10 @@ pub fn extract_messages(path: impl AsRef<Path>, port: u16) -> eyre::Result<Vec<M
                 i += 1;
             }
 
-            let mut reader = transport::reader::get(BufReader::new(messages.as_slice()));
+            let mut codec = DapCodec::new();
+            let mut buf = BytesMut::from(messages.as_slice());
             loop {
-                match reader.poll_message() {
+                match codec.decode(&mut buf) {
                     Ok(Some(message)) => {
                         result.push(message);
                     }

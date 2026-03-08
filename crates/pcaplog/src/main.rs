@@ -15,7 +15,7 @@ struct Args {
 }
 
 #[derive(Serialize)]
-struct Messages(Vec<transport::Message>);
+struct Messages(Vec<transport2::Message>);
 
 fn main() -> eyre::Result<()> {
     tracing_subscriber::fmt()

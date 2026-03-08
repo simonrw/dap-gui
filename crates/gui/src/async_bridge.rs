@@ -1,9 +1,11 @@
 use std::sync::{Arc, Mutex};
 
+use dap_types::Variable;
 use debugger::{AsyncEventReceiver, Breakpoint, EvaluateResult, Event, TcpAsyncDebugger};
 use eframe::egui;
 use tokio::sync::{mpsc, oneshot};
-use transport::types::{StackFrameId, Variable};
+
+type StackFrameId = i64;
 
 /// Commands the GUI can send to the async debugger runtime
 pub(crate) enum UiCommand {

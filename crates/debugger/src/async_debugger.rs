@@ -1,3 +1,5 @@
+use crate::request_types as requests;
+use dap_types::{StackFrameId, Variable};
 use eyre::WrapErr;
 use futures::StreamExt;
 use std::sync::Arc;
@@ -5,10 +7,6 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use transport::{
-    requests::{self},
-    types::{StackFrameId, Variable},
-};
 use transport2::{DapReader, DapWriter, Message};
 
 use crate::{

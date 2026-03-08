@@ -1,23 +1,9 @@
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
-use transport::{
-    DEFAULT_DAP_PORT,
-    requests::{self, DebugpyLaunchArguments},
-};
+use crate::request_types::{self as requests, DebugpyLaunchArguments};
+use server::DEFAULT_DAP_PORT;
 
-use crate::types::{self, PausedFrame};
-
-#[derive(Debug)]
-pub(crate) enum DebuggerState {
-    Initialised,
-    Paused {
-        stack: Vec<types::StackFrame>,
-        paused_frame: Box<PausedFrame>,
-        breakpoints: Vec<types::Breakpoint>,
-    },
-    Running,
-    Ended,
-}
+use crate::types;
 
 /// Represents the current program state
 #[derive(Debug, Clone)]
@@ -35,26 +21,6 @@ pub enum Event {
     ScopeChange(ProgramState),
     Running,
     Ended,
-}
-
-impl<'a> From<&'a DebuggerState> for Event {
-    fn from(value: &'a DebuggerState) -> Self {
-        match value {
-            DebuggerState::Initialised => Event::Initialised,
-            DebuggerState::Paused {
-                stack,
-                paused_frame,
-                breakpoints,
-                ..
-            } => Event::Paused(ProgramState {
-                stack: stack.clone(),
-                paused_frame: *paused_frame.clone(),
-                breakpoints: breakpoints.clone(),
-            }),
-            DebuggerState::Running => Event::Running,
-            DebuggerState::Ended => Event::Ended,
-        }
-    }
 }
 
 /// Languages supported by the debugger crate
@@ -182,7 +148,7 @@ impl LaunchArguments {
                 module: self.module,
                 args: self.args,
                 env: self.env,
-                launch_arguments: Some(transport::requests::LaunchArguments::Debugpy(
+                launch_arguments: Some(requests::LaunchArguments::Debugpy(
                     DebugpyLaunchArguments {
                         just_my_code,
                         cwd,

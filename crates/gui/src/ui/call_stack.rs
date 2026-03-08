@@ -1,5 +1,5 @@
+use dap_types::StackFrame;
 use eframe::egui::{Response, Widget};
-use transport::types::StackFrame;
 
 use crate::DebuggerAppState;
 

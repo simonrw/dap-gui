@@ -7,10 +7,13 @@ use std::{
 };
 
 use eyre::WrapErr;
-use transport::DEFAULT_DAP_PORT;
 
 pub mod debugpy;
 pub mod delve;
+pub mod util;
+
+/// The default port the DAP protocol listens on
+pub const DEFAULT_DAP_PORT: u16 = 5678;
 
 /// Default timeout for waiting for a server to become ready
 const SERVER_READY_TIMEOUT: Duration = Duration::from_secs(30);

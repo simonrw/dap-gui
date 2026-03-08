@@ -318,6 +318,23 @@ mod tests {
     }
 
     #[test]
+    fn decode_evaluate_error_with_newlines() {
+        let mut codec = DapCodec::new();
+        let json = r#"{"seq": 21, "type": "response", "request_seq": 13, "success": false, "command": "evaluate", "message": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nNameError: name 'b' is not defined\n"}"#;
+        let mut buf = make_frame(json);
+
+        let result = codec.decode(&mut buf).unwrap().unwrap();
+        match result {
+            Message::Response(r) => {
+                assert!(!r.success);
+                assert_eq!(r.request_seq, 13);
+                assert!(r.message.unwrap().contains("NameError"));
+            }
+            _ => panic!("expected response"),
+        }
+    }
+
+    #[test]
     fn decode_invalid_json_body() {
         let mut codec = DapCodec::new();
         let bad_json = b"not valid json";

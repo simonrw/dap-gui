@@ -7,4 +7,3 @@ edition = "2024"
 color-eyre.workspace = true
 iced = { version = "0.14.0", features = ["tokio"] }
 debugger = { path = "../debugger" }
-transport = { path = "../transport" }

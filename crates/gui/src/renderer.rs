@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
+use dap_types::{StackFrame, Variable};
 use debugger::{EvaluateResult, PausedFrame};
 use eframe::egui::{self, Context, Key, Modifiers, Ui};
-use transport::types::{StackFrame, Variable};
 
 use crate::{
     DebuggerAppState, State, TabState,

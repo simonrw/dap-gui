@@ -14,7 +14,9 @@ serde_json.workspace = true
 serde.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-transport = { path = "../transport" }
+transport2 = { path = "../transport2" }
+bytes = "1"
+tokio-util.workspace = true
 
 [dev-dependencies]
 ctor.workspace = true

@@ -8,10 +8,40 @@ use std::{
 };
 
 use eyre::Context;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-// re-export
-pub use transport::requests::PathMapping;
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PathMapping {
+    pub local_root: String,
+    pub remote_root: String,
+}
+
+impl PathMapping {
+    /// resolve VS Code workspace placeholders, e.g. ${workspaceFolder}
+    pub fn resolve(&mut self, root: impl AsRef<Path>) {
+        let root = root.as_ref();
+        if self.local_root.contains("workspaceFolder:") {
+            // TODO: assume only one location
+            let Some((_, after)) = self.local_root.split_once("${workspaceFolder:") else {
+                todo!()
+            };
+
+            let Some((subpath, _)) = after.split_once("}") else {
+                todo!()
+            };
+
+            self.local_root = self.local_root.replace(
+                &format!("${{workspaceFolder:{}}}", subpath),
+                &format!("{}/{}", root.display(), subpath),
+            );
+        } else {
+            self.local_root = self
+                .local_root
+                .replace("${workspaceFolder}", &format!("{}", root.display()));
+        }
+    }
+}
 
 /// Handle choosing a specific launch configuration, or if the user has not specified one, then
 /// present a list of launch configurations they can choose from

@@ -117,9 +117,9 @@ impl Drop for DebugpyServer {
 mod tests {
     use std::{io::IsTerminal, net::TcpStream};
 
+    use crate::util::get_random_tcp_port;
     use eyre::WrapErr;
     use tracing_subscriber::EnvFilter;
-    use transport::bindings::get_random_tcp_port;
 
     use crate::{Implementation, for_implementation_on_port};
 

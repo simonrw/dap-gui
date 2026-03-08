@@ -7,22 +7,19 @@ edition = "2024"
 
 [dependencies]
 eyre.workspace = true
-crossbeam-channel.workspace = true
 tracing.workspace = true
 server = { path = "../server" }
 serde.workspace = true
 serde_json.workspace = true
-transport = { path = "../transport" }
+dap-types = { path = "../dap-types" }
 transport2 = { path = "../transport2" }
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 tokio-util.workspace = true
 tokio-stream = "0.1.16"
 futures = "0.3.31"
-retry = "2.1.0"
 dirs.workspace = true
 launch_configuration = { path = "../launch_configuration" }
 uuid = { version = "1.18.1", features = ["v4"] }
-oneshot.workspace = true
 
 [dev-dependencies]
 color-eyre.workspace = true
@@ -30,3 +27,6 @@ ctor.workspace = true
 tracing-subscriber.workspace = true
 serde_json.workspace = true
 tempfile = "3.23.0"
+dap-types = { path = "../dap-types" }
+server = { path = "../server" }
+tokio = { workspace = true, features = ["sync", "rt-multi-thread", "macros", "time"] }

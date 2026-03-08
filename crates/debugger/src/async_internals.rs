@@ -1,3 +1,8 @@
+use crate::request_types as requests;
+use dap_types::{
+    EvaluateBody, ScopesBody, Source, SourceBreakpoint, StackFrame, StackFrameId, StackTraceBody,
+    ThreadId, Variable, VariablesBody,
+};
 use eyre::WrapErr;
 use std::{
     collections::HashMap,
@@ -8,11 +13,6 @@ use std::{
 };
 use tokio::io::AsyncWrite;
 use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
-use transport::{
-    requests::{self},
-    responses::{self},
-    types::{Source, SourceBreakpoint, StackFrame, StackFrameId, ThreadId, Variable},
-};
 use transport2::{DapWriter, OutgoingMessage, Response};
 
 type Seq = i64;
@@ -199,7 +199,7 @@ where
                 let _ = self_arc.event_tx.send(Event::Initialised);
             }
             "stopped" => {
-                let body: transport::events::StoppedEventBody =
+                let body: dap_types::StoppedEventBody =
                     serde_json::from_value(event.body.clone().unwrap_or_default())
                         .wrap_err("parsing stopped event")?;
 
@@ -237,10 +237,7 @@ where
     ///
     /// This is extracted into a separate method so it can be spawned as a
     /// background task, avoiding deadlock in the processor task.
-    async fn handle_stopped_event(
-        &self,
-        body: transport::events::StoppedEventBody,
-    ) -> eyre::Result<()> {
+    async fn handle_stopped_event(&self, body: dap_types::StoppedEventBody) -> eyre::Result<()> {
         tracing::debug!("locking current thread id");
         let thread_id = body.thread_id.expect("stopped event missing thread_id");
         {
@@ -288,9 +285,8 @@ where
             );
         }
 
-        let body: responses::StackTraceResponse =
-            serde_json::from_value(response.body.unwrap_or_default())
-                .wrap_err("parsing stackTrace response")?;
+        let body: StackTraceBody = serde_json::from_value(response.body.unwrap_or_default())
+            .wrap_err("parsing stackTrace response")?;
 
         Ok(body.stack_frames)
     }
@@ -324,9 +320,8 @@ where
 
         eyre::ensure!(response.success, "bad response received: {response:?}");
 
-        let scopes_body: responses::ScopesResponse =
-            serde_json::from_value(response.body.unwrap_or_default())
-                .wrap_err("parsing scopes response")?;
+        let scopes_body: ScopesBody = serde_json::from_value(response.body.unwrap_or_default())
+            .wrap_err("parsing scopes response")?;
 
         // Fetch variables for the first scope (usually locals)
         let variables = if let Some(scope) = scopes_body.scopes.first() {
@@ -355,9 +350,8 @@ where
 
         eyre::ensure!(response.success, "variables request failed");
 
-        let body: responses::VariablesResponse =
-            serde_json::from_value(response.body.unwrap_or_default())
-                .wrap_err("parsing variables response")?;
+        let body: VariablesBody = serde_json::from_value(response.body.unwrap_or_default())
+            .wrap_err("parsing variables response")?;
 
         Ok(body.variables)
     }
@@ -387,9 +381,8 @@ where
             });
         }
 
-        let body: responses::EvaluateResponse =
-            serde_json::from_value(response.body.unwrap_or_default())
-                .wrap_err("parsing evaluate response")?;
+        let body: EvaluateBody = serde_json::from_value(response.body.unwrap_or_default())
+            .wrap_err("parsing evaluate response")?;
 
         Ok(EvaluateResult {
             output: body.result,
@@ -961,7 +954,7 @@ mod tests {
         let internals_clone = Arc::clone(&internals);
         let handle = tokio::spawn(async move {
             internals_clone
-                .send_and_wait(transport::requests::RequestBody::Threads)
+                .send_and_wait(requests::RequestBody::Threads)
                 .await
         });
 

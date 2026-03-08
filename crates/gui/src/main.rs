@@ -7,12 +7,14 @@ use std::{
 };
 
 use clap::Parser;
+use dap_types::StackFrame;
 use debugger::{PausedFrame, ProgramState};
 use eframe::egui::{self, Visuals};
 use eyre::WrapErr;
 use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
 use state::StateManager;
-use transport::types::{StackFrame, StackFrameId};
+
+type StackFrameId = i64;
 
 mod async_bridge;
 mod code_view;
@@ -125,7 +127,7 @@ struct DebuggerAppState {
     file_cache: HashMap<PathBuf, String>,
 
     // Cache for child variables fetched via variablesReference
-    variables_cache: HashMap<i64, Vec<transport::types::Variable>>,
+    variables_cache: HashMap<i64, Vec<dap_types::Variable>>,
 
     // Persistent breakpoint state for the UI (survives across frames)
     ui_breakpoints: HashSet<debugger::Breakpoint>,
@@ -275,7 +277,7 @@ impl DebuggerApp {
 
                             tracing::debug!(?attach_args, "generated attach configuration");
 
-                            let port = attach_args.port.unwrap_or(transport::DEFAULT_DAP_PORT);
+                            let port = attach_args.port.unwrap_or(server::DEFAULT_DAP_PORT);
                             let debugger = debugger::TcpAsyncDebugger::attach_staged(
                                 port,
                                 debugger::Language::DebugPy,
@@ -295,7 +297,7 @@ impl DebuggerApp {
                             // debug adapter returns in frame.source.path.
                             let program = std::fs::canonicalize(&program).unwrap_or(program);
 
-                            let port = transport::DEFAULT_DAP_PORT;
+                            let port = server::DEFAULT_DAP_PORT;
                             _server_handle = Some(
                                 server::for_implementation_on_port(
                                     server::Implementation::Debugpy,
