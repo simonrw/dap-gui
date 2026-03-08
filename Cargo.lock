@@ -731,6 +731,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "catppuccin-egui"
+version = "5.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "119005543bcd5cc74f76323d40801bb29baf1b062e84f86eb42fb0b2a3fe61e9"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2090,12 +2099,138 @@ dependencies = [
 ]
 
 [[package]]
+name = "gui-catppuccin"
+version = "0.1.0"
+dependencies = [
+ "async-transport",
+ "catppuccin-egui",
+ "clap",
+ "color-eyre",
+ "crossbeam-channel",
+ "dap-types",
+ "dark-light",
+ "debugger",
+ "dirs 6.0.0",
+ "eframe",
+ "eyre",
+ "fuzzy",
+ "launch_configuration",
+ "sentry",
+ "server",
+ "state",
+ "syntect",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "gui-dracula"
+version = "0.1.0"
+dependencies = [
+ "async-transport",
+ "clap",
+ "color-eyre",
+ "crossbeam-channel",
+ "dap-types",
+ "dark-light",
+ "debugger",
+ "dirs 6.0.0",
+ "eframe",
+ "eyre",
+ "fuzzy",
+ "launch_configuration",
+ "sentry",
+ "server",
+ "state",
+ "syntect",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "gui-iced"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
  "debugger",
  "iced",
+]
+
+[[package]]
+name = "gui-material"
+version = "0.1.0"
+dependencies = [
+ "async-transport",
+ "clap",
+ "color-eyre",
+ "crossbeam-channel",
+ "dap-types",
+ "dark-light",
+ "debugger",
+ "dirs 6.0.0",
+ "eframe",
+ "eyre",
+ "fuzzy",
+ "launch_configuration",
+ "sentry",
+ "server",
+ "state",
+ "syntect",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "gui-native"
+version = "0.1.0"
+dependencies = [
+ "async-transport",
+ "clap",
+ "color-eyre",
+ "crossbeam-channel",
+ "dap-types",
+ "dark-light",
+ "debugger",
+ "dirs 6.0.0",
+ "eframe",
+ "eyre",
+ "fuzzy",
+ "launch_configuration",
+ "sentry",
+ "server",
+ "state",
+ "syntect",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "gui-nord"
+version = "0.1.0"
+dependencies = [
+ "async-transport",
+ "clap",
+ "color-eyre",
+ "crossbeam-channel",
+ "dap-types",
+ "dark-light",
+ "debugger",
+ "dirs 6.0.0",
+ "eframe",
+ "eyre",
+ "fuzzy",
+ "launch_configuration",
+ "sentry",
+ "server",
+ "state",
+ "syntect",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
