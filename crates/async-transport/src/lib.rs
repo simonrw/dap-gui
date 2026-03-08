@@ -14,11 +14,11 @@
 //! # Usage
 //!
 //! ```ignore
-//! use transport2::{connect, Message};
+//! use async_transport::{connect, Message};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let (mut reader, mut writer) = transport2::connect("127.0.0.1:5678").await?;
+//!     let (mut reader, mut writer) = async_transport::connect("127.0.0.1:5678").await?;
 //!
 //!     // Send a request
 //!     writer.send(/* request */).await?;
@@ -76,7 +76,7 @@ use tokio::net::{TcpStream, ToSocketAddrs};
 /// # Example
 ///
 /// ```ignore
-/// let (reader, writer) = transport2::connect("127.0.0.1:5678").await?;
+/// let (reader, writer) = async_transport::connect("127.0.0.1:5678").await?;
 /// ```
 pub async fn connect(
     addr: impl ToSocketAddrs,

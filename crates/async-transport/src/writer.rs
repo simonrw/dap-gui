@@ -24,7 +24,7 @@ pin_project! {
     /// # Example
     ///
     /// ```ignore
-    /// use transport2::{DapWriter, OutgoingMessage, Request};
+    /// use async_transport::{DapWriter, OutgoingMessage, Request};
     ///
     /// let mut writer = DapWriter::new(tcp_write_half);
     ///

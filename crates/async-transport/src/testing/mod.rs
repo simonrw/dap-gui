@@ -16,7 +16,7 @@ use serde::Serialize;
 /// # Example
 ///
 /// ```
-/// use transport2::testing::frame_message;
+/// use async_transport::testing::frame_message;
 /// use serde_json::json;
 ///
 /// let bytes = frame_message(&json!({
@@ -37,7 +37,7 @@ pub fn frame_message(msg: &impl Serialize) -> Vec<u8> {
 /// # Example
 ///
 /// ```
-/// use transport2::testing::frame_messages;
+/// use async_transport::testing::frame_messages;
 /// use serde_json::json;
 ///
 /// let bytes = frame_messages(&[

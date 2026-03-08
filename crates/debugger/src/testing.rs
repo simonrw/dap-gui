@@ -4,6 +4,8 @@
 //! including mock adapters that simulate debug adapter behavior with robust
 //! message capture and matching.
 
+use async_transport::testing::MemoryTransport;
+use async_transport::{DapReader, DapWriter, Message, OutgoingMessage, Request, Response, split};
 use futures::StreamExt;
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -12,8 +14,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::DuplexStream;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{Duration, timeout};
-use transport2::testing::MemoryTransport;
-use transport2::{DapReader, DapWriter, Message, OutgoingMessage, Request, Response, split};
 
 use crate::async_debugger::AsyncDebugger;
 
@@ -115,7 +115,7 @@ impl MessageCapture {
         event_name: &str,
         after_timestamp: LogicalTimestamp,
         max_lookups: usize,
-    ) -> Option<(transport2::Event, LogicalTimestamp)> {
+    ) -> Option<(async_transport::Event, LogicalTimestamp)> {
         let messages = self.messages.read().await;
         let mut count = 0;
 
@@ -174,7 +174,7 @@ impl MessageCapture {
         max_lookups: usize,
         poll_interval: Duration,
         max_wait: Duration,
-    ) -> Option<(transport2::Event, LogicalTimestamp)> {
+    ) -> Option<(async_transport::Event, LogicalTimestamp)> {
         let start = std::time::Instant::now();
 
         loop {
@@ -340,7 +340,7 @@ impl MockAdapter {
     /// Send a success response for a request.
     pub async fn send_success_response(&self, request_seq: i64, body: Option<Value>) {
         let seq = self.next_seq();
-        let response = OutgoingMessage::Response(transport2::OutgoingResponse {
+        let response = OutgoingMessage::Response(async_transport::OutgoingResponse {
             seq,
             request_seq,
             success: true,
@@ -358,7 +358,7 @@ impl MockAdapter {
     /// Send an error response for a request.
     pub async fn send_error_response(&self, request_seq: i64, message: &str) {
         let seq = self.next_seq();
-        let response = OutgoingMessage::Response(transport2::OutgoingResponse {
+        let response = OutgoingMessage::Response(async_transport::OutgoingResponse {
             seq,
             request_seq,
             success: false,
@@ -376,7 +376,7 @@ impl MockAdapter {
     /// Send an event to the debugger.
     pub async fn send_event(&self, event: &str, body: Option<Value>) {
         let seq = self.next_seq();
-        let event_msg = OutgoingMessage::Event(transport2::OutgoingEvent {
+        let event_msg = OutgoingMessage::Event(async_transport::OutgoingEvent {
             seq,
             event: event.to_string(),
             body,
@@ -758,12 +758,12 @@ mod tests {
         let capture = MessageCapture::new(100);
 
         // Record some messages
-        let evt1 = Message::Event(transport2::Event {
+        let evt1 = Message::Event(async_transport::Event {
             seq: 1,
             event: "initialized".to_string(),
             body: None,
         });
-        let evt2 = Message::Event(transport2::Event {
+        let evt2 = Message::Event(async_transport::Event {
             seq: 2,
             event: "stopped".to_string(),
             body: Some(json!({"reason": "breakpoint"})),

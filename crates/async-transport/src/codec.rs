@@ -25,7 +25,7 @@ const DEFAULT_MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
 ///
 /// ```ignore
 /// use tokio_util::codec::{FramedRead, FramedWrite};
-/// use transport2::DapCodec;
+/// use async_transport::DapCodec;
 ///
 /// let framed = FramedRead::new(reader, DapCodec::new());
 /// ```

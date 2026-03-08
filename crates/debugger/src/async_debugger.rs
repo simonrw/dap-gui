@@ -1,4 +1,5 @@
 use crate::request_types as requests;
+use async_transport::{DapReader, DapWriter, Message};
 use dap_types::{StackFrameId, Variable};
 use eyre::WrapErr;
 use futures::StreamExt;
@@ -7,7 +8,6 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use transport2::{DapReader, DapWriter, Message};
 
 use crate::{
     async_event::AsyncEventReceiver,
@@ -16,7 +16,7 @@ use crate::{
     types::{Breakpoint, BreakpointId, EvaluateResult},
 };
 
-/// An async debugger client using the transport2 layer.
+/// An async debugger client using the async_transport layer.
 ///
 /// The type parameters `R` and `W` represent the underlying async reader
 /// and writer types, allowing this to work with both TCP connections and
@@ -55,8 +55,8 @@ impl TcpAsyncDebugger {
         launch_args: &LaunchArguments,
         stop_on_entry: bool,
     ) -> eyre::Result<Self> {
-        // Connect using transport2
-        let (reader, writer) = transport2::connect(format!("127.0.0.1:{}", port))
+        // Connect using async_transport
+        let (reader, writer) = async_transport::connect(format!("127.0.0.1:{}", port))
             .await
             .wrap_err("connecting to debug adapter")?;
 
@@ -95,8 +95,8 @@ impl TcpAsyncDebugger {
         launch_args: &LaunchArguments,
         stop_on_entry: bool,
     ) -> eyre::Result<Self> {
-        // Connect using transport2
-        let (reader, writer) = transport2::connect(format!("127.0.0.1:{}", port))
+        // Connect using async_transport
+        let (reader, writer) = async_transport::connect(format!("127.0.0.1:{}", port))
             .await
             .wrap_err("connecting to debug adapter")?;
 
@@ -119,8 +119,8 @@ impl TcpAsyncDebugger {
         language: Language,
         attach_args: &AttachArguments,
     ) -> eyre::Result<Self> {
-        // Connect using transport2
-        let (reader, writer) = transport2::connect(format!("127.0.0.1:{}", port))
+        // Connect using async_transport
+        let (reader, writer) = async_transport::connect(format!("127.0.0.1:{}", port))
             .await
             .wrap_err("connecting to debug adapter")?;
 
@@ -144,8 +144,8 @@ impl TcpAsyncDebugger {
         language: Language,
         attach_args: &AttachArguments,
     ) -> eyre::Result<Self> {
-        // Connect using transport2
-        let (reader, writer) = transport2::connect(format!("127.0.0.1:{}", port))
+        // Connect using async_transport
+        let (reader, writer) = async_transport::connect(format!("127.0.0.1:{}", port))
             .await
             .wrap_err("connecting to debug adapter")?;
 

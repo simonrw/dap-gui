@@ -26,7 +26,7 @@ pin_project! {
     ///
     /// ```ignore
     /// use futures::StreamExt;
-    /// use transport2::DapReader;
+    /// use async_transport::DapReader;
     ///
     /// let reader = DapReader::new(tcp_read_half);
     ///

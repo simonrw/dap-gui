@@ -12,7 +12,7 @@ server = { path = "../server" }
 serde.workspace = true
 serde_json.workspace = true
 dap-types = { path = "../dap-types" }
-transport2 = { path = "../transport2" }
+async-transport = { path = "../async-transport" }
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 tokio-util.workspace = true
 tokio-stream = "0.1.16"

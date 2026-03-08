@@ -19,7 +19,7 @@ use crate::writer::DapWriter;
 /// # Example
 ///
 /// ```ignore
-/// use transport2::{split, DapTransport};
+/// use async_transport::{split, DapTransport};
 /// use tokio::net::TcpStream;
 ///
 /// let stream = TcpStream::connect("127.0.0.1:5678").await?;
@@ -54,7 +54,7 @@ impl DapTransport for TcpStream {
 /// # Example
 ///
 /// ```ignore
-/// use transport2::split;
+/// use async_transport::split;
 /// use tokio::net::TcpStream;
 ///
 /// let stream = TcpStream::connect("127.0.0.1:5678").await?;

@@ -12,8 +12,8 @@ use crate::transport::DapTransport;
 /// # Example
 ///
 /// ```
-/// use transport2::testing::MemoryTransport;
-/// use transport2::split;
+/// use async_transport::testing::MemoryTransport;
+/// use async_transport::split;
 ///
 /// // Create a connected pair of transports
 /// let (client_transport, server_transport) = MemoryTransport::pair();

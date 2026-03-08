@@ -14,7 +14,7 @@ serde_json.workspace = true
 serde.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-transport2 = { path = "../transport2" }
+async-transport = { path = "../async-transport" }
 bytes = "1"
 tokio-util.workspace = true
 

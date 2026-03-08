@@ -1,10 +1,10 @@
+use async_transport::{DapCodec, Message};
 use bytes::BytesMut;
 use etherparse::{SlicedPacket, TransportSlice};
 use eyre::WrapErr;
 use pcap_file::pcapng::{PcapNgParser, blocks::enhanced_packet::EnhancedPacketBlock};
 use std::path::Path;
 use tokio_util::codec::Decoder;
-use transport2::{DapCodec, Message};
 
 pub fn extract_messages(path: impl AsRef<Path>, port: u16) -> eyre::Result<Vec<Message>> {
     let path = path.as_ref();

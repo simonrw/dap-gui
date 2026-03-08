@@ -1,4 +1,5 @@
 use crate::request_types as requests;
+use async_transport::{DapWriter, OutgoingMessage, Response};
 use dap_types::{
     EvaluateBody, ScopesBody, Source, SourceBreakpoint, StackFrame, StackFrameId, StackTraceBody,
     ThreadId, Variable, VariablesBody,
@@ -13,7 +14,6 @@ use std::{
 };
 use tokio::io::AsyncWrite;
 use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
-use transport2::{DapWriter, OutgoingMessage, Response};
 
 type Seq = i64;
 
@@ -105,7 +105,7 @@ where
             _ => Some(arguments.get("arguments").cloned().unwrap_or(arguments)),
         };
 
-        let msg = OutgoingMessage::Request(transport2::Request {
+        let msg = OutgoingMessage::Request(async_transport::Request {
             seq,
             command: command.clone(),
             arguments: arguments.clone(),
@@ -182,7 +182,7 @@ where
     /// DAP requests without blocking the processor task.
     pub(crate) async fn handle_event(
         self_arc: Arc<Self>,
-        event: transport2::Event,
+        event: async_transport::Event,
     ) -> eyre::Result<()> {
         tracing::debug!(?event, "handling event");
 
@@ -643,10 +643,10 @@ mod tests {
             let mut reader = client_reader;
             while let Some(Ok(msg)) = reader.next().await {
                 match msg {
-                    transport2::Message::Response(response) => {
+                    async_transport::Message::Response(response) => {
                         internals_for_reader.handle_response(response).await;
                     }
-                    transport2::Message::Event(event) => {
+                    async_transport::Message::Event(event) => {
                         let _ = AsyncDebuggerInternals::handle_event(
                             Arc::clone(&internals_for_reader),
                             event,
@@ -672,7 +672,7 @@ mod tests {
             pending.insert(42, tx);
         }
 
-        let response = transport2::Response {
+        let response = async_transport::Response {
             seq: 1,
             request_seq: 42,
             success: true,
@@ -693,7 +693,7 @@ mod tests {
         let (internals, _, _event_rx) = setup();
 
         // No pending requests — should not panic
-        let response = transport2::Response {
+        let response = async_transport::Response {
             seq: 1,
             request_seq: 999,
             success: true,
@@ -716,7 +716,7 @@ mod tests {
         let (tx, _rx) = tokio::sync::oneshot::channel();
         internals.set_initialized_channel(tx).await;
 
-        let event = transport2::Event {
+        let event = async_transport::Event {
             seq: 1,
             event: "initialized".to_string(),
             body: None,
@@ -734,7 +734,7 @@ mod tests {
     async fn handle_event_continued() {
         let (internals, _, mut event_rx) = setup();
 
-        let event = transport2::Event {
+        let event = async_transport::Event {
             seq: 1,
             event: "continued".to_string(),
             body: Some(json!({"threadId": 1})),
@@ -752,7 +752,7 @@ mod tests {
     async fn handle_event_terminated() {
         let (internals, _, mut event_rx) = setup();
 
-        let event = transport2::Event {
+        let event = async_transport::Event {
             seq: 1,
             event: "terminated".to_string(),
             body: None,
@@ -770,7 +770,7 @@ mod tests {
     async fn handle_event_unknown_does_not_error() {
         let (internals, _, _event_rx) = setup();
 
-        let event = transport2::Event {
+        let event = async_transport::Event {
             seq: 1,
             event: "customUnknownEvent".to_string(),
             body: None,
@@ -973,7 +973,7 @@ mod tests {
     async fn handle_stopped_event_fetches_state() {
         let (internals, mock, mut event_rx) = setup();
 
-        let event = transport2::Event {
+        let event = async_transport::Event {
             seq: 1,
             event: "stopped".to_string(),
             body: Some(json!({"reason": "breakpoint", "threadId": 1})),

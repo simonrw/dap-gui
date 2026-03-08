@@ -1,5 +1,5 @@
 [package]
-name = "transport2"
+name = "async-transport"
 version = "0.1.0"
 edition = "2024"
 description = "Async DAP transport layer using tokio"
