@@ -132,6 +132,10 @@ struct DebuggerAppState {
     // Persistent breakpoint state for the UI (survives across frames)
     ui_breakpoints: HashSet<debugger::Breakpoint>,
 
+    // Text input for adding breakpoints via file:line
+    breakpoint_input: String,
+    breakpoint_input_error: bool,
+
     // Status bar state
     status: crate::ui::status_bar::StatusState,
 
@@ -420,6 +424,8 @@ impl DebuggerApp {
             file_cache: HashMap::new(),
             variables_cache: HashMap::new(),
             ui_breakpoints: all_breakpoints.into_iter().collect(),
+            breakpoint_input: String::new(),
+            breakpoint_input_error: false,
             status: Default::default(),
             state_manager,
             debug_root_dir,

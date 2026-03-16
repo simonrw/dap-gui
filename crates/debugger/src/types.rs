@@ -20,6 +20,43 @@ impl Breakpoint {
     pub fn normalised_path(&self) -> Cow<'_, Path> {
         crate::utils::normalise_path(&self.path)
     }
+
+    /// Parse a `file:line` breakpoint specification, resolving the path to an
+    /// absolute path immediately. Relative paths are resolved against `cwd`.
+    pub fn parse(input: &str, cwd: &Path) -> eyre::Result<Self> {
+        let input = input.trim();
+        eyre::ensure!(!input.is_empty(), "empty breakpoint specification");
+
+        let colon_pos = input
+            .rfind(':')
+            .ok_or_else(|| eyre::eyre!("breakpoint specification '{input}' has no colon"))?;
+
+        let path_str = &input[..colon_pos];
+        let line_str = &input[colon_pos + 1..];
+
+        eyre::ensure!(
+            !path_str.is_empty(),
+            "breakpoint specification '{input}' has no file path"
+        );
+
+        let line: usize = line_str
+            .parse()
+            .wrap_err_with(|| format!("invalid line number '{line_str}'"))?;
+
+        let raw_path = PathBuf::from(path_str);
+        let absolute = if raw_path.is_absolute() {
+            raw_path
+        } else {
+            cwd.join(raw_path)
+        };
+        let path = std::fs::canonicalize(&absolute).unwrap_or(absolute);
+
+        Ok(Self {
+            name: None,
+            path,
+            line,
+        })
+    }
 }
 
 impl FromStr for Breakpoint {
@@ -124,5 +161,83 @@ mod tests {
         invalid_structure: ("test", Err(eyre::eyre!("breakpoint specification 'test' has no colon"))),
         invalid_line_number: ("test.py:foo", Err(eyre::eyre!("invalid line number"))),
         success: ("../../test.py:16", Ok(Breakpoint { path: PathBuf::from("../../test.py"), line: 16, name: None })),
+    }
+
+    mod breakpoint_parse {
+        use super::Breakpoint;
+        use std::path::{Path, PathBuf};
+
+        #[test]
+        fn relative_path_resolved_against_cwd() {
+            let cwd = Path::new("/home/user/project");
+            let bp = Breakpoint::parse("src/main.py:42", cwd).unwrap();
+            // canonicalize won't work on non-existent paths, so we get the joined path
+            assert_eq!(bp.path, PathBuf::from("/home/user/project/src/main.py"));
+            assert_eq!(bp.line, 42);
+        }
+
+        #[test]
+        fn absolute_path_used_as_is() {
+            let cwd = Path::new("/other");
+            let bp = Breakpoint::parse("/home/user/project/app.py:10", cwd).unwrap();
+            assert_eq!(bp.path, PathBuf::from("/home/user/project/app.py"));
+            assert_eq!(bp.line, 10);
+        }
+
+        #[test]
+        fn missing_line_number_errors() {
+            let cwd = Path::new("/tmp");
+            let err = Breakpoint::parse("main.py", cwd).unwrap_err();
+            assert!(
+                err.to_string().contains("has no colon"),
+                "unexpected error: {err}"
+            );
+        }
+
+        #[test]
+        fn non_numeric_line_errors() {
+            let cwd = Path::new("/tmp");
+            let err = Breakpoint::parse("main.py:abc", cwd).unwrap_err();
+            assert!(
+                err.to_string().contains("invalid line number"),
+                "unexpected error: {err}"
+            );
+        }
+
+        #[test]
+        fn empty_input_errors() {
+            let cwd = Path::new("/tmp");
+            let err = Breakpoint::parse("", cwd).unwrap_err();
+            assert!(
+                err.to_string().contains("empty breakpoint specification"),
+                "unexpected error: {err}"
+            );
+        }
+
+        #[test]
+        fn whitespace_only_errors() {
+            let cwd = Path::new("/tmp");
+            let err = Breakpoint::parse("  \t  ", cwd).unwrap_err();
+            assert!(
+                err.to_string().contains("empty breakpoint specification"),
+                "unexpected error: {err}"
+            );
+        }
+
+        #[test]
+        fn path_with_spaces() {
+            let cwd = Path::new("/home/user");
+            let bp = Breakpoint::parse("my project/main.py:5", cwd).unwrap();
+            assert_eq!(bp.path, PathBuf::from("/home/user/my project/main.py"));
+            assert_eq!(bp.line, 5);
+        }
+
+        #[test]
+        fn input_is_trimmed() {
+            let cwd = Path::new("/home/user");
+            let bp = Breakpoint::parse("  src/app.py:7  ", cwd).unwrap();
+            assert_eq!(bp.path, PathBuf::from("/home/user/src/app.py"));
+            assert_eq!(bp.line, 7);
+        }
     }
 }
