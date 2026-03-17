@@ -4,6 +4,7 @@
 
 use std::{
     collections::HashMap,
+    io::Read,
     path::{Path, PathBuf},
 };
 
@@ -79,7 +80,7 @@ struct Folder {
     // path: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum LaunchConfiguration {
     Debugpy(Debugpy),
@@ -88,6 +89,13 @@ pub enum LaunchConfiguration {
 }
 
 impl LaunchConfiguration {
+    pub fn name(&self) -> &str {
+        match self {
+            LaunchConfiguration::Debugpy(d) | LaunchConfiguration::Python(d) => &d.name,
+            LaunchConfiguration::LLDB(l) => &l.name,
+        }
+    }
+
     pub fn resolve(&mut self, root: impl AsRef<Path>) {
         match self {
             LaunchConfiguration::Debugpy(debugpy) | LaunchConfiguration::Python(debugpy) => {
@@ -214,6 +222,21 @@ pub fn load_from_path(
     let f = std::fs::File::open(path).wrap_err("opening input path")?;
     let config = crate::load(name, f).context("loading file from given path")?;
     Ok(config)
+}
+
+/// Load all launch configurations from a file path.
+pub fn load_all_from_path(path: impl AsRef<Path>) -> eyre::Result<Vec<LaunchConfiguration>> {
+    let mut contents = String::new();
+    std::fs::File::open(path)
+        .wrap_err("opening input path")?
+        .read_to_string(&mut contents)
+        .wrap_err("reading configuration contents")?;
+    let config = jsonc_to_serde(&contents).wrap_err("parsing launch configuration")?;
+    let configurations = match config {
+        ConfigFormat::VsCode(v) => v.configurations,
+        ConfigFormat::VsCodeWorkspace { launch, .. } => launch.configurations,
+    };
+    Ok(configurations)
 }
 
 #[derive(Debug, Clone, Deserialize)]

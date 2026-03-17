@@ -1,11 +1,14 @@
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+};
 
 use dap_types::{StackFrame, Variable};
 use debugger::{EvaluateResult, PausedFrame};
 use eframe::egui::{self, Context, Key, Modifiers, Ui};
 
 use crate::{
-    DebuggerAppState, State, TabState,
+    DebuggerAppState, Session, State, TabState,
     code_view::CodeView,
     ui::{
         breakpoints::Breakpoints,
@@ -17,11 +20,21 @@ use crate::{
 
 pub(crate) struct Renderer<'a> {
     state: &'a mut DebuggerAppState,
+    app_state: &'a Arc<Mutex<DebuggerAppState>>,
+    egui_ctx: &'a Context,
 }
 
 impl<'s> Renderer<'s> {
-    pub(crate) fn new(state: &'s mut DebuggerAppState) -> Self {
-        Self { state }
+    pub(crate) fn new(
+        state: &'s mut DebuggerAppState,
+        app_state: &'s Arc<Mutex<DebuggerAppState>>,
+        egui_ctx: &'s Context,
+    ) -> Self {
+        Self {
+            state,
+            app_state,
+            egui_ctx,
+        }
     }
 
     pub(crate) fn render_ui(&mut self, ctx: &Context) {
@@ -57,6 +70,20 @@ impl<'s> Renderer<'s> {
             }
         }
 
+        // Handle F5: start session or continue
+        if ctx.input(|i| i.key_pressed(Key::F5) && i.modifiers.is_none()) {
+            self.handle_f5();
+        }
+
+        // Handle Shift+F5: stop session
+        if ctx.input(|i| i.key_pressed(Key::F5) && i.modifiers.matches_exact(Modifiers::SHIFT)) {
+            if self.state.session.is_some() {
+                self.state.session = None;
+                self.state.variables_cache.clear();
+                *self.state.repl_output.borrow_mut() = String::new();
+            }
+        }
+
         // Render file picker overlay if open
         if self.state.file_picker_open {
             if let FilePickerResult::Selected(path) = file_picker::show(ctx, self.state) {
@@ -64,9 +91,16 @@ impl<'s> Renderer<'s> {
             }
         }
 
-        let current_state = self.state.state.clone();
+        let has_session = self.state.session.is_some();
+        if !has_session {
+            self.render_no_session(ctx);
+            return;
+        }
+
+        let current_state = self.state.session.as_ref().unwrap().state.clone();
         match current_state {
             State::Initialising => {
+                self.render_controls_window(ctx);
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.centered_and_justified(|ui| {
                         ui.label("Initialising debugger...");
@@ -78,10 +112,11 @@ impl<'s> Renderer<'s> {
                     stack,
                     paused_frame,
                     ..
-                }) = self.state.previous_state.clone()
+                }) = self.state.session.as_ref().unwrap().previous_state.clone()
                 {
                     self.render_paused_or_running_ui(ctx, &stack, &paused_frame, false);
                 } else {
+                    self.render_controls_window(ctx);
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.centered_and_justified(|ui| {
                             ui.label("Program running...");
@@ -97,11 +132,93 @@ impl<'s> Renderer<'s> {
                 self.render_paused_or_running_ui(ctx, &stack, &paused_frame, true);
             }
             State::Terminated => {
+                self.render_controls_window(ctx);
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.label("Program terminated");
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(40.0);
+                        ui.label("Program terminated");
+                        ui.add_space(10.0);
+                        if ui.button("⟳ Restart").clicked() {
+                            self.start_session();
+                        }
+                        ui.label("or press F5");
+                    });
                 });
             }
         }
+    }
+
+    fn handle_f5(&mut self) {
+        if let Some(session) = &self.state.session {
+            match &session.state {
+                State::Paused { .. } => {
+                    session
+                        .bridge
+                        .send(crate::async_bridge::UiCommand::Continue);
+                }
+                State::Terminated => {
+                    self.start_session();
+                }
+                _ => {} // Running or Initialising: no-op
+            }
+        } else {
+            self.start_session();
+        }
+    }
+
+    fn start_session(&mut self) {
+        // Drop existing session first
+        self.state.session = None;
+        self.state.variables_cache.clear();
+        *self.state.repl_output.borrow_mut() = String::new();
+
+        let persisted_bps = self.state.collect_persisted_breakpoints();
+        let mut all_bps: Vec<_> = self.state.ui_breakpoints.iter().cloned().collect();
+        all_bps.extend(persisted_bps);
+        self.state.ui_breakpoints = all_bps.iter().cloned().collect();
+
+        let config = self.state.configs[self.state.selected_config_index].clone();
+        let app_state_clone = Arc::clone(self.app_state);
+        match Session::start(
+            &config,
+            &all_bps,
+            &mut self.state.debug_root_dir,
+            self.egui_ctx,
+            app_state_clone,
+        ) {
+            Ok(session) => {
+                self.state.session = Some(session);
+            }
+            Err(e) => {
+                self.state
+                    .status
+                    .push_error(format!("Failed to start session: {e}"));
+            }
+        }
+    }
+
+    fn render_no_session(&mut self, ctx: &Context) {
+        egui::TopBottomPanel::top("control_panel").show(ctx, |ui| {
+            ui.heading("DAP Debugger");
+            ui.separator();
+            ui.horizontal(|ui| {
+                self.render_config_selector(ui);
+                if ui.button("▶ Start").clicked() {
+                    self.start_session();
+                }
+            });
+        });
+        egui::TopBottomPanel::bottom("status-bar")
+            .exact_height(24.0)
+            .show(ctx, |ui| {
+                ui.add(StatusBar::new("Ready", &mut self.state.status));
+            });
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.add_space(80.0);
+                ui.heading("Select a configuration and press Start or F5");
+            });
+        });
     }
 
     /// Render both the paused and running UIs
@@ -137,31 +254,69 @@ impl<'s> Renderer<'s> {
         });
     }
 
+    fn render_config_selector(&mut self, ui: &mut Ui) {
+        let selected_name = self.state.config_names[self.state.selected_config_index].clone();
+        egui::ComboBox::from_id_salt("config_selector")
+            .selected_text(&selected_name)
+            .show_ui(ui, |ui| {
+                for (i, name) in self.state.config_names.iter().enumerate() {
+                    ui.selectable_value(&mut self.state.selected_config_index, i, name);
+                }
+            });
+    }
+
     fn render_controls_window(&mut self, ctx: &Context) {
+        let has_session = self.state.session.is_some();
+        let is_terminated = self
+            .state
+            .session
+            .as_ref()
+            .is_some_and(|s| matches!(s.state, State::Terminated));
+
         egui::TopBottomPanel::top("control_panel").show(ctx, |ui| {
             ui.heading("DAP Debugger");
             ui.separator();
 
             ui.horizontal(|ui| {
-                if ui.button("▶ Continue").clicked() {
-                    self.state
-                        .bridge
-                        .send(crate::async_bridge::UiCommand::Continue);
+                // Config selector (disabled during active session)
+                ui.add_enabled_ui(!has_session || is_terminated, |ui| {
+                    self.render_config_selector(ui);
+                });
+
+                if !has_session || is_terminated {
+                    if ui.button("▶ Start").clicked() {
+                        self.start_session();
+                    }
                 }
-                if ui.button("⏭ Step Over").clicked() {
-                    self.state
-                        .bridge
-                        .send(crate::async_bridge::UiCommand::StepOver);
+
+                if has_session && !is_terminated {
+                    if ui.button("⏹ Stop").clicked() {
+                        self.state.session = None;
+                        self.state.variables_cache.clear();
+                        *self.state.repl_output.borrow_mut() = String::new();
+                    }
                 }
-                if ui.button("⏬ Step Into").clicked() {
-                    self.state
-                        .bridge
-                        .send(crate::async_bridge::UiCommand::StepIn);
-                }
-                if ui.button("⏫ Step Out").clicked() {
-                    self.state
-                        .bridge
-                        .send(crate::async_bridge::UiCommand::StepOut);
+
+                // Stepping controls only when session is active and not terminated
+                if let Some(session) = &self.state.session {
+                    if !matches!(session.state, State::Terminated) {
+                        if ui.button("▶ Continue").clicked() {
+                            session
+                                .bridge
+                                .send(crate::async_bridge::UiCommand::Continue);
+                        }
+                        if ui.button("⏭ Step Over").clicked() {
+                            session
+                                .bridge
+                                .send(crate::async_bridge::UiCommand::StepOver);
+                        }
+                        if ui.button("⏬ Step Into").clicked() {
+                            session.bridge.send(crate::async_bridge::UiCommand::StepIn);
+                        }
+                        if ui.button("⏫ Step Out").clicked() {
+                            session.bridge.send(crate::async_bridge::UiCommand::StepOut);
+                        }
+                    }
                 }
             });
         });
@@ -197,17 +352,19 @@ impl<'s> Renderer<'s> {
                     match debugger::Breakpoint::parse(&input, &self.state.debug_root_dir) {
                         Ok(bp) => {
                             self.state.ui_breakpoints.insert(bp.clone());
-                            match self.state.bridge.send_sync(|reply| {
-                                crate::async_bridge::UiCommand::AddBreakpoint {
-                                    breakpoint: bp,
-                                    reply,
-                                }
-                            }) {
-                                Ok(_id) => {}
-                                Err(e) => {
-                                    self.state
-                                        .status
-                                        .push_error(format!("Failed to add breakpoint: {e}"));
+                            if let Some(session) = &self.state.session {
+                                match session.bridge.send_sync(|reply| {
+                                    crate::async_bridge::UiCommand::AddBreakpoint {
+                                        breakpoint: bp,
+                                        reply,
+                                    }
+                                }) {
+                                    Ok(_id) => {}
+                                    Err(e) => {
+                                        self.state
+                                            .status
+                                            .push_error(format!("Failed to add breakpoint: {e}"));
+                                    }
                                 }
                             }
                             self.state.persist_breakpoints();
@@ -250,9 +407,8 @@ impl<'s> Renderer<'s> {
     fn render_repl(&mut self, _ctx: &Context, ui: &mut Ui) {
         let repl_input = &mut *self.state.repl_input.borrow_mut();
         let repl_output = &mut *self.state.repl_output.borrow_mut();
-        // We only have a frame id if we are paused. If we are running then there is no frame id,
-        // so don't render the REPL.
-        if let Some(frame_id) = self.state.current_frame_id {
+        let current_frame_id = self.state.session.as_ref().and_then(|s| s.current_frame_id);
+        if let Some(frame_id) = current_frame_id {
             // output/history area
             ui.text_edit_multiline(repl_output);
             // input area
@@ -260,24 +416,26 @@ impl<'s> Renderer<'s> {
                 && ui.input(|i| i.key_pressed(Key::Enter))
             {
                 let expr = repl_input.clone();
-                match self.state.bridge.send_sync(|reply| {
-                    crate::async_bridge::UiCommand::Evaluate {
-                        expression: expr,
-                        frame_id,
-                        reply,
-                    }
-                }) {
-                    Ok(EvaluateResult { output, error }) => {
-                        if error {
-                            *repl_output += &format!("\n{repl_input}\n!! {output}\n");
-                        } else {
-                            *repl_output += &format!("\n{repl_input}\n=> {output}\n");
+                if let Some(session) = &self.state.session {
+                    match session.bridge.send_sync(|reply| {
+                        crate::async_bridge::UiCommand::Evaluate {
+                            expression: expr,
+                            frame_id,
+                            reply,
                         }
-                        repl_input.clear();
-                    }
-                    Err(e) => {
-                        self.state.status.push_error(format!("Eval failed: {e}"));
-                        repl_input.clear();
+                    }) {
+                        Ok(EvaluateResult { output, error }) => {
+                            if error {
+                                *repl_output += &format!("\n{repl_input}\n!! {output}\n");
+                            } else {
+                                *repl_output += &format!("\n{repl_input}\n=> {output}\n");
+                            }
+                            repl_input.clear();
+                        }
+                        Err(e) => {
+                            self.state.status.push_error(format!("Eval failed: {e}"));
+                            repl_input.clear();
+                        }
                     }
                 }
             }
@@ -323,20 +481,22 @@ impl<'s> Renderer<'s> {
                 .show(ui, |ui| {
                     // Fetch children on first expand
                     if !self.state.variables_cache.contains_key(&var_ref) {
-                        match self.state.bridge.send_sync(|reply| {
-                            crate::async_bridge::UiCommand::FetchVariables {
-                                reference: var_ref,
-                                reply,
-                            }
-                        }) {
-                            Ok(children) => {
-                                self.state.variables_cache.insert(var_ref, children);
-                            }
-                            Err(e) => {
-                                self.state
-                                    .status
-                                    .push_error(format!("Failed to fetch variables: {e}"));
-                                return;
+                        if let Some(session) = &self.state.session {
+                            match session.bridge.send_sync(|reply| {
+                                crate::async_bridge::UiCommand::FetchVariables {
+                                    reference: var_ref,
+                                    reply,
+                                }
+                            }) {
+                                Ok(children) => {
+                                    self.state.variables_cache.insert(var_ref, children);
+                                }
+                                Err(e) => {
+                                    self.state
+                                        .status
+                                        .push_error(format!("Failed to fetch variables: {e}"));
+                                    return;
+                                }
                             }
                         }
                     }
@@ -414,17 +574,19 @@ impl<'s> Renderer<'s> {
         for added in file_breakpoints.difference(&breakpoints_before) {
             let bp = added.clone();
             self.state.ui_breakpoints.insert(bp.clone());
-            match self.state.bridge.send_sync(|reply| {
-                crate::async_bridge::UiCommand::AddBreakpoint {
-                    breakpoint: bp,
-                    reply,
-                }
-            }) {
-                Ok(_id) => {}
-                Err(e) => {
-                    self.state
-                        .status
-                        .push_error(format!("Failed to add breakpoint: {e}"));
+            if let Some(session) = &self.state.session {
+                match session.bridge.send_sync(|reply| {
+                    crate::async_bridge::UiCommand::AddBreakpoint {
+                        breakpoint: bp,
+                        reply,
+                    }
+                }) {
+                    Ok(_id) => {}
+                    Err(e) => {
+                        self.state
+                            .status
+                            .push_error(format!("Failed to add breakpoint: {e}"));
+                    }
                 }
             }
         }

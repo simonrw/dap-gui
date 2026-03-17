@@ -10,7 +10,7 @@ use clap::Parser;
 use dap_types::StackFrame;
 use debugger::{PausedFrame, ProgramState};
 use eframe::egui::{self, Visuals};
-use eyre::WrapErr;
+use eyre::Context;
 use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
 use state::StateManager;
 
@@ -102,160 +102,40 @@ enum TabState {
     Repl,
 }
 
-struct DebuggerAppState {
-    state: State,
+/// An active debug session, bundling the async bridge and server process.
+///
+/// Dropping this struct tears down the session: the bridge is dropped (which
+/// cancels the debugger tasks), the server process is killed, and the event
+/// forwarding thread exits when its channel closes.
+struct Session {
     bridge: AsyncBridge,
+    state: State,
     previous_state: Option<State>,
     current_frame_id: Option<StackFrameId>,
-
-    // UI internals
-    tab: RefCell<TabState>,
-    repl_input: RefCell<String>,
-    repl_output: RefCell<String>,
-    jump: bool,
-
-    // File picker state
-    file_picker_open: bool,
-    file_picker_input: String,
-    file_picker_cursor: usize,
-    file_picker_results: Vec<fuzzy::FuzzyMatch>,
-    git_files: Vec<fuzzy::TrackedFile>,
-    git_files_loaded: bool,
-
-    // File override (when user manually opens a file via picker)
-    file_override: Option<PathBuf>,
-
-    // File content cache to avoid repeated disk reads
-    file_cache: HashMap<PathBuf, String>,
-
-    // Cache for child variables fetched via variablesReference
-    variables_cache: HashMap<i64, Vec<dap_types::Variable>>,
-
-    // Persistent breakpoint state for the UI (survives across frames)
-    ui_breakpoints: HashSet<debugger::Breakpoint>,
-
-    // Text input for adding breakpoints via file:line
-    breakpoint_input: String,
-    breakpoint_input_error: bool,
-
-    // Code view font size
-    code_font_size: f32,
-
-    // Status bar state
-    status: crate::ui::status_bar::StatusState,
-
-    // Persistence
-    state_manager: StateManager,
-    debug_root_dir: PathBuf,
-}
-
-impl DebuggerAppState {
-    pub(crate) fn persist_breakpoints(&mut self) {
-        let breakpoints: Vec<_> = self.ui_breakpoints.iter().cloned().collect();
-        if let Err(e) = self
-            .state_manager
-            .set_project_breakpoints(self.debug_root_dir.clone(), breakpoints)
-        {
-            tracing::warn!(error = %e, "failed to persist breakpoints");
-        }
-    }
-
-    pub(crate) fn change_scope(&self, stack_frame_id: StackFrameId) -> eyre::Result<()> {
-        self.bridge
-            .send_sync(|reply| async_bridge::UiCommand::ChangeScope {
-                frame_id: stack_frame_id,
-                reply,
-            })
-    }
-
-    #[tracing::instrument(skip(self), level = "trace")]
-    fn handle_event(&mut self, event: &debugger::Event) -> eyre::Result<()> {
-        tracing::debug!("handling event");
-        self.previous_state = Some(self.state.clone());
-        self.state = event.clone().into();
-        if let State::Paused {
-            paused_frame,
-            breakpoints,
-            ..
-        } = &self.state
-        {
-            self.current_frame_id = Some(paused_frame.frame.id);
-            // Refresh UI breakpoints from the debugger's authoritative state
-            self.ui_breakpoints = breakpoints.iter().cloned().collect();
-        } else if let State::Running = &self.state {
-            self.current_frame_id = None;
-        }
-
-        // if we have just been paused then jump the editor to the nearest point
-        if let (State::Paused { .. }, Some(State::Running)) =
-            (&mut self.state, &self.previous_state)
-        {
-            self.jump = true;
-            self.file_override = None;
-            self.variables_cache.clear();
-        }
-
-        Ok(())
-    }
-}
-
-struct DebuggerApp {
-    inner: Arc<Mutex<DebuggerAppState>>,
-    // Keep the debug server process alive for the lifetime of the app.
-    // Dropping this handle terminates the server and closes the transport.
     _server: Option<Box<dyn server::Server + Send>>,
 }
 
-impl DebuggerApp {
-    fn new(args: Args, cc: &eframe::CreationContext<'_>) -> eyre::Result<Self> {
-        let state_path = dirs::data_local_dir()
-            .unwrap_or_else(|| PathBuf::from("/tmp"))
-            .join("dapgui")
-            .join("state.json");
-        tracing::debug!(state_path = %state_path.display(), "loading state");
-        if !state_path.parent().unwrap().is_dir() {
-            create_dir_all(state_path.parent().unwrap()).context("creating state directory")?;
-        }
-        let state_manager = StateManager::new(state_path).wrap_err("loading state")?;
-        state_manager.save().wrap_err("saving state")?;
-        let persisted_state = state_manager.current();
-        tracing::trace!(state = ?persisted_state, "loaded state");
-
-        let config =
-            match launch_configuration::load_from_path(args.name.as_ref(), args.config_path)
-                .wrap_err("loading launch configuration")?
-            {
-                ChosenLaunchConfiguration::Specific(config) => config,
-                ChosenLaunchConfiguration::NotFound => {
-                    eyre::bail!("no matching configuration found")
-                }
-                ChosenLaunchConfiguration::ToBeChosen(configurations) => {
-                    eprintln!("Configuration name not specified");
-                    eprintln!("Available options:");
-                    for config in &configurations {
-                        eprintln!("- {config}");
-                    }
-                    // TODO: best option?
-                    std::process::exit(1);
-                }
-            };
-
-        let mut debug_root_dir = std::env::current_dir()
-            .and_then(|p| std::fs::canonicalize(&p))
-            .unwrap();
-
-        // Create a tokio runtime for async initialization
+impl Session {
+    /// Start a new debug session from a launch configuration.
+    ///
+    /// This spawns the server (for launch mode), connects to the debugger,
+    /// configures breakpoints, and starts execution.
+    fn start(
+        config: &LaunchConfiguration,
+        breakpoints: &[debugger::Breakpoint],
+        debug_root_dir: &mut PathBuf,
+        egui_ctx: &egui::Context,
+        app_state: Arc<Mutex<DebuggerAppState>>,
+    ) -> eyre::Result<Self> {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .worker_threads(2)
             .build()
             .map_err(|e| eyre::eyre!("failed to create tokio runtime: {e}"))?;
 
-        // Server handle must live beyond the async block so the debug server
-        // process is not killed before we finish initialization.
-        let mut _server_handle: Option<Box<dyn server::Server + Send>> = None;
+        let mut server_handle: Option<Box<dyn server::Server + Send>> = None;
 
-        let (mut debugger, initial_breakpoints) = rt.block_on(async {
+        let mut debugger = rt.block_on(async {
             match config {
                 LaunchConfiguration::Python(debugpy) | LaunchConfiguration::Debugpy(debugpy) => {
                     let Debugpy {
@@ -265,22 +145,14 @@ impl DebuggerApp {
                         path_mappings,
                         program,
                         ..
-                    } = debugpy;
+                    } = debugpy.clone();
                     if let Some(dir) = cwd {
-                        debug_root_dir =
+                        *debug_root_dir =
                             std::fs::canonicalize(debugger::utils::normalise_path(&dir).as_ref())
                                 .unwrap_or_else(|_| {
                                     debugger::utils::normalise_path(&dir).into_owned()
                                 });
                     }
-
-                    // Collect breakpoints from CLI args (shared by attach & launch)
-                    let initial_bps: Vec<debugger::Breakpoint> = args
-                        .breakpoints
-                        .iter()
-                        .map(|bp_str| debugger::Breakpoint::parse(bp_str, &debug_root_dir))
-                        .collect::<eyre::Result<Vec<_>>>()
-                        .wrap_err("parsing --breakpoint arguments")?;
 
                     match request.as_str() {
                         "attach" => {
@@ -304,19 +176,17 @@ impl DebuggerApp {
                             .await
                             .context("creating async debugger (attach)")?;
 
-                            Ok::<_, eyre::Report>((debugger, initial_bps))
+                            Ok::<_, eyre::Report>(debugger)
                         }
                         "launch" => {
                             let Some(program) = program else {
                                 eyre::bail!("'program' is a required setting");
                             };
 
-                            // Canonicalize so breakpoint paths match what the
-                            // debug adapter returns in frame.source.path.
                             let program = std::fs::canonicalize(&program).unwrap_or(program);
 
                             let port = server::DEFAULT_DAP_PORT;
-                            _server_handle = Some(
+                            server_handle = Some(
                                 server::for_implementation_on_port(
                                     server::Implementation::Debugpy,
                                     port,
@@ -324,7 +194,6 @@ impl DebuggerApp {
                                 .context("creating background server process")?,
                             );
 
-                            // Small delay to let the server start
                             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
                             let launch_args = debugger::LaunchArguments {
@@ -349,7 +218,7 @@ impl DebuggerApp {
                             .await
                             .context("creating async debugger (launch)")?;
 
-                            Ok((debugger, initial_bps))
+                            Ok(debugger)
                         }
                         other => eyre::bail!("unsupported request type: {other}"),
                     }
@@ -358,33 +227,9 @@ impl DebuggerApp {
             }
         })?;
 
-        // Configure breakpoints (from CLI and persisted state) before starting
-        let mut all_breakpoints = initial_breakpoints;
-        if let Some(project_state) = state_manager
-            .current()
-            .projects
-            .iter()
-            .find(|p| debugger::utils::normalise_path(&p.path) == debug_root_dir)
-        {
-            tracing::debug!("got project state");
-            for breakpoint in &project_state.breakpoints {
-                let breakpoint_path = debugger::utils::normalise_path(&breakpoint.path);
-                if !breakpoint_path.starts_with(&debug_root_dir) {
-                    continue;
-                }
-                tracing::debug!(?breakpoint, "adding breakpoint from state file");
-                let mut bp = breakpoint.clone();
-                let normalised = debugger::utils::normalise_path(&bp.path).into_owned();
-                bp.path = std::fs::canonicalize(&normalised).unwrap_or(normalised);
-                all_breakpoints.push(bp);
-            }
-        } else {
-            tracing::warn!("missing project state");
-        }
-
         rt.block_on(async {
             debugger
-                .configure_breakpoints(&all_breakpoints)
+                .configure_breakpoints(breakpoints)
                 .await
                 .context("configuring breakpoints")?;
 
@@ -392,27 +237,229 @@ impl DebuggerApp {
             debugger.start().await.context("launching debugee")
         })?;
 
-        // Set up event forwarding from async debugger to GUI thread
         let (event_tx, event_rx) = crossbeam_channel::unbounded();
         let event_receiver = debugger.take_events();
+        let egui_ctx = egui_ctx.clone();
 
-        let egui_context = cc.egui_ctx.clone();
-
-        // Create the async bridge which takes ownership of the debugger
         let bridge = AsyncBridge::spawn(
             debugger,
             event_receiver,
             event_tx.clone(),
-            egui_context.clone(),
+            egui_ctx.clone(),
             rt,
         )
         .context("creating async bridge")?;
 
-        let temp_state = DebuggerAppState {
+        // Spawn event forwarding thread for this session
+        std::thread::spawn(move || {
+            loop {
+                match event_rx.recv() {
+                    Ok(event) => {
+                        let mut state = app_state.lock().unwrap();
+                        state.handle_session_event(&event);
+                        drop(state);
+                        egui_ctx.request_repaint();
+                    }
+                    Err(_) => break,
+                }
+            }
+            tracing::debug!("event forwarding thread ended");
+        });
+
+        Ok(Self {
+            bridge,
             state: State::Initialising,
             previous_state: None,
-            bridge,
             current_frame_id: None,
+            _server: server_handle,
+        })
+    }
+
+    fn handle_event(&mut self, event: &debugger::Event) {
+        tracing::debug!("handling event");
+        self.previous_state = Some(self.state.clone());
+        self.state = event.clone().into();
+        if let State::Paused { paused_frame, .. } = &self.state {
+            self.current_frame_id = Some(paused_frame.frame.id);
+        } else if let State::Running = &self.state {
+            self.current_frame_id = None;
+        }
+    }
+}
+
+struct DebuggerAppState {
+    session: Option<Session>,
+
+    // UI internals
+    tab: RefCell<TabState>,
+    repl_input: RefCell<String>,
+    repl_output: RefCell<String>,
+    jump: bool,
+
+    // File picker state
+    file_picker_open: bool,
+    file_picker_input: String,
+    file_picker_cursor: usize,
+    file_picker_results: Vec<fuzzy::FuzzyMatch>,
+    git_files: Vec<fuzzy::TrackedFile>,
+    git_files_loaded: bool,
+
+    // File override (when user manually opens a file via picker)
+    file_override: Option<PathBuf>,
+
+    // File content cache to avoid repeated disk reads
+    file_cache: HashMap<PathBuf, String>,
+
+    // Cache for child variables fetched via variablesReference
+    variables_cache: HashMap<i64, Vec<dap_types::Variable>>,
+
+    // Persistent breakpoint state for the UI (survives across sessions)
+    ui_breakpoints: HashSet<debugger::Breakpoint>,
+
+    // Text input for adding breakpoints via file:line
+    breakpoint_input: String,
+    breakpoint_input_error: bool,
+
+    // Code view font size
+    code_font_size: f32,
+
+    // Status bar state
+    status: crate::ui::status_bar::StatusState,
+
+    // Persistence
+    state_manager: StateManager,
+    debug_root_dir: PathBuf,
+
+    // Launch configurations
+    configs: Vec<LaunchConfiguration>,
+    config_names: Vec<String>,
+    selected_config_index: usize,
+    #[allow(dead_code)]
+    config_path: PathBuf,
+}
+
+impl DebuggerAppState {
+    pub(crate) fn persist_breakpoints(&mut self) {
+        let breakpoints: Vec<_> = self.ui_breakpoints.iter().cloned().collect();
+        if let Err(e) = self
+            .state_manager
+            .set_project_breakpoints(self.debug_root_dir.clone(), breakpoints)
+        {
+            tracing::warn!(error = %e, "failed to persist breakpoints");
+        }
+    }
+
+    pub(crate) fn change_scope(&self, stack_frame_id: StackFrameId) -> eyre::Result<()> {
+        let session = self
+            .session
+            .as_ref()
+            .ok_or_else(|| eyre::eyre!("no active session"))?;
+        session
+            .bridge
+            .send_sync(|reply| async_bridge::UiCommand::ChangeScope {
+                frame_id: stack_frame_id,
+                reply,
+            })
+    }
+
+    fn handle_session_event(&mut self, event: &debugger::Event) {
+        if let Some(session) = &mut self.session {
+            session.handle_event(event);
+            // Refresh UI breakpoints from debugger's authoritative state
+            if let State::Paused { breakpoints, .. } = &session.state {
+                self.ui_breakpoints = breakpoints.iter().cloned().collect();
+            }
+            // Jump + clear overrides when transitioning to paused
+            if let (State::Paused { .. }, Some(State::Running)) =
+                (&session.state, &session.previous_state)
+            {
+                self.jump = true;
+                self.file_override = None;
+                self.variables_cache.clear();
+            }
+        }
+    }
+
+    /// Collect breakpoints from persisted state for the current project.
+    fn collect_persisted_breakpoints(&self) -> Vec<debugger::Breakpoint> {
+        let mut bps = Vec::new();
+        if let Some(project_state) = self
+            .state_manager
+            .current()
+            .projects
+            .iter()
+            .find(|p| debugger::utils::normalise_path(&p.path) == self.debug_root_dir)
+        {
+            tracing::debug!("got project state");
+            for breakpoint in &project_state.breakpoints {
+                let breakpoint_path = debugger::utils::normalise_path(&breakpoint.path);
+                if !breakpoint_path.starts_with(&self.debug_root_dir) {
+                    continue;
+                }
+                tracing::debug!(?breakpoint, "adding breakpoint from state file");
+                let mut bp = breakpoint.clone();
+                let normalised = debugger::utils::normalise_path(&bp.path).into_owned();
+                bp.path = std::fs::canonicalize(&normalised).unwrap_or(normalised);
+                bps.push(bp);
+            }
+        } else {
+            tracing::warn!("missing project state");
+        }
+        bps
+    }
+}
+
+struct DebuggerApp {
+    inner: Arc<Mutex<DebuggerAppState>>,
+}
+
+impl DebuggerApp {
+    fn new(args: Args, cc: &eframe::CreationContext<'_>) -> eyre::Result<Self> {
+        let state_path = dirs::data_local_dir()
+            .unwrap_or_else(|| PathBuf::from("/tmp"))
+            .join("dapgui")
+            .join("state.json");
+        tracing::debug!(state_path = %state_path.display(), "loading state");
+        if !state_path.parent().unwrap().is_dir() {
+            create_dir_all(state_path.parent().unwrap()).context("creating state directory")?;
+        }
+        let state_manager = StateManager::new(state_path).wrap_err("loading state")?;
+        state_manager.save().wrap_err("saving state")?;
+        let persisted_state = state_manager.current();
+        tracing::trace!(state = ?persisted_state, "loaded state");
+
+        let debug_root_dir = std::env::current_dir()
+            .and_then(|p| std::fs::canonicalize(&p))
+            .unwrap();
+
+        // Load all configurations
+        let configs = launch_configuration::load_all_from_path(&args.config_path)
+            .wrap_err("loading launch configurations")?;
+        if configs.is_empty() {
+            eyre::bail!("no configurations found in launch.json");
+        }
+        let config_names: Vec<String> = configs.iter().map(|c| c.name().to_string()).collect();
+
+        // Pre-select config if --name provided
+        let selected_config_index = if let Some(ref name) = args.name {
+            config_names
+                .iter()
+                .position(|n| n == name)
+                .ok_or_else(|| eyre::eyre!("no configuration named '{name}' found"))?
+        } else {
+            0
+        };
+
+        // Parse CLI breakpoints
+        let initial_breakpoints: Vec<debugger::Breakpoint> = args
+            .breakpoints
+            .iter()
+            .map(|bp_str| debugger::Breakpoint::parse(bp_str, &debug_root_dir))
+            .collect::<eyre::Result<Vec<_>>>()
+            .wrap_err("parsing --breakpoint arguments")?;
+
+        let app_state = DebuggerAppState {
+            session: None,
             jump: false,
             tab: RefCell::new(TabState::Variables),
             repl_input: RefCell::new(String::new()),
@@ -426,33 +473,43 @@ impl DebuggerApp {
             file_override: None,
             file_cache: HashMap::new(),
             variables_cache: HashMap::new(),
-            ui_breakpoints: all_breakpoints.into_iter().collect(),
+            ui_breakpoints: initial_breakpoints.into_iter().collect(),
             breakpoint_input: String::new(),
             breakpoint_input_error: false,
             code_font_size: persisted_state.code_font_size.unwrap_or(14.0),
             status: Default::default(),
             state_manager,
             debug_root_dir,
+            configs,
+            config_names,
+            selected_config_index,
+            config_path: args.config_path,
         };
 
-        let inner = Arc::new(Mutex::new(temp_state));
-        let background_inner = Arc::clone(&inner);
+        let inner = Arc::new(Mutex::new(app_state));
 
-        std::thread::spawn(move || {
-            loop {
-                if let Ok(event) = event_rx.recv() {
-                    if let Err(e) = background_inner.lock().unwrap().handle_event(&event) {
-                        tracing::warn!(error = %e, "handling debugger event");
-                    }
-                    egui_context.request_repaint();
-                }
-            }
-        });
+        // Auto-start if --name was provided (preserving CLI behavior)
+        if args.name.is_some() {
+            let mut state = inner.lock().unwrap();
+            let persisted_bps = state.collect_persisted_breakpoints();
+            let mut all_bps: Vec<_> = state.ui_breakpoints.iter().cloned().collect();
+            all_bps.extend(persisted_bps);
+            state.ui_breakpoints = all_bps.iter().cloned().collect();
 
-        Ok(Self {
-            inner,
-            _server: _server_handle,
-        })
+            let config = state.configs[state.selected_config_index].clone();
+            let egui_ctx = cc.egui_ctx.clone();
+            let app_state_clone = Arc::clone(&inner);
+            let session = Session::start(
+                &config,
+                &all_bps,
+                &mut state.debug_root_dir,
+                &egui_ctx,
+                app_state_clone,
+            )?;
+            state.session = Some(session);
+        }
+
+        Ok(Self { inner })
     }
 }
 
@@ -461,13 +518,15 @@ impl eframe::App for DebuggerApp {
         let mut inner = self.inner.lock().unwrap();
 
         // Drain any async command errors into the status bar
-        for err in inner.bridge.drain_errors() {
-            inner
-                .status
-                .push_error(format!("{} failed: {}", err.operation, err.error));
+        if let Some(session) = &inner.session {
+            for err in session.bridge.drain_errors() {
+                inner
+                    .status
+                    .push_error(format!("{} failed: {}", err.operation, err.error));
+            }
         }
 
-        let mut user_interface = crate::renderer::Renderer::new(&mut inner);
+        let mut user_interface = crate::renderer::Renderer::new(&mut inner, &self.inner, ctx);
         user_interface.render_ui(ctx);
         if inner.jump {
             inner.jump = false;
