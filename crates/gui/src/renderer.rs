@@ -391,6 +391,13 @@ impl<'s> Renderer<'s> {
             ui.label(&display_name);
             ui.separator();
 
+            // Always-visible search bar for browsing
+            let search = &mut self.state.search_state;
+            if !search.active {
+                search.active = true;
+            }
+            self.render_search_bar(ui);
+
             let contents = self
                 .state
                 .file_cache
@@ -400,6 +407,11 @@ impl<'s> Renderer<'s> {
                         .unwrap_or_else(|e| format!("Error reading file: {e}"))
                 })
                 .clone();
+
+            // Update search matches if query or file changed
+            if self.state.search_state.active {
+                self.state.search_state.update(&contents, &display_path);
+            }
 
             let mut file_breakpoints: HashSet<_> = self
                 .state
@@ -413,6 +425,20 @@ impl<'s> Renderer<'s> {
             let is_dark = ui.visuals().dark_mode;
             let jump = false;
 
+            let scroll_to_line = if self.state.search_state.scroll_to_match {
+                self.state.search_state.scroll_to_match = false;
+                self.state.search_state.current_match_line(&contents)
+            } else {
+                None
+            };
+
+            let search_matches = if self.state.search_state.active {
+                &self.state.search_state.matches
+            } else {
+                &[][..]
+            };
+            let current_search_match = self.state.search_state.current_match;
+
             ui.add(CodeView::new(
                 &contents,
                 1,
@@ -422,9 +448,9 @@ impl<'s> Renderer<'s> {
                 display_path,
                 is_dark,
                 self.state.code_font_size,
-                &[],
-                0,
-                None,
+                search_matches,
+                current_search_match,
+                scroll_to_line,
             ));
 
             for added in file_breakpoints.difference(&breakpoints_before) {
