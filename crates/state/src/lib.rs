@@ -70,6 +70,11 @@ impl StateManager {
         self.save()
     }
 
+    pub fn set_code_font_size(&mut self, size: f32) -> eyre::Result<()> {
+        self.current.code_font_size = Some(size);
+        self.save()
+    }
+
     pub fn current(&self) -> &Persistence {
         &self.current
     }
@@ -80,6 +85,9 @@ impl StateManager {
 pub struct Persistence {
     pub projects: Vec<PerFile>,
     pub version: String,
+    /// Code view font size (if set by user)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_font_size: Option<f32>,
 }
 
 /// State that is persisted per file
@@ -130,6 +138,7 @@ mod tests {
                     line: 10,
                 }],
             }],
+            ..Default::default()
         };
 
         let mut buf = Vec::new();
@@ -158,6 +167,7 @@ mod tests {
         let state = Persistence {
             version: "2.0".to_string(),
             projects: vec![],
+            ..Default::default()
         };
 
         save_to(&state, &path).unwrap();
@@ -197,6 +207,7 @@ mod tests {
                 path: PathBuf::from("/src/main.py"),
                 breakpoints: vec![],
             }],
+            ..Default::default()
         };
         save_to(&state, &path).unwrap();
 

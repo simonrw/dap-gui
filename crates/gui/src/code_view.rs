@@ -40,6 +40,8 @@ pub struct CodeView<'a> {
     file_path: PathBuf,
     /// Whether the UI is using dark mode
     is_dark: bool,
+    /// Font size for code text
+    font_size: f32,
 }
 
 impl<'a> CodeView<'a> {
@@ -55,6 +57,7 @@ impl<'a> CodeView<'a> {
         jump: &'a bool,
         file_path: PathBuf,
         is_dark: bool,
+        font_size: f32,
     ) -> Self {
         Self {
             content,
@@ -64,6 +67,7 @@ impl<'a> CodeView<'a> {
             jump,
             file_path,
             is_dark,
+            font_size,
         }
     }
 
@@ -99,13 +103,12 @@ impl egui::Widget for CodeView<'_> {
         let bullet = "•";
 
         // closure that defines the layout job
+        let font_size = self.font_size;
         let mut layouter = |ui: &egui::Ui, s: &dyn egui::TextBuffer, _wrap_width: f32| {
             let mut layout_job = LayoutJob::default();
             let indent = 4.0;
             let bullet_format = |color| TextFormat {
-                font_id: egui::FontId::monospace(
-                    ui.style().text_styles[&egui::TextStyle::Body].size,
-                ),
+                font_id: egui::FontId::monospace(font_size),
                 color,
                 ..Default::default()
             };

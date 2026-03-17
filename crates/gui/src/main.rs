@@ -19,6 +19,7 @@ type StackFrameId = i64;
 mod async_bridge;
 mod browse;
 mod code_view;
+mod fonts;
 mod renderer;
 mod ui;
 
@@ -136,6 +137,9 @@ struct DebuggerAppState {
     // Text input for adding breakpoints via file:line
     breakpoint_input: String,
     breakpoint_input_error: bool,
+
+    // Code view font size
+    code_font_size: f32,
 
     // Status bar state
     status: crate::ui::status_bar::StatusState,
@@ -425,6 +429,7 @@ impl DebuggerApp {
             ui_breakpoints: all_breakpoints.into_iter().collect(),
             breakpoint_input: String::new(),
             breakpoint_input_error: false,
+            code_font_size: persisted_state.code_font_size.unwrap_or(14.0),
             status: Default::default(),
             state_manager,
             debug_root_dir,
@@ -491,7 +496,7 @@ fn main() -> eyre::Result<()> {
                 ..Default::default()
             };
             cc.egui_ctx.set_style(style);
-
+            crate::fonts::install_lilex(&cc.egui_ctx);
             if browse_mode {
                 // Resolve debug_root_dir from launch config's cwd
                 let debug_root_dir = resolve_debug_root_dir(&args)

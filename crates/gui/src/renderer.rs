@@ -25,6 +25,29 @@ impl<'s> Renderer<'s> {
     }
 
     pub(crate) fn render_ui(&mut self, ctx: &Context) {
+        // Handle Ctrl/Cmd+= to increase code font size
+        if ctx.input(|i| i.key_pressed(Key::Equals) && i.modifiers.command) {
+            self.state.code_font_size = (self.state.code_font_size + 1.0).min(32.0);
+            if let Err(e) = self
+                .state
+                .state_manager
+                .set_code_font_size(self.state.code_font_size)
+            {
+                tracing::warn!(error = %e, "failed to persist font size");
+            }
+        }
+        // Handle Ctrl/Cmd+- to decrease code font size
+        if ctx.input(|i| i.key_pressed(Key::Minus) && i.modifiers.command) {
+            self.state.code_font_size = (self.state.code_font_size - 1.0).max(8.0);
+            if let Err(e) = self
+                .state
+                .state_manager
+                .set_code_font_size(self.state.code_font_size)
+            {
+                tracing::warn!(error = %e, "failed to persist font size");
+            }
+        }
+
         // Handle Ctrl+P to toggle file picker
         if ctx.input(|i| i.key_pressed(Key::P) && i.modifiers.matches_exact(Modifiers::CTRL)) {
             self.state.file_picker_open = !self.state.file_picker_open;
@@ -384,6 +407,7 @@ impl<'s> Renderer<'s> {
             &self.state.jump,
             display_path,
             is_dark,
+            self.state.code_font_size,
         ));
 
         // Detect breakpoint changes from gutter clicks and sync with debugger
