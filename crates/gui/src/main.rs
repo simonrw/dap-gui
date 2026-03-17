@@ -252,14 +252,15 @@ impl DebuggerApp {
 
         let (mut debugger, initial_breakpoints) = rt.block_on(async {
             match config {
-                LaunchConfiguration::Debugpy(Debugpy {
-                    request,
-                    cwd,
-                    connect,
-                    path_mappings,
-                    program,
-                    ..
-                }) => {
+                LaunchConfiguration::Python(debugpy) | LaunchConfiguration::Debugpy(debugpy) => {
+                    let Debugpy {
+                        request,
+                        cwd,
+                        connect,
+                        path_mappings,
+                        program,
+                        ..
+                    } = debugpy;
                     if let Some(dir) = cwd {
                         debug_root_dir =
                             std::fs::canonicalize(debugger::utils::normalise_path(&dir).as_ref())
