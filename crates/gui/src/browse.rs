@@ -287,6 +287,9 @@ impl eframe::App for BrowseApp {
                 display_path.clone(),
                 is_dark,
                 14.0,
+                &[],
+                0,
+                None,
             ));
 
             // Detect breakpoint changes from gutter clicks

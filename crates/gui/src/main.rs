@@ -326,6 +326,9 @@ struct DebuggerAppState {
     // Status bar state
     status: crate::ui::status_bar::StatusState,
 
+    // Search state for the code view
+    search_state: crate::code_view::SearchState,
+
     // Persistence
     state_manager: StateManager,
     debug_root_dir: PathBuf,
@@ -478,6 +481,7 @@ impl DebuggerApp {
             breakpoint_input_error: false,
             code_font_size: persisted_state.code_font_size.unwrap_or(14.0),
             status: Default::default(),
+            search_state: Default::default(),
             state_manager,
             debug_root_dir,
             configs,

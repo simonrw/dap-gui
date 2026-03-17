@@ -18,6 +18,9 @@ use crate::{
     },
 };
 
+/// ID for the search input field so we can request focus
+const SEARCH_INPUT_ID: &str = "code_view_search_input";
+
 pub(crate) struct Renderer<'a> {
     state: &'a mut DebuggerAppState,
     app_state: &'a Arc<Mutex<DebuggerAppState>>,
@@ -81,6 +84,23 @@ impl<'s> Renderer<'s> {
                 self.state.session = None;
                 self.state.variables_cache.clear();
                 *self.state.repl_output.borrow_mut() = String::new();
+            }
+        }
+
+        // Handle Cmd+F / Ctrl+F to toggle search
+        let find_shortcut = ctx.input(|i| {
+            i.key_pressed(Key::F)
+                && (i.modifiers.matches_exact(Modifiers::COMMAND)
+                    || i.modifiers.matches_exact(Modifiers::CTRL))
+        });
+        if find_shortcut {
+            let search = &mut self.state.search_state;
+            if search.active {
+                // Re-focus if already open
+                search.request_focus = true;
+            } else {
+                search.active = true;
+                search.request_focus = true;
             }
         }
 
@@ -250,7 +270,7 @@ impl<'s> Renderer<'s> {
             });
         self.render_controls_window(ctx);
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.render_code_panel(ctx, ui, paused_frame);
+            self.render_code_panel(ui, paused_frame);
         });
     }
 
@@ -442,8 +462,81 @@ impl<'s> Renderer<'s> {
         }
     }
 
-    fn render_code_panel(&mut self, ctx: &Context, ui: &mut Ui, paused_frame: &PausedFrame) {
-        self.render_code_viewer(ctx, ui, paused_frame);
+    fn render_code_panel(&mut self, ui: &mut Ui, paused_frame: &PausedFrame) {
+        self.render_search_bar(ui);
+        self.render_code_viewer(ui, paused_frame);
+    }
+
+    fn render_search_bar(&mut self, ui: &mut Ui) {
+        if !self.state.search_state.active {
+            return;
+        }
+
+        let search = &mut self.state.search_state;
+        let id = egui::Id::new(SEARCH_INPUT_ID);
+
+        ui.horizontal(|ui| {
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut search.query)
+                    .id(id)
+                    .desired_width(200.0)
+                    .hint_text("Search..."),
+            );
+
+            if search.request_focus {
+                response.request_focus();
+                // Select all text when focusing
+                if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), id) {
+                    state
+                        .cursor
+                        .set_char_range(Some(egui::text::CCursorRange::two(
+                            egui::text::CCursor::new(0),
+                            egui::text::CCursor::new(search.query.len()),
+                        )));
+                    state.store(ui.ctx(), id);
+                }
+                search.request_focus = false;
+            }
+
+            // Handle Enter/Shift+Enter for navigation
+            if response.has_focus() {
+                let enter = ui.input(|i| i.key_pressed(Key::Enter));
+                let shift = ui.input(|i| i.modifiers.shift);
+                if enter {
+                    if shift {
+                        search.prev_match();
+                    } else {
+                        search.next_match();
+                    }
+                }
+
+                // Handle Escape to close
+                if ui.input(|i| i.key_pressed(Key::Escape)) {
+                    search.active = false;
+                    search.query.clear();
+                    search.recompute_for_new_file();
+                }
+            }
+
+            // Match count label
+            if !search.query.is_empty() {
+                let total = search.matches.len();
+                if total > 0 {
+                    ui.label(format!("{} of {}", search.current_match + 1, total));
+                } else {
+                    ui.label("0 of 0");
+                }
+            }
+
+            // Prev/Next buttons
+            if ui.button("<").clicked() {
+                search.prev_match();
+            }
+            if ui.button(">").clicked() {
+                search.next_match();
+            }
+        });
+        ui.separator();
     }
 
     fn render_variables(
@@ -511,7 +604,8 @@ impl<'s> Renderer<'s> {
             ui.label(label);
         }
     }
-    fn render_code_viewer(&mut self, _ctx: &Context, ui: &mut Ui, paused_frame: &PausedFrame) {
+
+    fn render_code_viewer(&mut self, ui: &mut Ui, paused_frame: &PausedFrame) {
         let frame = &paused_frame.frame;
         let Some(debugger_path) = frame.source.as_ref().and_then(|s| s.path.as_ref()).cloned()
         else {
@@ -547,6 +641,11 @@ impl<'s> Renderer<'s> {
             })
             .clone();
 
+        // Update search matches if query or file changed
+        if self.state.search_state.active {
+            self.state.search_state.update(&contents, &display_path);
+        }
+
         // Filter ui_breakpoints to current file for the code view
         let mut file_breakpoints: HashSet<_> = self
             .state
@@ -559,6 +658,21 @@ impl<'s> Renderer<'s> {
         let breakpoints_before = file_breakpoints.clone();
         let is_dark = ui.visuals().dark_mode;
 
+        // Compute scroll target for search match navigation
+        let scroll_to_line = if self.state.search_state.scroll_to_match {
+            self.state.search_state.scroll_to_match = false;
+            self.state.search_state.current_match_line(&contents)
+        } else {
+            None
+        };
+
+        let search_matches = if self.state.search_state.active {
+            &self.state.search_state.matches
+        } else {
+            &[][..]
+        };
+        let current_search_match = self.state.search_state.current_match;
+
         ui.add(CodeView::new(
             &contents,
             current_line,
@@ -568,6 +682,9 @@ impl<'s> Renderer<'s> {
             display_path,
             is_dark,
             self.state.code_font_size,
+            search_matches,
+            current_search_match,
+            scroll_to_line,
         ));
 
         // Detect breakpoint changes from gutter clicks and sync with debugger
