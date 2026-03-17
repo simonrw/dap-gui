@@ -31,7 +31,7 @@ struct Args {
     name: Option<String>,
 
     #[clap(short, long)]
-    breakpoints: Vec<usize>,
+    breakpoints: Vec<String>,
 }
 
 #[cfg(feature = "sentry")]
@@ -290,7 +290,15 @@ impl DebuggerApp {
                             .await
                             .context("creating async debugger (attach)")?;
 
-                            Ok::<_, eyre::Report>((debugger, vec![]))
+                            // Collect breakpoints from CLI args
+                            let initial_bps: Vec<debugger::Breakpoint> = args
+                                .breakpoints
+                                .iter()
+                                .map(|bp_str| debugger::Breakpoint::parse(bp_str, &debug_root_dir))
+                                .collect::<eyre::Result<Vec<_>>>()
+                                .wrap_err("parsing --breakpoint arguments")?;
+
+                            Ok::<_, eyre::Report>((debugger, initial_bps))
                         }
                         "launch" => {
                             let Some(program) = program else {
@@ -339,12 +347,9 @@ impl DebuggerApp {
                             let initial_bps: Vec<debugger::Breakpoint> = args
                                 .breakpoints
                                 .iter()
-                                .map(|&line| debugger::Breakpoint {
-                                    path: program.clone(),
-                                    line,
-                                    ..Default::default()
-                                })
-                                .collect();
+                                .map(|bp_str| debugger::Breakpoint::parse(bp_str, &debug_root_dir))
+                                .collect::<eyre::Result<Vec<_>>>()
+                                .wrap_err("parsing --breakpoint arguments")?;
 
                             Ok((debugger, initial_bps))
                         }
