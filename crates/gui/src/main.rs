@@ -269,6 +269,14 @@ impl DebuggerApp {
                                 });
                     }
 
+                    // Collect breakpoints from CLI args (shared by attach & launch)
+                    let initial_bps: Vec<debugger::Breakpoint> = args
+                        .breakpoints
+                        .iter()
+                        .map(|bp_str| debugger::Breakpoint::parse(bp_str, &debug_root_dir))
+                        .collect::<eyre::Result<Vec<_>>>()
+                        .wrap_err("parsing --breakpoint arguments")?;
+
                     match request.as_str() {
                         "attach" => {
                             let attach_args = debugger::AttachArguments {
@@ -290,14 +298,6 @@ impl DebuggerApp {
                             )
                             .await
                             .context("creating async debugger (attach)")?;
-
-                            // Collect breakpoints from CLI args
-                            let initial_bps: Vec<debugger::Breakpoint> = args
-                                .breakpoints
-                                .iter()
-                                .map(|bp_str| debugger::Breakpoint::parse(bp_str, &debug_root_dir))
-                                .collect::<eyre::Result<Vec<_>>>()
-                                .wrap_err("parsing --breakpoint arguments")?;
 
                             Ok::<_, eyre::Report>((debugger, initial_bps))
                         }
@@ -343,14 +343,6 @@ impl DebuggerApp {
                             )
                             .await
                             .context("creating async debugger (launch)")?;
-
-                            // Collect breakpoints from CLI args
-                            let initial_bps: Vec<debugger::Breakpoint> = args
-                                .breakpoints
-                                .iter()
-                                .map(|bp_str| debugger::Breakpoint::parse(bp_str, &debug_root_dir))
-                                .collect::<eyre::Result<Vec<_>>>()
-                                .wrap_err("parsing --breakpoint arguments")?;
 
                             Ok((debugger, initial_bps))
                         }
