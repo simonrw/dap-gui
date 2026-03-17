@@ -96,6 +96,13 @@ impl LaunchConfiguration {
         }
     }
 
+    pub fn cwd(&self) -> Option<&Path> {
+        match self {
+            LaunchConfiguration::Debugpy(d) | LaunchConfiguration::Python(d) => d.cwd.as_deref(),
+            LaunchConfiguration::LLDB(l) => l.cwd.as_deref().map(Path::new),
+        }
+    }
+
     pub fn resolve(&mut self, root: impl AsRef<Path>) {
         match self {
             LaunchConfiguration::Debugpy(debugpy) | LaunchConfiguration::Python(debugpy) => {

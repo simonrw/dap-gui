@@ -218,6 +218,57 @@ impl<'s> Renderer<'s> {
     }
 
     fn render_no_session(&mut self, ctx: &Context) {
+        // Update debug_root_dir from the selected config's cwd
+        let config = &self.state.configs[self.state.selected_config_index];
+        if let Some(cwd) = config.cwd() {
+            let normalised = debugger::utils::normalise_path(cwd);
+            let resolved = std::fs::canonicalize(normalised.as_ref())
+                .unwrap_or_else(|_| normalised.into_owned());
+            if resolved != self.state.debug_root_dir {
+                self.state.debug_root_dir = resolved;
+                self.state.git_files_loaded = false;
+                self.state.file_override = None;
+                self.state.file_cache.clear();
+            }
+        }
+
+        // Lazy-load git files for the file browser
+        if !self.state.git_files_loaded {
+            self.state.git_files_loaded = true;
+            match fuzzy::list_git_files(&self.state.debug_root_dir) {
+                Ok(files) => self.state.git_files = files,
+                Err(e) => {
+                    tracing::warn!(error = %e, "failed to list git files");
+                    if let Some(root) = fuzzy::find_repo_root() {
+                        if let Ok(files) = fuzzy::list_git_files(&root) {
+                            self.state.git_files = files;
+                        }
+                    }
+                }
+            }
+            self.state.file_picker_results =
+                fuzzy::fuzzy_filter(&self.state.git_files, &self.state.file_picker_input);
+        }
+
+        // Handle keyboard for file picker navigation
+        ctx.input(|i| {
+            if i.key_pressed(Key::ArrowDown) && !self.state.file_picker_results.is_empty() {
+                self.state.file_picker_cursor = (self.state.file_picker_cursor + 1)
+                    .min(self.state.file_picker_results.len() - 1);
+            }
+            if i.key_pressed(Key::ArrowUp) {
+                self.state.file_picker_cursor =
+                    self.state.file_picker_cursor.saturating_sub(1);
+            }
+            if i.key_pressed(Key::Enter) && !self.state.file_picker_results.is_empty() {
+                let selected = &self.state.file_picker_results[self.state.file_picker_cursor];
+                self.state.file_override = Some(
+                    std::fs::canonicalize(&selected.file.absolute_path)
+                        .unwrap_or_else(|_| selected.file.absolute_path.clone()),
+                );
+            }
+        });
+
         egui::TopBottomPanel::top("control_panel").show(ctx, |ui| {
             ui.heading("DAP Debugger");
             ui.separator();
@@ -233,11 +284,159 @@ impl<'s> Renderer<'s> {
             .show(ctx, |ui| {
                 ui.add(StatusBar::new("Ready", &mut self.state.status));
             });
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.vertical_centered(|ui| {
-                ui.add_space(80.0);
-                ui.heading("Select a configuration and press Start or F5");
+
+        // File browser sidebar
+        egui::SidePanel::left("browse-file-picker")
+            .default_width(300.0)
+            .show(ctx, |ui| {
+                ui.heading("Files");
+                ui.separator();
+
+                let _input_response = ui.add(
+                    egui::TextEdit::singleline(&mut self.state.file_picker_input)
+                        .hint_text("Search files...")
+                        .desired_width(f32::INFINITY),
+                );
+
+                let prev_len = self.state.file_picker_results.len();
+                self.state.file_picker_results =
+                    fuzzy::fuzzy_filter(&self.state.git_files, &self.state.file_picker_input);
+
+                if self.state.file_picker_results.is_empty() {
+                    self.state.file_picker_cursor = 0;
+                } else {
+                    if self.state.file_picker_results.len() != prev_len {
+                        self.state.file_picker_cursor = 0;
+                    }
+                    self.state.file_picker_cursor = self
+                        .state
+                        .file_picker_cursor
+                        .min(self.state.file_picker_results.len() - 1);
+                }
+
+                ui.separator();
+
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    for (i, m) in self.state.file_picker_results.iter().enumerate() {
+                        let is_selected = i == self.state.file_picker_cursor;
+                        let path_str = m.file.relative_path.to_string_lossy();
+
+                        let mut job = eframe::epaint::text::LayoutJob::default();
+                        let base_color = if is_selected {
+                            egui::Color32::WHITE
+                        } else {
+                            ui.visuals().text_color()
+                        };
+                        let match_color = egui::Color32::from_rgb(255, 200, 50);
+
+                        for (ci, ch) in path_str.char_indices() {
+                            let color = if m.matched_indices.contains(&ci) {
+                                match_color
+                            } else {
+                                base_color
+                            };
+                            let mut buf = [0u8; 4];
+                            job.append(
+                                ch.encode_utf8(&mut buf),
+                                0.0,
+                                egui::TextFormat {
+                                    color,
+                                    ..Default::default()
+                                },
+                            );
+                        }
+
+                        let bg = if is_selected {
+                            ui.visuals().selection.bg_fill
+                        } else {
+                            egui::Color32::TRANSPARENT
+                        };
+
+                        let frame = egui::Frame::new().fill(bg).inner_margin(4.0);
+                        let response = frame
+                            .show(ui, |ui| {
+                                ui.label(job);
+                            })
+                            .response;
+
+                        if response.clicked() {
+                            self.state.file_override = Some(
+                                std::fs::canonicalize(&m.file.absolute_path)
+                                    .unwrap_or_else(|_| m.file.absolute_path.clone()),
+                            );
+                            self.state.file_picker_cursor = i;
+                        }
+                    }
+                });
             });
+
+        // Central panel: code viewer or welcome
+        egui::CentralPanel::default().show(ctx, |ui| {
+            let Some(ref display_path) = self.state.file_override else {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(80.0);
+                    ui.heading("Select a configuration and press Start or F5");
+                    ui.add_space(10.0);
+                    ui.label("Browse files in the sidebar to set breakpoints");
+                });
+                return;
+            };
+            let display_path = display_path.clone();
+
+            let display_name = display_path
+                .strip_prefix(&self.state.debug_root_dir)
+                .unwrap_or(&display_path)
+                .to_string_lossy()
+                .to_string();
+            ui.label(&display_name);
+            ui.separator();
+
+            let contents = self
+                .state
+                .file_cache
+                .entry(display_path.clone())
+                .or_insert_with(|| {
+                    std::fs::read_to_string(&display_path)
+                        .unwrap_or_else(|e| format!("Error reading file: {e}"))
+                })
+                .clone();
+
+            let mut file_breakpoints: HashSet<_> = self
+                .state
+                .ui_breakpoints
+                .iter()
+                .filter(|b| b.path == display_path.as_path())
+                .cloned()
+                .collect();
+
+            let breakpoints_before = file_breakpoints.clone();
+            let is_dark = ui.visuals().dark_mode;
+            let jump = false;
+
+            ui.add(CodeView::new(
+                &contents,
+                1,
+                false,
+                &mut file_breakpoints,
+                &jump,
+                display_path,
+                is_dark,
+                self.state.code_font_size,
+                &[],
+                0,
+                None,
+            ));
+
+            for added in file_breakpoints.difference(&breakpoints_before) {
+                self.state.ui_breakpoints.insert(added.clone());
+            }
+            for removed in breakpoints_before.difference(&file_breakpoints) {
+                self.state.ui_breakpoints.remove(removed);
+            }
+
+            if file_breakpoints != breakpoints_before {
+                self.state.persist_breakpoints();
+            }
         });
     }
 

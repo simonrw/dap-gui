@@ -11,13 +11,12 @@ use dap_types::StackFrame;
 use debugger::{PausedFrame, ProgramState};
 use eframe::egui::{self, Visuals};
 use eyre::Context;
-use launch_configuration::{ChosenLaunchConfiguration, Debugpy, LaunchConfiguration};
+use launch_configuration::{Debugpy, LaunchConfiguration};
 use state::StateManager;
 
 type StackFrameId = i64;
 
 mod async_bridge;
-mod browse;
 mod code_view;
 mod fonts;
 mod renderer;
@@ -492,8 +491,8 @@ impl DebuggerApp {
 
         let inner = Arc::new(Mutex::new(app_state));
 
-        // Auto-start if --name was provided (preserving CLI behavior)
-        if args.name.is_some() {
+        // Auto-start if --name and breakpoints were both provided on the CLI
+        if args.name.is_some() && !args.breakpoints.is_empty() {
             let mut state = inner.lock().unwrap();
             let persisted_bps = state.collect_persisted_breakpoints();
             let mut all_bps: Vec<_> = state.ui_breakpoints.iter().cloned().collect();
@@ -503,14 +502,22 @@ impl DebuggerApp {
             let config = state.configs[state.selected_config_index].clone();
             let egui_ctx = cc.egui_ctx.clone();
             let app_state_clone = Arc::clone(&inner);
-            let session = Session::start(
+            match Session::start(
                 &config,
                 &all_bps,
                 &mut state.debug_root_dir,
                 &egui_ctx,
                 app_state_clone,
-            )?;
-            state.session = Some(session);
+            ) {
+                Ok(session) => {
+                    state.session = Some(session);
+                }
+                Err(e) => {
+                    state
+                        .status
+                        .push_error(format!("Failed to start session: {e}"));
+                }
+            }
         }
 
         Ok(Self { inner })
@@ -544,8 +551,6 @@ fn main() -> eyre::Result<()> {
     let _ = color_eyre::install();
 
     let args = Args::parse();
-    let browse_mode = args.breakpoints.is_empty();
-
     let native_options = eframe::NativeOptions::default();
     eframe::run_native(
         "DAP Debugger",
@@ -560,57 +565,11 @@ fn main() -> eyre::Result<()> {
             };
             cc.egui_ctx.set_style(style);
             crate::fonts::install_lilex(&cc.egui_ctx);
-            if browse_mode {
-                // Resolve debug_root_dir from launch config's cwd
-                let debug_root_dir = resolve_debug_root_dir(&args)
-                    .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e.to_string()))?;
-                let app = browse::BrowseApp::new(debug_root_dir, cc)
-                    .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e.to_string()))?;
-                Ok(Box::new(app) as Box<dyn eframe::App>)
-            } else {
-                let app = DebuggerApp::new(args, cc)
-                    .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e.to_string()))?;
-                Ok(Box::new(app) as Box<dyn eframe::App>)
-            }
+            let app = DebuggerApp::new(args, cc)
+                .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e.to_string()))?;
+            Ok(Box::new(app) as Box<dyn eframe::App>)
         }),
     )
     .map_err(|e| eyre::eyre!("running gui mainloop: {e}"))
 }
 
-/// Resolve the debug root directory from the launch configuration's `cwd` field,
-/// falling back to the current working directory.
-fn resolve_debug_root_dir(args: &Args) -> eyre::Result<PathBuf> {
-    let mut debug_root_dir = std::env::current_dir()
-        .and_then(|p| std::fs::canonicalize(&p))
-        .unwrap();
-
-    let config = match launch_configuration::load_from_path(args.name.as_ref(), &args.config_path)
-        .wrap_err("loading launch configuration")?
-    {
-        ChosenLaunchConfiguration::Specific(config) => config,
-        ChosenLaunchConfiguration::NotFound => {
-            eyre::bail!("no matching configuration found")
-        }
-        ChosenLaunchConfiguration::ToBeChosen(configurations) => {
-            eprintln!("Configuration name not specified");
-            eprintln!("Available options:");
-            for config in &configurations {
-                eprintln!("- {config}");
-            }
-            std::process::exit(1);
-        }
-    };
-
-    match config {
-        LaunchConfiguration::Python(debugpy) | LaunchConfiguration::Debugpy(debugpy) => {
-            if let Some(dir) = debugpy.cwd {
-                debug_root_dir =
-                    std::fs::canonicalize(debugger::utils::normalise_path(&dir).as_ref())
-                        .unwrap_or_else(|_| debugger::utils::normalise_path(&dir).into_owned());
-            }
-        }
-        _ => {}
-    }
-
-    Ok(debug_root_dir)
-}
