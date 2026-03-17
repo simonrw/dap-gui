@@ -31,7 +31,7 @@ struct Args {
     name: Option<String>,
 
     #[clap(short, long)]
-    breakpoints: Vec<usize>,
+    breakpoints: Vec<String>,
 }
 
 #[cfg(feature = "sentry")]
@@ -131,6 +131,10 @@ struct DebuggerAppState {
 
     // Persistent breakpoint state for the UI (survives across frames)
     ui_breakpoints: HashSet<debugger::Breakpoint>,
+
+    // Text input for adding breakpoints via file:line
+    breakpoint_input: String,
+    breakpoint_input_error: bool,
 
     // Status bar state
     status: crate::ui::status_bar::StatusState,
@@ -248,14 +252,15 @@ impl DebuggerApp {
 
         let (mut debugger, initial_breakpoints) = rt.block_on(async {
             match config {
-                LaunchConfiguration::Debugpy(Debugpy {
-                    request,
-                    cwd,
-                    connect,
-                    path_mappings,
-                    program,
-                    ..
-                }) => {
+                LaunchConfiguration::Python(debugpy) | LaunchConfiguration::Debugpy(debugpy) => {
+                    let Debugpy {
+                        request,
+                        cwd,
+                        connect,
+                        path_mappings,
+                        program,
+                        ..
+                    } = debugpy;
                     if let Some(dir) = cwd {
                         debug_root_dir =
                             std::fs::canonicalize(debugger::utils::normalise_path(&dir).as_ref())
@@ -263,6 +268,14 @@ impl DebuggerApp {
                                     debugger::utils::normalise_path(&dir).into_owned()
                                 });
                     }
+
+                    // Collect breakpoints from CLI args (shared by attach & launch)
+                    let initial_bps: Vec<debugger::Breakpoint> = args
+                        .breakpoints
+                        .iter()
+                        .map(|bp_str| debugger::Breakpoint::parse(bp_str, &debug_root_dir))
+                        .collect::<eyre::Result<Vec<_>>>()
+                        .wrap_err("parsing --breakpoint arguments")?;
 
                     match request.as_str() {
                         "attach" => {
@@ -286,7 +299,7 @@ impl DebuggerApp {
                             .await
                             .context("creating async debugger (attach)")?;
 
-                            Ok::<_, eyre::Report>((debugger, vec![]))
+                            Ok::<_, eyre::Report>((debugger, initial_bps))
                         }
                         "launch" => {
                             let Some(program) = program else {
@@ -330,17 +343,6 @@ impl DebuggerApp {
                             )
                             .await
                             .context("creating async debugger (launch)")?;
-
-                            // Collect breakpoints from CLI args
-                            let initial_bps: Vec<debugger::Breakpoint> = args
-                                .breakpoints
-                                .iter()
-                                .map(|&line| debugger::Breakpoint {
-                                    path: program.clone(),
-                                    line,
-                                    ..Default::default()
-                                })
-                                .collect();
 
                             Ok((debugger, initial_bps))
                         }
@@ -420,6 +422,8 @@ impl DebuggerApp {
             file_cache: HashMap::new(),
             variables_cache: HashMap::new(),
             ui_breakpoints: all_breakpoints.into_iter().collect(),
+            breakpoint_input: String::new(),
+            breakpoint_input_error: false,
             status: Default::default(),
             state_manager,
             debug_root_dir,

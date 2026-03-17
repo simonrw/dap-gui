@@ -156,6 +156,50 @@ impl<'s> Renderer<'s> {
             ui.add(CallStack::new(stack, show_details, self.state));
             ui.separator();
             ui.add(Breakpoints::new(&bp_list, show_details));
+
+            // Text input for adding breakpoints via file:line
+            ui.separator();
+            let hint = "file:line";
+            let text_edit = egui::TextEdit::singleline(&mut self.state.breakpoint_input)
+                .hint_text(hint)
+                .text_color_opt(if self.state.breakpoint_input_error {
+                    Some(egui::Color32::RED)
+                } else {
+                    None
+                });
+            let response = ui.add(text_edit);
+            if response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
+                let input = self.state.breakpoint_input.clone();
+                if !input.trim().is_empty() {
+                    match debugger::Breakpoint::parse(&input, &self.state.debug_root_dir) {
+                        Ok(bp) => {
+                            self.state.ui_breakpoints.insert(bp.clone());
+                            match self.state.bridge.send_sync(|reply| {
+                                crate::async_bridge::UiCommand::AddBreakpoint {
+                                    breakpoint: bp,
+                                    reply,
+                                }
+                            }) {
+                                Ok(_id) => {}
+                                Err(e) => {
+                                    self.state
+                                        .status
+                                        .push_error(format!("Failed to add breakpoint: {e}"));
+                                }
+                            }
+                            self.state.persist_breakpoints();
+                            self.state.breakpoint_input.clear();
+                            self.state.breakpoint_input_error = false;
+                        }
+                        Err(_) => {
+                            self.state.breakpoint_input_error = true;
+                        }
+                    }
+                }
+            }
+            if response.changed() {
+                self.state.breakpoint_input_error = false;
+            }
         });
     }
 
