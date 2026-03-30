@@ -13,7 +13,9 @@ mod async_internals;
 /// Testing utilities for the async debugger.
 pub mod testing;
 
-pub use state::{AttachArguments, Event, Language, LaunchArguments, ProgramState};
+pub use state::{
+    AttachArguments, Event, Language, LaunchArguments, ProgramState, SessionArgs, StartMode,
+};
 pub use types::{Breakpoint, EvaluateResult, PausedFrame};
 
 // Export async types

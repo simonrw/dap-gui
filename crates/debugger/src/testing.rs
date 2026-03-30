@@ -584,8 +584,8 @@ pub fn create_mock_adapter() -> (
 
 /// A mock adapter handler that automatically responds to common initialization requests.
 ///
-/// This simplifies tests by handling the standard initialize/launch/configurationDone
-/// sequence automatically.
+/// This simplifies tests by handling the standard initialize → launch/attach →
+/// initialized event → setExceptionBreakpoints sequence automatically.
 pub struct AutoInitMockAdapter {
     adapter: Arc<MockAdapter>,
     capabilities: Value,
@@ -603,7 +603,7 @@ impl AutoInitMockAdapter {
 
     /// Run the adapter, automatically responding to initialization requests.
     ///
-    /// This handles: initialize, launch, setExceptionBreakpoints
+    /// This handles: initialize, launch **or** attach, setExceptionBreakpoints
     /// and sends the initialized event at the appropriate time.
     pub async fn handle_initialization(&self) {
         // Handle initialize request
@@ -612,8 +612,13 @@ impl AutoInitMockAdapter {
             .send_success_response(req.seq, Some(self.capabilities.clone()))
             .await;
 
-        // Handle launch request
-        let req = self.adapter.expect_request("launch").await;
+        // Handle launch or attach request
+        let req = self.adapter.expect_any_request().await;
+        assert!(
+            req.command == "launch" || req.command == "attach",
+            "expected launch or attach request, got: {}",
+            req.command
+        );
         self.adapter.send_success_response(req.seq, None).await;
 
         // Send initialized event
@@ -635,6 +640,7 @@ impl AutoInitMockAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::{AttachArguments, Language, LaunchArguments, SessionArgs, StartMode};
 
     #[tokio::test]
     async fn mock_adapter_send_receive() {
@@ -884,5 +890,281 @@ mod tests {
         // Wait for both to complete
         init_handle.await.unwrap();
         client_handle.await.unwrap();
+    }
+
+    // --- Initialization unit tests ---
+
+    fn test_launch_args() -> LaunchArguments {
+        // Use module instead of program to avoid canonicalize() on a non-existent path
+        LaunchArguments {
+            program: None,
+            module: Some("pytest".into()),
+            args: None,
+            env: None,
+            working_directory: Some("/tmp".into()),
+            language: Language::DebugPy,
+            just_my_code: None,
+            stop_on_entry: None,
+        }
+    }
+
+    fn test_attach_args() -> AttachArguments {
+        AttachArguments {
+            working_directory: "/tmp".into(),
+            port: Some(5678),
+            host: None,
+            language: Language::DebugPy,
+            path_mappings: None,
+            just_my_code: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn staged_init_does_not_send_configuration_done() {
+        let (client_reader, client_writer, mock) = create_mock_adapter();
+        let mock = Arc::new(mock);
+        let auto_init = AutoInitMockAdapter::new(mock.clone());
+
+        let adapter_handle = tokio::spawn({
+            let mock = mock.clone();
+            async move {
+                auto_init.handle_initialization().await;
+                // After staged init, the next request should NOT be configurationDone
+                // (it should only come after calling start())
+                mock
+            }
+        });
+
+        let debugger_handle = tokio::spawn(async move {
+            TestAsyncDebugger::from_transport(
+                client_reader,
+                client_writer,
+                Language::DebugPy,
+                SessionArgs::Launch(test_launch_args()),
+                StartMode::Staged,
+            )
+            .await
+            .unwrap()
+        });
+
+        let mock = adapter_handle.await.unwrap();
+        let debugger = debugger_handle.await.unwrap();
+
+        // Now call start() — this should send ConfigurationDone
+        let start_handle = tokio::spawn(async move {
+            debugger.start().await.unwrap();
+        });
+
+        let req = mock.expect_request("configurationDone").await;
+        mock.send_success_response(req.seq, None).await;
+
+        start_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn immediate_init_sends_configuration_done() {
+        let (client_reader, client_writer, mock) = create_mock_adapter();
+        let mock = Arc::new(mock);
+        let auto_init = AutoInitMockAdapter::new(mock.clone());
+
+        let adapter_handle = tokio::spawn({
+            let mock = mock.clone();
+            async move {
+                auto_init.handle_initialization().await;
+                // In immediate mode, configurationDone should be sent during construction
+                let req = mock.expect_request("configurationDone").await;
+                mock.send_success_response(req.seq, None).await;
+            }
+        });
+
+        let debugger_handle = tokio::spawn(async move {
+            TestAsyncDebugger::from_transport(
+                client_reader,
+                client_writer,
+                Language::DebugPy,
+                SessionArgs::Launch(test_launch_args()),
+                StartMode::Immediate,
+            )
+            .await
+            .unwrap()
+        });
+
+        adapter_handle.await.unwrap();
+        let _debugger = debugger_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn attach_init_sends_attach_request() {
+        let (client_reader, client_writer, mock) = create_mock_adapter();
+        let mock = Arc::new(mock);
+
+        let adapter_handle = tokio::spawn({
+            let mock = mock.clone();
+            async move {
+                // Handle initialize
+                let req = mock.expect_request("initialize").await;
+                mock.send_success_response(
+                    req.seq,
+                    Some(json!({"supportsConfigurationDoneRequest": true})),
+                )
+                .await;
+
+                // Expect attach (not launch)
+                let req = mock.expect_request("attach").await;
+                assert_eq!(req.command, "attach");
+                mock.send_success_response(req.seq, None).await;
+
+                mock.send_initialized_event().await;
+
+                let req = mock.expect_request("setExceptionBreakpoints").await;
+                mock.send_success_response(req.seq, Some(json!({"breakpoints": []})))
+                    .await;
+            }
+        });
+
+        let debugger_handle = tokio::spawn(async move {
+            TestAsyncDebugger::from_transport(
+                client_reader,
+                client_writer,
+                Language::DebugPy,
+                SessionArgs::Attach(test_attach_args()),
+                StartMode::Staged,
+            )
+            .await
+            .unwrap()
+        });
+
+        adapter_handle.await.unwrap();
+        let _debugger = debugger_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn initialize_failure_propagates_error() {
+        let (client_reader, client_writer, mock) = create_mock_adapter();
+
+        let adapter_handle = tokio::spawn(async move {
+            let req = mock.expect_request("initialize").await;
+            mock.send_error_response(req.seq, "adapter exploded").await;
+        });
+
+        let debugger_result = tokio::spawn(async move {
+            TestAsyncDebugger::from_transport(
+                client_reader,
+                client_writer,
+                Language::DebugPy,
+                SessionArgs::Launch(test_launch_args()),
+                StartMode::Staged,
+            )
+            .await
+        })
+        .await
+        .unwrap();
+
+        match debugger_result {
+            Ok(_) => panic!("expected initialization to fail"),
+            Err(err) => {
+                let msg = err.to_string();
+                assert!(
+                    msg.contains("initialize request failed"),
+                    "unexpected error: {msg}"
+                );
+            }
+        }
+
+        adapter_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn initialized_event_timeout_produces_error() {
+        let (client_reader, client_writer, mock) = create_mock_adapter();
+
+        let adapter_handle = tokio::spawn(async move {
+            // Handle initialize
+            let req = mock.expect_request("initialize").await;
+            mock.send_success_response(
+                req.seq,
+                Some(json!({"supportsConfigurationDoneRequest": true})),
+            )
+            .await;
+
+            // Handle launch but NEVER send initialized event
+            let req = mock.expect_request("launch").await;
+            mock.send_success_response(req.seq, None).await;
+
+            // Keep the mock alive for the timeout duration
+            tokio::time::sleep(Duration::from_secs(15)).await;
+        });
+
+        let debugger_result = tokio::spawn(async move {
+            TestAsyncDebugger::from_transport(
+                client_reader,
+                client_writer,
+                Language::DebugPy,
+                SessionArgs::Launch(test_launch_args()),
+                StartMode::Staged,
+            )
+            .await
+        })
+        .await
+        .unwrap();
+
+        match debugger_result {
+            Ok(_) => panic!("expected timeout error"),
+            Err(err) => {
+                let msg = format!("{err:#}");
+                assert!(
+                    msg.contains("timeout"),
+                    "expected timeout error, got: {msg}"
+                );
+            }
+        }
+
+        adapter_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn initialized_event_before_wait_is_still_captured() {
+        // Verifies the oneshot channel ordering prevents the race condition:
+        // the channel is created before Launch/Attach, so an early initialized
+        // event is captured.
+        let (client_reader, client_writer, mock) = create_mock_adapter();
+        let mock = Arc::new(mock);
+
+        let adapter_handle = tokio::spawn({
+            let mock = mock.clone();
+            async move {
+                let req = mock.expect_request("initialize").await;
+                mock.send_success_response(
+                    req.seq,
+                    Some(json!({"supportsConfigurationDoneRequest": true})),
+                )
+                .await;
+
+                let req = mock.expect_request("launch").await;
+                mock.send_success_response(req.seq, None).await;
+
+                // Send initialized event immediately (before client can call wait)
+                mock.send_initialized_event().await;
+
+                let req = mock.expect_request("setExceptionBreakpoints").await;
+                mock.send_success_response(req.seq, Some(json!({"breakpoints": []})))
+                    .await;
+            }
+        });
+
+        let debugger_handle = tokio::spawn(async move {
+            TestAsyncDebugger::from_transport(
+                client_reader,
+                client_writer,
+                Language::DebugPy,
+                SessionArgs::Launch(test_launch_args()),
+                StartMode::Staged,
+            )
+            .await
+            .unwrap()
+        });
+
+        adapter_handle.await.unwrap();
+        let _debugger = debugger_handle.await.unwrap();
     }
 }

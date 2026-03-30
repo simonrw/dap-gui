@@ -167,10 +167,11 @@ impl Session {
                             tracing::debug!(?attach_args, "generated attach configuration");
 
                             let port = attach_args.port.unwrap_or(server::DEFAULT_DAP_PORT);
-                            let debugger = debugger::TcpAsyncDebugger::attach_staged(
+                            let debugger = debugger::TcpAsyncDebugger::connect(
                                 port,
                                 debugger::Language::DebugPy,
-                                &attach_args,
+                                debugger::SessionArgs::Attach(attach_args),
+                                debugger::StartMode::Staged,
                             )
                             .await
                             .context("creating async debugger (attach)")?;
@@ -208,11 +209,11 @@ impl Session {
 
                             tracing::debug!(?launch_args, "generated launch configuration");
 
-                            let debugger = debugger::TcpAsyncDebugger::connect_staged(
+                            let debugger = debugger::TcpAsyncDebugger::connect(
                                 port,
                                 debugger::Language::DebugPy,
-                                &launch_args,
-                                false,
+                                debugger::SessionArgs::Launch(launch_args),
+                                debugger::StartMode::Staged,
                             )
                             .await
                             .context("creating async debugger (launch)")?;
@@ -572,4 +573,3 @@ fn main() -> eyre::Result<()> {
     )
     .map_err(|e| eyre::eyre!("running gui mainloop: {e}"))
 }
-

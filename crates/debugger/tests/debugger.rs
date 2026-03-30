@@ -115,10 +115,14 @@ async fn test_remote_attach() -> eyre::Result<()> {
         just_my_code: None,
     };
 
-    let mut debugger =
-        debugger::TcpAsyncDebugger::attach_staged(port, debugger::Language::DebugPy, &attach_args)
-            .await
-            .context("creating async debugger (attach)")?;
+    let mut debugger = debugger::TcpAsyncDebugger::connect(
+        port,
+        debugger::Language::DebugPy,
+        debugger::SessionArgs::Attach(attach_args),
+        debugger::StartMode::Staged,
+    )
+    .await
+    .context("creating async debugger (attach)")?;
 
     let mut event_rx = debugger.take_events();
 
@@ -219,11 +223,11 @@ async fn test_debugger() -> eyre::Result<()> {
         just_my_code: None,
         stop_on_entry: None,
     };
-    let mut debugger = debugger::TcpAsyncDebugger::connect_staged(
+    let mut debugger = debugger::TcpAsyncDebugger::connect(
         port,
         debugger::Language::DebugPy,
-        &launch_args,
-        false,
+        debugger::SessionArgs::Launch(launch_args),
+        debugger::StartMode::Staged,
     )
     .await
     .context("creating async debugger")?;

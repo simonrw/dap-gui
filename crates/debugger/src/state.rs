@@ -23,6 +23,23 @@ pub enum Event {
     Ended,
 }
 
+/// Launch or attach — replaces the `(Option<LaunchArguments>, Option<AttachArguments>)` pair.
+/// Eliminates the impossible `(None, None)` state at the type level.
+pub enum SessionArgs {
+    Launch(LaunchArguments),
+    Attach(AttachArguments),
+}
+
+/// Whether to send ConfigurationDone during initialization.
+/// Replaces the `_staged` / non-staged constructor split.
+pub enum StartMode {
+    /// Send ConfigurationDone immediately after init. Session is running on return.
+    Immediate,
+    /// Stop after SetExceptionBreakpoints. Caller must call `start()` after
+    /// configuring breakpoints.
+    Staged,
+}
+
 /// Languages supported by the debugger crate
 #[derive(Debug, Clone, Copy)]
 pub enum Language {

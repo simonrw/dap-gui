@@ -257,8 +257,7 @@ impl<'s> Renderer<'s> {
                     .min(self.state.file_picker_results.len() - 1);
             }
             if i.key_pressed(Key::ArrowUp) {
-                self.state.file_picker_cursor =
-                    self.state.file_picker_cursor.saturating_sub(1);
+                self.state.file_picker_cursor = self.state.file_picker_cursor.saturating_sub(1);
             }
             if i.key_pressed(Key::Enter) && !self.state.file_picker_results.is_empty() {
                 let selected = &self.state.file_picker_results[self.state.file_picker_cursor];
