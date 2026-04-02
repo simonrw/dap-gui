@@ -151,6 +151,25 @@ where
         Ok(response)
     }
 
+    /// Send a request, wait for the response, and check that it succeeded.
+    ///
+    /// Returns the response body on success, or an error with the adapter's
+    /// failure message on failure.
+    pub(crate) async fn send_and_expect_success(
+        &self,
+        body: requests::RequestBody,
+    ) -> eyre::Result<Response> {
+        let response = self.send_and_wait(body).await?;
+        if !response.success {
+            eyre::bail!(
+                "{} request failed: {}",
+                response.command,
+                response.message.unwrap_or_default()
+            );
+        }
+        Ok(response)
+    }
+
     /// Handle a response message by forwarding it to the waiting request
     pub(crate) async fn handle_response(&self, response: Response) {
         tracing::debug!(
@@ -271,24 +290,14 @@ where
     /// Fetch stack trace for a thread
     #[tracing::instrument(skip(self))]
     async fn fetch_stack_trace(&self, thread_id: ThreadId) -> eyre::Result<Vec<StackFrame>> {
-        tracing::debug!("sending request");
         let response = self
-            .send_and_wait(requests::RequestBody::StackTrace(requests::StackTrace {
+            .send_and_expect_success(requests::RequestBody::StackTrace(requests::StackTrace {
                 thread_id,
                 levels: None,
                 format: None,
                 start_frame: None,
             }))
             .await?;
-
-        tracing::debug!(?response, "got response");
-
-        if !response.success {
-            eyre::bail!(
-                "stackTrace request failed: {}",
-                response.message.unwrap_or_default()
-            );
-        }
 
         let body: StackTraceBody = serde_json::from_value(response.body.unwrap_or_default())
             .wrap_err("parsing stackTrace response")?;
@@ -318,12 +327,10 @@ where
 
         // Fetch scopes for the frame
         let response = self
-            .send_and_wait(requests::RequestBody::Scopes(requests::Scopes {
+            .send_and_expect_success(requests::RequestBody::Scopes(requests::Scopes {
                 frame_id: frame.id,
             }))
             .await?;
-
-        eyre::ensure!(response.success, "bad response received: {response:?}");
 
         let scopes_body: ScopesBody = serde_json::from_value(response.body.unwrap_or_default())
             .wrap_err("parsing scopes response")?;
@@ -344,7 +351,7 @@ where
     /// Fetch variables for a scope
     async fn fetch_variables(&self, variables_reference: i64) -> eyre::Result<Vec<Variable>> {
         let response = self
-            .send_and_wait(requests::RequestBody::Variables(requests::Variables {
+            .send_and_expect_success(requests::RequestBody::Variables(requests::Variables {
                 variables_reference,
                 count: None,
                 filter: None,
@@ -352,8 +359,6 @@ where
                 start: None,
             }))
             .await?;
-
-        eyre::ensure!(response.success, "variables request failed");
 
         let body: VariablesBody = serde_json::from_value(response.body.unwrap_or_default())
             .wrap_err("parsing variables response")?;
@@ -424,31 +429,23 @@ where
         }
 
         // Send all breakpoints for this file to debug adapter
-        let response = self
-            .send_and_wait(requests::RequestBody::SetBreakpoints(
-                requests::SetBreakpoints {
-                    source: Source {
-                        name: breakpoint
-                            .path
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .map(|s| s.to_string()),
-                        path: Some(breakpoint.path.clone()),
-                        ..Default::default()
-                    },
-                    breakpoints: Some(source_breakpoints),
-                    lines: None,
-                    source_modified: None,
+        self.send_and_expect_success(requests::RequestBody::SetBreakpoints(
+            requests::SetBreakpoints {
+                source: Source {
+                    name: breakpoint
+                        .path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .map(|s| s.to_string()),
+                    path: Some(breakpoint.path.clone()),
+                    ..Default::default()
                 },
-            ))
-            .await?;
-
-        if !response.success {
-            eyre::bail!(
-                "setBreakpoints failed: {}",
-                response.message.unwrap_or_default()
-            );
-        }
+                breakpoints: Some(source_breakpoints),
+                lines: None,
+                source_modified: None,
+            },
+        ))
+        .await?;
 
         Ok(id)
     }
@@ -482,30 +479,22 @@ where
         }
 
         // Send updated breakpoints list to debug adapter
-        let response = self
-            .send_and_wait(requests::RequestBody::SetBreakpoints(
-                requests::SetBreakpoints {
-                    source: Source {
-                        name: file_path
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .map(|s| s.to_string()),
-                        path: Some(file_path),
-                        ..Default::default()
-                    },
-                    breakpoints: Some(source_breakpoints),
-                    lines: None,
-                    source_modified: None,
+        self.send_and_expect_success(requests::RequestBody::SetBreakpoints(
+            requests::SetBreakpoints {
+                source: Source {
+                    name: file_path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .map(|s| s.to_string()),
+                    path: Some(file_path),
+                    ..Default::default()
                 },
-            ))
-            .await?;
-
-        if !response.success {
-            eyre::bail!(
-                "setBreakpoints failed: {}",
-                response.message.unwrap_or_default()
-            );
-        }
+                breakpoints: Some(source_breakpoints),
+                lines: None,
+                source_modified: None,
+            },
+        ))
+        .await?;
 
         Ok(())
     }
@@ -557,18 +546,10 @@ where
             })
             .collect();
 
-        let response = self
-            .send_and_wait(requests::RequestBody::SetFunctionBreakpoints(
-                requests::SetFunctionBreakpoints { breakpoints },
-            ))
-            .await?;
-
-        if !response.success {
-            eyre::bail!(
-                "setFunctionBreakpoints failed: {}",
-                response.message.unwrap_or_default()
-            );
-        }
+        self.send_and_expect_success(requests::RequestBody::SetFunctionBreakpoints(
+            requests::SetFunctionBreakpoints { breakpoints },
+        ))
+        .await?;
 
         Ok(())
     }
@@ -591,18 +572,10 @@ where
             })
             .collect();
 
-        let response = self
-            .send_and_wait(requests::RequestBody::SetFunctionBreakpoints(
-                requests::SetFunctionBreakpoints { breakpoints },
-            ))
-            .await?;
-
-        if !response.success {
-            eyre::bail!(
-                "setFunctionBreakpoints failed: {}",
-                response.message.unwrap_or_default()
-            );
-        }
+        self.send_and_expect_success(requests::RequestBody::SetFunctionBreakpoints(
+            requests::SetFunctionBreakpoints { breakpoints },
+        ))
+        .await?;
 
         Ok(())
     }

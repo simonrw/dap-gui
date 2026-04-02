@@ -1064,10 +1064,8 @@ mod tests {
             Ok(_) => panic!("expected initialization to fail"),
             Err(err) => {
                 let msg = err.to_string();
-                assert!(
-                    msg.contains("initialize request failed"),
-                    "unexpected error: {msg}"
-                );
+                assert!(msg.contains("request failed"), "unexpected error: {msg}");
+                assert!(msg.contains("adapter exploded"), "unexpected error: {msg}");
             }
         }
 

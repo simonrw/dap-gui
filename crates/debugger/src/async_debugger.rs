@@ -135,9 +135,8 @@ where
             Language::Delve => "delve",
         };
 
-        let response = self
-            .internals
-            .send_and_wait(requests::RequestBody::Initialize(requests::Initialize {
+        self.internals
+            .send_and_expect_success(requests::RequestBody::Initialize(requests::Initialize {
                 adapter_id: adapter_id.to_string(),
                 client_id: None,
                 client_name: None,
@@ -157,13 +156,6 @@ where
                 supports_variable_type: Some(false),
             }))
             .await?;
-
-        if !response.success {
-            eyre::bail!(
-                "initialize request failed: {}",
-                response.message.unwrap_or_default()
-            );
-        }
 
         // Set up the channel to receive the initialized event BEFORE sending
         // Launch/Attach. This prevents a race condition where the initialized
@@ -342,18 +334,9 @@ where
 
     /// Start the debugging session (send ConfigurationDone)
     pub async fn start(&self) -> eyre::Result<()> {
-        let response = self
-            .internals
-            .send_and_wait(requests::RequestBody::ConfigurationDone)
+        self.internals
+            .send_and_expect_success(requests::RequestBody::ConfigurationDone)
             .await?;
-
-        if !response.success {
-            eyre::bail!(
-                "configurationDone request failed: {}",
-                response.message.unwrap_or_default()
-            );
-        }
-
         Ok(())
     }
 
@@ -366,21 +349,12 @@ where
             .await
             .ok_or_else(|| eyre::eyre!("no current thread"))?;
 
-        let response = self
-            .internals
-            .send_and_wait(requests::RequestBody::Continue(requests::Continue {
+        self.internals
+            .send_and_expect_success(requests::RequestBody::Continue(requests::Continue {
                 thread_id,
                 single_thread: Some(false),
             }))
             .await?;
-
-        if !response.success {
-            eyre::bail!(
-                "continue request failed: {}",
-                response.message.unwrap_or_default()
-            );
-        }
-
         Ok(())
     }
 
@@ -393,22 +367,13 @@ where
             .await
             .ok_or_else(|| eyre::eyre!("no current thread"))?;
 
-        let response = self
-            .internals
-            .send_and_wait(requests::RequestBody::Next(requests::Next {
+        self.internals
+            .send_and_expect_success(requests::RequestBody::Next(requests::Next {
                 thread_id,
                 granularity: None,
                 single_thread: None,
             }))
             .await?;
-
-        if !response.success {
-            eyre::bail!(
-                "next request failed: {}",
-                response.message.unwrap_or_default()
-            );
-        }
-
         Ok(())
     }
 
@@ -421,23 +386,14 @@ where
             .await
             .ok_or_else(|| eyre::eyre!("no current thread"))?;
 
-        let response = self
-            .internals
-            .send_and_wait(requests::RequestBody::StepIn(requests::StepIn {
+        self.internals
+            .send_and_expect_success(requests::RequestBody::StepIn(requests::StepIn {
                 thread_id,
                 granularity: None,
                 single_thread: None,
                 target_id: None,
             }))
             .await?;
-
-        if !response.success {
-            eyre::bail!(
-                "stepIn request failed: {}",
-                response.message.unwrap_or_default()
-            );
-        }
-
         Ok(())
     }
 
@@ -450,22 +406,13 @@ where
             .await
             .ok_or_else(|| eyre::eyre!("no current thread"))?;
 
-        let response = self
-            .internals
-            .send_and_wait(requests::RequestBody::StepOut(requests::StepOut {
+        self.internals
+            .send_and_expect_success(requests::RequestBody::StepOut(requests::StepOut {
                 thread_id,
                 granularity: None,
                 single_thread: None,
             }))
             .await?;
-
-        if !response.success {
-            eyre::bail!(
-                "stepOut request failed: {}",
-                response.message.unwrap_or_default()
-            );
-        }
-
         Ok(())
     }
 
@@ -525,20 +472,11 @@ where
 
     /// Terminate the debugee process
     pub async fn terminate(&self) -> eyre::Result<()> {
-        let response = self
-            .internals
-            .send_and_wait(requests::RequestBody::Terminate(requests::Terminate {
+        self.internals
+            .send_and_expect_success(requests::RequestBody::Terminate(requests::Terminate {
                 restart: Some(false),
             }))
             .await?;
-
-        if !response.success {
-            eyre::bail!(
-                "terminate request failed: {}",
-                response.message.unwrap_or_default()
-            );
-        }
-
         Ok(())
     }
 
