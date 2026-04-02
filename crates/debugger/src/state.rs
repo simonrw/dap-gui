@@ -21,6 +21,9 @@ pub enum Event {
     ScopeChange(ProgramState),
     Running,
     Ended,
+    /// An error occurred in a background task (e.g. fetching state after a
+    /// stopped event). The UI should display this to the user.
+    Error(String),
 }
 
 /// Launch or attach — replaces the `(Option<LaunchArguments>, Option<AttachArguments>)` pair.

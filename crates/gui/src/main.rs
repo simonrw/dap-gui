@@ -91,6 +91,13 @@ impl From<debugger::Event> for State {
                 breakpoints,
                 paused_frame: Box::new(paused_frame),
             },
+            debugger::Event::Error(msg) => {
+                tracing::error!(msg, "debugger error event");
+                // Preserve the current state; the error is logged.
+                // We return Initialising as a neutral fallback since we
+                // don't have access to the previous state here.
+                State::Initialising
+            }
         }
     }
 }

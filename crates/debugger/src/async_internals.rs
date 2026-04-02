@@ -210,6 +210,9 @@ where
                 tokio::spawn(async move {
                     if let Err(e) = internals.handle_stopped_event(body).await {
                         tracing::error!(error = %e, "error handling stopped event");
+                        let _ = internals
+                            .event_tx
+                            .send(Event::Error(format!("error handling stopped event: {e}")));
                     }
                 });
             }
