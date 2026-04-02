@@ -11,6 +11,7 @@ mod async_event;
 mod async_internals;
 
 /// Testing utilities for the async debugger.
+#[cfg(any(test, feature = "testing"))]
 pub mod testing;
 
 pub use state::{
