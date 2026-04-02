@@ -239,7 +239,9 @@ where
     /// background task, avoiding deadlock in the processor task.
     async fn handle_stopped_event(&self, body: dap_types::StoppedEventBody) -> eyre::Result<()> {
         tracing::debug!("locking current thread id");
-        let thread_id = body.thread_id.expect("stopped event missing thread_id");
+        let thread_id = body
+            .thread_id
+            .ok_or_else(|| eyre::eyre!("stopped event missing thread_id"))?;
         {
             // scope to enforce lock drop
             *self.current_thread_id.write().await = Some(thread_id);
