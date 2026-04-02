@@ -68,42 +68,8 @@ where
     /// Send a request and return the sequence number
     pub(crate) async fn send_request(&self, body: requests::RequestBody) -> eyre::Result<Seq> {
         let seq = self.sequence_number.fetch_add(1, Ordering::SeqCst);
-
-        // Serialize the request body to JSON
-        let arguments = serde_json::to_value(&body).wrap_err("encoding request body")?;
-
-        // Extract command name from the request body
-        let command = match &body {
-            requests::RequestBody::StackTrace(_) => "stackTrace",
-            requests::RequestBody::Threads => "threads",
-            requests::RequestBody::ConfigurationDone => "configurationDone",
-            requests::RequestBody::Initialize(_) => "initialize",
-            requests::RequestBody::Continue(_) => "continue",
-            requests::RequestBody::SetFunctionBreakpoints(_) => "setFunctionBreakpoints",
-            requests::RequestBody::SetBreakpoints(_) => "setBreakpoints",
-            requests::RequestBody::SetExceptionBreakpoints(_) => "setExceptionBreakpoints",
-            requests::RequestBody::Attach(_) => "attach",
-            requests::RequestBody::Launch(_) => "launch",
-            requests::RequestBody::Scopes(_) => "scopes",
-            requests::RequestBody::Variables(_) => "variables",
-            requests::RequestBody::BreakpointLocations(_) => "breakpointLocations",
-            requests::RequestBody::LoadedSources => "loadedSources",
-            requests::RequestBody::Terminate(_) => "terminate",
-            requests::RequestBody::Disconnect(_) => "disconnect",
-            requests::RequestBody::Next(_) => "next",
-            requests::RequestBody::StepIn(_) => "stepIn",
-            requests::RequestBody::StepOut(_) => "stepOut",
-            requests::RequestBody::Evaluate(_) => "evaluate",
-        }
-        .to_string();
-
-        // Extract arguments - for commands without arguments, use null
-        let arguments = match &body {
-            requests::RequestBody::Threads
-            | requests::RequestBody::ConfigurationDone
-            | requests::RequestBody::LoadedSources => None,
-            _ => Some(arguments.get("arguments").cloned().unwrap_or(arguments)),
-        };
+        let command = body.command_name().to_string();
+        let arguments = body.into_arguments().wrap_err("encoding request body")?;
 
         let msg = OutgoingMessage::Request(async_transport::Request {
             seq,

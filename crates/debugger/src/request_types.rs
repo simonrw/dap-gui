@@ -53,6 +53,64 @@ pub enum RequestBody {
     Evaluate(Evaluate),
 }
 
+impl RequestBody {
+    /// Returns the DAP protocol command name for this request.
+    ///
+    /// This is the canonical mapping from enum variant to wire-format command
+    /// string, kept in one place so it stays in sync with the enum definition.
+    pub fn command_name(&self) -> &'static str {
+        match self {
+            Self::StackTrace(_) => "stackTrace",
+            Self::Threads => "threads",
+            Self::ConfigurationDone => "configurationDone",
+            Self::Initialize(_) => "initialize",
+            Self::Continue(_) => "continue",
+            Self::SetFunctionBreakpoints(_) => "setFunctionBreakpoints",
+            Self::SetBreakpoints(_) => "setBreakpoints",
+            Self::SetExceptionBreakpoints(_) => "setExceptionBreakpoints",
+            Self::Attach(_) => "attach",
+            Self::Launch(_) => "launch",
+            Self::Scopes(_) => "scopes",
+            Self::Variables(_) => "variables",
+            Self::BreakpointLocations(_) => "breakpointLocations",
+            Self::LoadedSources => "loadedSources",
+            Self::Terminate(_) => "terminate",
+            Self::Disconnect(_) => "disconnect",
+            Self::Next(_) => "next",
+            Self::StepIn(_) => "stepIn",
+            Self::StepOut(_) => "stepOut",
+            Self::Evaluate(_) => "evaluate",
+        }
+    }
+
+    /// Serialize only the arguments payload for the wire format.
+    ///
+    /// Returns `None` for argument-less commands (Threads, ConfigurationDone,
+    /// LoadedSources), and `Some(value)` for commands that carry arguments.
+    pub fn into_arguments(self) -> eyre::Result<Option<serde_json::Value>> {
+        match self {
+            Self::Threads | Self::ConfigurationDone | Self::LoadedSources => Ok(None),
+            Self::StackTrace(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::Initialize(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::Continue(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::SetFunctionBreakpoints(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::SetBreakpoints(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::SetExceptionBreakpoints(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::Attach(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::Launch(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::Scopes(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::Variables(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::BreakpointLocations(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::Terminate(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::Disconnect(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::Next(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::StepIn(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::StepOut(args) => Ok(Some(serde_json::to_value(args)?)),
+            Self::Evaluate(args) => Ok(Some(serde_json::to_value(args)?)),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectInfo {
