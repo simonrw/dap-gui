@@ -996,4 +996,162 @@ mod tests {
         let breakpoints = internals.breakpoints.read().await;
         assert_eq!(breakpoints.len(), 2);
     }
+
+    #[tokio::test]
+    async fn stopped_event_missing_thread_id_sends_error_event() {
+        let (internals, _mock, mut event_rx) = setup();
+
+        let event = async_transport::Event {
+            seq: 1,
+            event: "stopped".to_string(),
+            body: Some(json!({"reason": "breakpoint"})), // no threadId
+        };
+
+        AsyncDebuggerInternals::handle_event(Arc::clone(&internals), event)
+            .await
+            .unwrap();
+
+        // The stopped handler spawns a task — wait for an error event
+        let evt = tokio::time::timeout(std::time::Duration::from_secs(5), event_rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+
+        match evt {
+            Event::Error(msg) => {
+                assert!(
+                    msg.contains("thread_id"),
+                    "expected thread_id error, got: {msg}"
+                );
+            }
+            other => panic!("expected Event::Error, got: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn change_scope_sends_scope_change_event() {
+        let (internals, mock, mut event_rx) = setup();
+
+        // First set up a current thread_id (normally set by stopped handler)
+        *internals.current_thread_id.write().await = Some(1);
+
+        // Add a breakpoint so ProgramState has some
+        let bp = Breakpoint {
+            name: None,
+            path: PathBuf::from("/tmp/test.py"),
+            line: 10,
+        };
+        {
+            let mut breakpoints = internals.breakpoints.write().await;
+            breakpoints.insert(0, bp);
+        }
+
+        let internals_clone = Arc::clone(&internals);
+        let scope_handle = tokio::spawn(async move { internals_clone.change_scope_async(1).await });
+
+        // change_scope_async calls fetch_stack_trace, then build_paused_frame_for_id
+        // which calls scopes + variables
+        let req = mock.expect_request("stackTrace").await;
+        mock.send_stack_trace_response(req.seq, vec![StackFrameData::default()])
+            .await;
+
+        let req = mock.expect_request("scopes").await;
+        mock.send_scopes_response(req.seq, vec![ScopeData::default()])
+            .await;
+
+        let req = mock.expect_request("variables").await;
+        mock.send_variables_response(req.seq, vec![VariableData::default()])
+            .await;
+
+        scope_handle.await.unwrap().unwrap();
+
+        let evt = tokio::time::timeout(std::time::Duration::from_secs(5), event_rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            matches!(evt, Event::ScopeChange(_)),
+            "expected ScopeChange event, got: {evt:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn change_scope_without_current_thread_errors() {
+        let (internals, _mock, _event_rx) = setup();
+
+        // current_thread_id is None by default
+        let result = internals.change_scope_async(1).await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("no current thread"),
+            "expected 'no current thread' error"
+        );
+    }
+
+    #[tokio::test]
+    async fn send_and_expect_success_returns_error_on_failure() {
+        let (internals, mock, _event_rx) = setup();
+
+        let internals_clone = Arc::clone(&internals);
+        let handle = tokio::spawn(async move {
+            internals_clone
+                .send_and_expect_success(requests::RequestBody::Threads)
+                .await
+        });
+
+        let req = mock.expect_request("threads").await;
+        mock.send_error_response(req.seq, "something went wrong")
+            .await;
+
+        let result = handle.await.unwrap();
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("request failed"), "unexpected error: {msg}");
+        assert!(
+            msg.contains("something went wrong"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn build_paused_frame_with_empty_stack_errors() {
+        let (internals, _mock, _event_rx) = setup();
+
+        let result = internals.build_paused_frame(&[]).await;
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains("no frames"),
+            "expected 'no frames' error"
+        );
+    }
+
+    #[tokio::test]
+    async fn build_paused_frame_for_missing_frame_id_errors() {
+        let (internals, _mock, _event_rx) = setup();
+
+        let stack = vec![dap_types::StackFrame {
+            id: 1,
+            name: "main".to_string(),
+            line: 10,
+            column: 0,
+            source: None,
+            end_column: None,
+            end_line: None,
+            can_restart: None,
+            instruction_pointer_reference: None,
+            module_id: None,
+            presentation_hint: None,
+        }];
+
+        // Ask for frame_id 999 which doesn't exist
+        let result = internals.build_paused_frame_for_id(&stack, 999).await;
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains("frame not found"),
+            "expected 'frame not found' error"
+        );
+    }
 }
