@@ -48,7 +48,7 @@ where
     pub(crate) fn new(writer: DapWriter<W>, event_tx: mpsc::UnboundedSender<Event>) -> Self {
         Self {
             writer: Mutex::new(writer),
-            sequence_number: AtomicI64::new(0),
+            sequence_number: AtomicI64::new(1),
             event_tx,
             pending_requests: Mutex::new(HashMap::new()),
             initialized_tx: Mutex::new(None),
