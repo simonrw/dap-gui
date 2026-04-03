@@ -126,9 +126,15 @@ async fn test_remote_attach() -> eyre::Result<()> {
 
     let mut event_rx = debugger.take_events();
 
-    // Wait for initialised event
-    let evt = event_rx.recv().await.unwrap();
-    assert!(matches!(evt, debugger::Event::Initialised));
+    // Wait for initialised event (may get Output/Thread events first)
+    loop {
+        let evt = event_rx.recv().await.unwrap();
+        match evt {
+            debugger::Event::Initialised => break,
+            debugger::Event::Output { .. } | debugger::Event::Thread { .. } => continue,
+            other => panic!("unexpected event while waiting for Initialised: {other:?}"),
+        }
+    }
 
     let breakpoint_line = 9;
     debugger
@@ -236,9 +242,15 @@ async fn test_debugger() -> eyre::Result<()> {
 
     let mut event_rx = debugger.take_events();
 
-    // Wait for initialised event
-    let evt = event_rx.recv().await.unwrap();
-    assert!(matches!(evt, debugger::Event::Initialised));
+    // Wait for initialised event (may get Output/Thread events first)
+    loop {
+        let evt = event_rx.recv().await.unwrap();
+        match evt {
+            debugger::Event::Initialised => break,
+            debugger::Event::Output { .. } | debugger::Event::Thread { .. } => continue,
+            other => panic!("unexpected event while waiting for Initialised: {other:?}"),
+        }
+    }
 
     let breakpoint_line = 4;
     debugger

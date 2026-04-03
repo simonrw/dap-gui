@@ -1,0 +1,26 @@
+[package]
+name = "tui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ratatui = { version = "0.29", features = ["crossterm"] }
+crossterm = "0.28"
+crossbeam-channel.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "macros"] }
+debugger = { path = "../debugger" }
+dap-types = { path = "../dap-types" }
+server = { path = "../server" }
+state = { path = "../state" }
+launch_configuration = { path = "../launch_configuration" }
+fuzzy = { path = "../fuzzy" }
+async-transport = { path = "../async-transport" }
+clap.workspace = true
+eyre.workspace = true
+color-eyre.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+dirs.workspace = true
+syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "parsing", "regex-onig"] }
+serde.workspace = true
+serde_json.workspace = true
