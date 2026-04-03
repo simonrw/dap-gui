@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
@@ -9,7 +9,31 @@ use ratatui::{
 use crate::app::{App, AppMode};
 
 /// Render the controls bar showing available keybindings for the current state.
+/// In NoSession/Terminated modes, also shows the config selector with h/l cycling.
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
+    let mut spans = Vec::new();
+
+    // Config selector: shown when no active session
+    if matches!(app.mode, AppMode::NoSession | AppMode::Terminated) && !app.config_names.is_empty()
+    {
+        spans.push(Span::styled(
+            " \u{25c0} ",
+            Style::default().fg(Color::DarkGray),
+        )); // ◀
+        spans.push(Span::styled(
+            format!(" {} ", app.config_names[app.selected_config_index]),
+            Style::default()
+                .fg(Color::White)
+                .bg(Color::Rgb(50, 50, 80))
+                .add_modifier(Modifier::BOLD),
+        ));
+        spans.push(Span::styled(
+            " \u{25b6} ",
+            Style::default().fg(Color::DarkGray),
+        )); // ▶
+        spans.push(Span::raw("  "));
+    }
+
     let controls = match app.mode {
         AppMode::NoSession => vec![
             control("F5", "Start"),
@@ -33,14 +57,14 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         ],
         AppMode::Terminated => vec![
             control("F5", "Restart"),
+            control("Ctrl+Shift+F5", "Restart"),
             control("Shift+F5", "Close"),
             control("q", "Quit"),
         ],
     };
 
-    let mut spans = Vec::new();
     for (i, (key, action)) in controls.iter().enumerate() {
-        if i > 0 {
+        if i > 0 || !spans.is_empty() {
             spans.push(Span::raw(" "));
         }
         spans.push(Span::styled(

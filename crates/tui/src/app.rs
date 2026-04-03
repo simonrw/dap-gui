@@ -77,6 +77,8 @@ pub enum InputMode {
     BreakpointInput,
     /// Typing into REPL input.
     Repl,
+    /// Typing into file browser search in sidebar.
+    FileBrowser,
 }
 
 // ── Code view state ───────────────────────────────────────────────────────
@@ -422,6 +424,13 @@ pub struct App {
     // Status line messages
     pub status_message: Option<String>,
     pub status_error: Option<String>,
+
+    // File browser sidebar (no-session mode)
+    pub file_browser_query: String,
+    pub file_browser_cursor: usize,
+    pub file_browser_results: Vec<fuzzy::FuzzyMatch>,
+    pub file_browser_files: Vec<fuzzy::TrackedFile>,
+    pub file_browser_loaded: bool,
 }
 
 impl App {
@@ -471,6 +480,11 @@ impl App {
             output_scroll_offset: 0,
             status_message: None,
             status_error: None,
+            file_browser_query: String::new(),
+            file_browser_cursor: 0,
+            file_browser_results: Vec::new(),
+            file_browser_files: Vec::new(),
+            file_browser_loaded: false,
         }
     }
 
@@ -595,6 +609,12 @@ impl App {
         let config = self.configs[self.selected_config_index].clone();
         let breakpoints: Vec<debugger::Breakpoint> = self.collect_all_breakpoints();
 
+        // Persist selected config name
+        let config_name = config.name().to_string();
+        if let Err(e) = self.state_manager.set_last_selected_config(config_name) {
+            tracing::warn!(error = %e, "failed to persist selected config");
+        }
+
         self.mode = AppMode::Initialising;
         self.status_message = Some("Starting debug session...".to_string());
         self.status_error = None;
@@ -636,6 +656,21 @@ impl App {
         self.session = None;
         self.mode = AppMode::NoSession;
         self.status_message = Some("Session ended".to_string());
+    }
+
+    /// Restart the debug session: stop the current session and start a new one.
+    pub fn restart_session(&mut self) {
+        if self.session.is_some() {
+            // Terminate + shutdown the current session
+            if let Some(session) = &self.session {
+                session.bridge.send(UiCommand::Terminate);
+            }
+            // Drop session (sends shutdown implicitly)
+            self.session = None;
+            self.mode = AppMode::NoSession;
+        }
+        // Start a fresh session
+        self.start_session();
     }
 
     /// Collect all breakpoints (UI + persisted) for session start.
@@ -907,5 +942,48 @@ impl App {
         let osc52 = format!("\x1b]52;c;{encoded}\x07");
         let _ = std::io::stdout().write_all(osc52.as_bytes());
         let _ = std::io::stdout().flush();
+    }
+
+    // ── File browser operations ──────────────────────────────────────
+
+    /// Ensure file browser files are loaded (lazy).
+    pub fn ensure_file_browser_loaded(&mut self) {
+        if self.file_browser_loaded {
+            return;
+        }
+        self.file_browser_loaded = true;
+        if let Some(root) = fuzzy::find_repo_root() {
+            match fuzzy::list_git_files(&root) {
+                Ok(files) => self.file_browser_files = files,
+                Err(e) => tracing::warn!(error = %e, "failed to list git files for browser"),
+            }
+        }
+        self.refilter_file_browser();
+    }
+
+    /// Recompute file browser results from current query.
+    pub fn refilter_file_browser(&mut self) {
+        self.file_browser_results =
+            fuzzy::fuzzy_filter(&self.file_browser_files, &self.file_browser_query);
+        if self.file_browser_results.is_empty() {
+            self.file_browser_cursor = 0;
+        } else {
+            self.file_browser_cursor = self
+                .file_browser_cursor
+                .min(self.file_browser_results.len() - 1);
+        }
+    }
+
+    /// Select the current file browser item and open it in the code view.
+    pub fn select_file_browser_item(&mut self) {
+        if self.file_browser_results.is_empty() {
+            return;
+        }
+        let path = self.file_browser_results[self.file_browser_cursor]
+            .file
+            .absolute_path
+            .clone();
+        self.open_file(path);
+        self.focus = Focus::CodeView;
     }
 }

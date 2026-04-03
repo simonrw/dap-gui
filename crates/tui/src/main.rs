@@ -62,20 +62,11 @@ fn main() -> eyre::Result<()> {
     }
     let config_names: Vec<String> = configs.iter().map(|c| c.name().to_string()).collect();
 
-    let selected_config_index = if let Some(ref name) = args.name {
-        config_names
-            .iter()
-            .position(|n| n == name)
-            .ok_or_else(|| eyre::eyre!("no configuration named '{name}' found"))?
-    } else {
-        0
-    };
-
     let debug_root_dir = std::env::current_dir()
         .and_then(|p| std::fs::canonicalize(&p))
         .wrap_err("resolving current directory")?;
 
-    // State manager for breakpoint persistence
+    // State manager for breakpoint persistence and TUI preferences
     let state_path = dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
         .join("dapgui")
@@ -85,6 +76,18 @@ fn main() -> eyre::Result<()> {
     }
     let state_manager = StateManager::new(state_path).wrap_err("loading state")?;
     state_manager.save().wrap_err("saving initial state")?;
+
+    let selected_config_index = if let Some(ref name) = args.name {
+        config_names
+            .iter()
+            .position(|n| n == name)
+            .ok_or_else(|| eyre::eyre!("no configuration named '{name}' found"))?
+    } else if let Some(ref last) = state_manager.current().last_selected_config {
+        // Restore last selected config from persisted state
+        config_names.iter().position(|n| n == last).unwrap_or(0)
+    } else {
+        0
+    };
 
     // Parse CLI breakpoints
     let initial_breakpoints: Vec<debugger::Breakpoint> = args
@@ -110,9 +113,17 @@ fn main() -> eyre::Result<()> {
     );
 
     // Install a panic hook that restores the terminal before printing.
+    // This ensures the terminal is usable even after a panic.
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let _ = restore_terminal();
+        // Best-effort terminal restore: ignore errors since we're panicking anyway.
+        let _ = disable_raw_mode();
+        let _ = execute!(
+            io::stdout(),
+            LeaveAlternateScreen,
+            DisableMouseCapture,
+            crossterm::cursor::Show
+        );
         default_hook(info);
     }));
 

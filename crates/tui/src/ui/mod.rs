@@ -2,6 +2,7 @@ pub mod breakpoints;
 pub mod call_stack;
 pub mod code_view;
 pub mod controls_bar;
+pub mod file_browser;
 pub mod file_picker;
 pub mod help;
 pub mod output;
@@ -16,7 +17,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
 };
 
-use crate::app::{App, BottomTab, Focus};
+use crate::app::{App, AppMode, BottomTab, Focus};
 
 /// Border style for the currently focused pane.
 fn focused_border() -> Style {
@@ -90,20 +91,26 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     }
 }
 
-/// Render the left sidebar: call stack, breakpoints, threads stacked vertically.
-fn render_sidebar(app: &App, frame: &mut Frame, area: Rect) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage(40), // call stack
-            Constraint::Percentage(40), // breakpoints
-            Constraint::Percentage(20), // threads
-        ])
-        .split(area);
+/// Render the left sidebar: file browser (no-session) or call stack + breakpoints + threads.
+fn render_sidebar(app: &mut App, frame: &mut Frame, area: Rect) {
+    if app.mode == AppMode::NoSession {
+        // Lazy-load files for the browser
+        app.ensure_file_browser_loaded();
+        file_browser::render(app, frame, area);
+    } else {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(40), // call stack
+                Constraint::Percentage(40), // breakpoints
+                Constraint::Percentage(20), // threads
+            ])
+            .split(area);
 
-    call_stack::render(app, frame, chunks[0]);
-    breakpoints::render(app, frame, chunks[1]);
-    threads::render(app, frame, chunks[2]);
+        call_stack::render(app, frame, chunks[0]);
+        breakpoints::render(app, frame, chunks[1]);
+        threads::render(app, frame, chunks[2]);
+    }
 }
 
 /// Render the bottom tabbed panel (variables / output / REPL).

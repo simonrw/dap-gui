@@ -11,6 +11,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         InputMode::Search => handle_search_key(app, key),
         InputMode::BreakpointInput => handle_breakpoint_input_key(app, key),
         InputMode::Repl => handle_repl_input_key(app, key),
+        InputMode::FileBrowser => handle_file_browser_input_key(app, key),
         InputMode::Normal => handle_normal_key(app, key),
     }
 }
@@ -146,12 +147,58 @@ fn handle_repl_input_key(app: &mut App, key: KeyEvent) {
     }
 }
 
+// ── File browser input mode (typing in sidebar search) ────────────────────
+
+fn handle_file_browser_input_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Esc => {
+            app.file_browser_query.clear();
+            app.refilter_file_browser();
+            app.input_mode = InputMode::Normal;
+        }
+        KeyCode::Enter => {
+            app.select_file_browser_item();
+            app.input_mode = InputMode::Normal;
+        }
+        KeyCode::Up => {
+            app.file_browser_cursor = app.file_browser_cursor.saturating_sub(1);
+        }
+        KeyCode::Down => {
+            if !app.file_browser_results.is_empty() {
+                app.file_browser_cursor =
+                    (app.file_browser_cursor + 1).min(app.file_browser_results.len() - 1);
+            }
+        }
+        KeyCode::Backspace => {
+            app.file_browser_query.pop();
+            app.refilter_file_browser();
+        }
+        KeyCode::Char(c) => {
+            app.file_browser_query.push(c);
+            app.refilter_file_browser();
+        }
+        _ => {}
+    }
+}
+
 // ── Normal mode ───────────────────────────────────────────────────────────
 
 fn handle_normal_key(app: &mut App, key: KeyEvent) {
     // Global keybindings (always active in normal mode)
     match key.code {
         KeyCode::Char('q') => {
+            // Clean quit: shut down session if active, then exit
+            if app.session.is_some() {
+                app.shutdown_session();
+            }
+            app.should_quit = true;
+            return;
+        }
+        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            // Ctrl+C: same as q
+            if app.session.is_some() {
+                app.shutdown_session();
+            }
             app.should_quit = true;
             return;
         }
@@ -209,8 +256,38 @@ fn handle_normal_key(app: &mut App, key: KeyEvent) {
         _ => {}
     }
 
+    // Config cycling (h/l when no active session)
+    if matches!(app.mode, AppMode::NoSession | AppMode::Terminated) && !app.config_names.is_empty()
+    {
+        match key.code {
+            KeyCode::Char('h') | KeyCode::Left => {
+                if app.selected_config_index == 0 {
+                    app.selected_config_index = app.config_names.len() - 1;
+                } else {
+                    app.selected_config_index -= 1;
+                }
+                return;
+            }
+            KeyCode::Char('l') | KeyCode::Right => {
+                app.selected_config_index =
+                    (app.selected_config_index + 1) % app.config_names.len();
+                return;
+            }
+            _ => {}
+        }
+    }
+
     // Debugger keybindings
     match key.code {
+        // Ctrl+Shift+F5: restart session
+        KeyCode::F(5)
+            if key
+                .modifiers
+                .contains(KeyModifiers::CONTROL | KeyModifiers::SHIFT) =>
+        {
+            app.restart_session();
+            return;
+        }
         KeyCode::F(5) if key.modifiers.contains(KeyModifiers::SHIFT) => {
             // Shift+F5: terminate / shutdown
             match app.mode {
@@ -276,9 +353,21 @@ fn handle_normal_key(app: &mut App, key: KeyEvent) {
     // Focus-specific keybindings
     match app.focus {
         Focus::CodeView => handle_code_view_key(app, key),
-        Focus::Breakpoints => handle_breakpoints_key(app, key),
+        Focus::Breakpoints => {
+            if app.mode == AppMode::NoSession {
+                handle_file_browser_focus_key(app, key);
+            } else {
+                handle_breakpoints_key(app, key);
+            }
+        }
         Focus::Variables => handle_variables_key(app, key),
-        Focus::CallStack => handle_call_stack_key(app, key),
+        Focus::CallStack => {
+            if app.mode == AppMode::NoSession {
+                handle_file_browser_focus_key(app, key);
+            } else {
+                handle_call_stack_key(app, key);
+            }
+        }
         Focus::Output => handle_output_key(app, key),
         Focus::Repl => handle_repl_focus_key(app, key),
     }
@@ -530,6 +619,30 @@ fn handle_repl_focus_key(app: &mut App, key: KeyEvent) {
             if app.mode == AppMode::Paused {
                 app.input_mode = InputMode::Repl;
             }
+        }
+        _ => {}
+    }
+}
+
+fn handle_file_browser_focus_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        // Start typing to filter
+        KeyCode::Char('/') | KeyCode::Char('i') => {
+            app.input_mode = InputMode::FileBrowser;
+        }
+        // Navigation
+        KeyCode::Char('j') | KeyCode::Down => {
+            if !app.file_browser_results.is_empty() {
+                app.file_browser_cursor =
+                    (app.file_browser_cursor + 1).min(app.file_browser_results.len() - 1);
+            }
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            app.file_browser_cursor = app.file_browser_cursor.saturating_sub(1);
+        }
+        // Select file
+        KeyCode::Enter => {
+            app.select_file_browser_item();
         }
         _ => {}
     }

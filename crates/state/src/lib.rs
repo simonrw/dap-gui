@@ -75,6 +75,11 @@ impl StateManager {
         self.save()
     }
 
+    pub fn set_last_selected_config(&mut self, name: String) -> eyre::Result<()> {
+        self.current.last_selected_config = Some(name);
+        self.save()
+    }
+
     pub fn current(&self) -> &Persistence {
         &self.current
     }
@@ -88,6 +93,9 @@ pub struct Persistence {
     /// Code view font size (if set by user)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub code_font_size: Option<f32>,
+    /// Last selected configuration name (for TUI)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_selected_config: Option<String>,
 }
 
 /// State that is persisted per file
