@@ -21,6 +21,20 @@ pub enum Event {
     ScopeChange(ProgramState),
     Running,
     Ended,
+    /// Program output captured from the debug adapter's `output` event.
+    Output {
+        /// The output category (e.g. `"stdout"`, `"stderr"`, `"console"`).
+        category: String,
+        /// The output text.
+        output: String,
+    },
+    /// A thread lifecycle event from the debug adapter.
+    Thread {
+        /// The reason for the event (e.g. `"started"`, `"exited"`).
+        reason: String,
+        /// The thread ID.
+        thread_id: i64,
+    },
     /// An error occurred in a background task (e.g. fetching state after a
     /// stopped event). The UI should display this to the user.
     Error(String),

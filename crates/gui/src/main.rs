@@ -98,6 +98,10 @@ impl From<debugger::Event> for State {
                 // don't have access to the previous state here.
                 State::Initialising
             }
+            debugger::Event::Output { .. } | debugger::Event::Thread { .. } => {
+                // TODO: surface output/thread events in the GUI
+                State::Initialising
+            }
         }
     }
 }

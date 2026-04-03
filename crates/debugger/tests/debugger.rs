@@ -162,7 +162,9 @@ async fn test_remote_attach() -> eyre::Result<()> {
                 ));
                 break;
             }
-            debugger::Event::Running => continue,
+            debugger::Event::Running
+            | debugger::Event::Output { .. }
+            | debugger::Event::Thread { .. } => continue,
             other => panic!("unexpected event: {:?}", other),
         }
     }
@@ -270,7 +272,9 @@ async fn test_debugger() -> eyre::Result<()> {
                 ));
                 break;
             }
-            debugger::Event::Running => continue,
+            debugger::Event::Running
+            | debugger::Event::Output { .. }
+            | debugger::Event::Thread { .. } => continue,
             other => panic!("unexpected event: {:?}", other),
         }
     }

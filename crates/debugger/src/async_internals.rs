@@ -208,10 +208,22 @@ where
                 let _ = self_arc.event_tx.send(Event::Ended);
             }
             "output" => {
-                tracing::debug!("output event: {:?}", event.body);
+                let body: dap_types::OutputEventBody =
+                    serde_json::from_value(event.body.clone().unwrap_or_default())
+                        .wrap_err("parsing output event")?;
+                let _ = self_arc.event_tx.send(Event::Output {
+                    category: body.category.unwrap_or_else(|| "console".to_string()),
+                    output: body.output,
+                });
             }
             "thread" => {
-                tracing::debug!("thread event: {:?}", event.body);
+                let body: dap_types::ThreadEventBody =
+                    serde_json::from_value(event.body.clone().unwrap_or_default())
+                        .wrap_err("parsing thread event")?;
+                let _ = self_arc.event_tx.send(Event::Thread {
+                    reason: body.reason,
+                    thread_id: body.thread_id,
+                });
             }
             _ => {
                 tracing::debug!("unhandled event: {}", event.event);
