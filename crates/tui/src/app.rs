@@ -1,13 +1,12 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use crossterm::event::KeyEvent;
-use launch_configuration::LaunchConfiguration;
-use state::StateManager;
-
 use crate::async_bridge::UiCommand;
 use crate::event::AppEvent;
 use crate::session::Session;
+use crossterm::event::KeyEvent;
+use launch_configuration::LaunchConfiguration;
+use state::StateManager;
 
 /// The current mode of the application.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,6 +73,10 @@ pub enum InputMode {
     FilePicker,
     /// Typing into code view search.
     Search,
+    /// Typing into breakpoint add input.
+    BreakpointInput,
+    /// Typing into REPL input.
+    Repl,
 }
 
 // ── Code view state ───────────────────────────────────────────────────────
@@ -374,6 +377,10 @@ pub struct App {
 
     // Variables child cache: variables_reference -> children
     pub variables_cache: HashMap<i64, Vec<dap_types::Variable>>,
+    pub variables_cursor: usize,
+
+    // Call stack cursor
+    pub call_stack_cursor: usize,
 
     // Persistence
     pub state_manager: StateManager,
@@ -396,6 +403,21 @@ pub struct App {
     // REPL
     pub repl_input: String,
     pub repl_history: Vec<(String, String, bool)>, // (input, output, is_error)
+    pub repl_input_history: Vec<String>,           // history of past inputs for Up/Down
+    pub repl_history_cursor: Option<usize>,        // position in input history (None = new input)
+
+    // Breakpoint panel input (for "a" add mode)
+    pub breakpoint_input: Option<String>,
+
+    // Breakpoint panel cursor
+    pub breakpoints_cursor: usize,
+
+    // Breakpoint IDs returned by the debugger (for removal)
+    pub breakpoint_ids: HashMap<debugger::Breakpoint, u64>,
+
+    // Output auto-scroll
+    pub output_auto_scroll: bool,
+    pub output_scroll_offset: usize,
 
     // Status line messages
     pub status_message: Option<String>,
@@ -430,6 +452,8 @@ impl App {
             output_lines: Vec::new(),
             threads: Vec::new(),
             variables_cache: HashMap::new(),
+            variables_cursor: 0,
+            call_stack_cursor: 0,
             state_manager,
             file_cache: HashMap::new(),
             code_view: CodeViewState::default(),
@@ -438,6 +462,13 @@ impl App {
             show_help: false,
             repl_input: String::new(),
             repl_history: Vec::new(),
+            repl_input_history: Vec::new(),
+            repl_history_cursor: None,
+            breakpoint_input: None,
+            breakpoints_cursor: 0,
+            breakpoint_ids: HashMap::new(),
+            output_auto_scroll: true,
+            output_scroll_offset: 0,
             status_message: None,
             status_error: None,
         }
@@ -509,6 +540,11 @@ impl App {
                 }
                 debugger::Event::Output { category, output } => {
                     self.output_lines.push((category.clone(), output.clone()));
+                    // Ring buffer: keep max 10,000 lines
+                    if self.output_lines.len() > crate::ui::output::MAX_OUTPUT_LINES {
+                        let excess = self.output_lines.len() - crate::ui::output::MAX_OUTPUT_LINES;
+                        self.output_lines.drain(..excess);
+                    }
                 }
                 debugger::Event::Thread { reason, thread_id } => match reason.as_str() {
                     "started" => {
@@ -628,7 +664,6 @@ impl App {
     }
 
     /// Persist current breakpoints to state file.
-    #[allow(dead_code)] // Used in Phase 4 for breakpoint toggle
     pub fn persist_breakpoints(&mut self) {
         let breakpoints: Vec<_> = self.ui_breakpoints.iter().cloned().collect();
         if let Err(e) = self
@@ -664,5 +699,213 @@ impl App {
     pub fn current_file_content(&self) -> Option<&str> {
         let path = self.code_view.file_path.as_ref()?;
         self.file_cache.get(path).map(|s| s.as_str())
+    }
+
+    // ── Breakpoint operations ─────────────────────────────────────────
+
+    /// Toggle a breakpoint at the current cursor line in the code view.
+    pub fn toggle_breakpoint_at_cursor(&mut self) {
+        let Some(path) = self.code_view.file_path.clone() else {
+            return;
+        };
+        let line = self.code_view.cursor_line + 1; // DAP is 1-indexed
+
+        let bp = debugger::Breakpoint {
+            name: None,
+            path,
+            line,
+        };
+
+        if self.ui_breakpoints.contains(&bp) {
+            self.remove_breakpoint(&bp);
+        } else {
+            self.add_breakpoint(bp);
+        }
+    }
+
+    /// Add a breakpoint (to UI set, to debugger if session active, and persist).
+    pub fn add_breakpoint(&mut self, bp: debugger::Breakpoint) {
+        self.ui_breakpoints.insert(bp.clone());
+
+        if let Some(session) = &self.session {
+            let result = session.bridge.send_sync(|reply| UiCommand::AddBreakpoint {
+                breakpoint: bp.clone(),
+                reply,
+            });
+            match result {
+                Ok(id) => {
+                    self.breakpoint_ids.insert(bp, id);
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "failed to add breakpoint to debugger");
+                    self.status_error = Some(format!("Add breakpoint: {e}"));
+                }
+            }
+        }
+
+        self.persist_breakpoints();
+    }
+
+    /// Remove a breakpoint (from UI set, from debugger if session active, and persist).
+    pub fn remove_breakpoint(&mut self, bp: &debugger::Breakpoint) {
+        self.ui_breakpoints.remove(bp);
+
+        if let Some(id) = self.breakpoint_ids.remove(bp) {
+            if let Some(session) = &self.session {
+                let result = session
+                    .bridge
+                    .send_sync(|reply| UiCommand::RemoveBreakpoint { id, reply });
+                if let Err(e) = result {
+                    tracing::warn!(error = %e, "failed to remove breakpoint from debugger");
+                    self.status_error = Some(format!("Remove breakpoint: {e}"));
+                }
+            }
+        }
+
+        self.persist_breakpoints();
+    }
+
+    /// Add a breakpoint from a "file:line" string (used by breakpoint panel input).
+    pub fn add_breakpoint_from_str(&mut self, input: &str) {
+        match debugger::Breakpoint::parse(input, &self.debug_root_dir) {
+            Ok(bp) => self.add_breakpoint(bp),
+            Err(e) => {
+                self.status_error = Some(format!("Invalid breakpoint: {e}"));
+            }
+        }
+    }
+
+    /// Remove the n-th breakpoint (sorted order) from the breakpoints panel.
+    pub fn remove_breakpoint_by_index(&mut self, index: usize) {
+        let mut bps: Vec<_> = self.ui_breakpoints.iter().cloned().collect();
+        bps.sort_by(|a, b| (&a.path, a.line).cmp(&(&b.path, b.line)));
+        if let Some(bp) = bps.get(index).cloned() {
+            self.remove_breakpoint(&bp);
+        }
+    }
+
+    /// Reconcile breakpoints with the debugger's authoritative set.
+    /// Marks breakpoints the adapter rejected as unverified.
+    #[allow(dead_code)] // Will be fully implemented when ListBreakpoints UiCommand is added
+    pub fn reconcile_breakpoints(&mut self) {
+        // TODO: send UiCommand::ListBreakpoints and diff against ui_breakpoints.
+        // For now, we trust the debugger's Paused event breakpoints list.
+    }
+
+    // ── REPL operations ───────────────────────────────────────────────
+
+    /// Evaluate the current REPL input and display the result.
+    pub fn evaluate_repl(&mut self) {
+        let input = self.repl_input.trim().to_string();
+        if input.is_empty() {
+            return;
+        }
+
+        // Save to input history
+        self.repl_input_history.push(input.clone());
+        self.repl_history_cursor = None;
+
+        let frame_id = self.session.as_ref().and_then(|s| s.current_frame_id);
+
+        let Some(frame_id) = frame_id else {
+            self.repl_history
+                .push((input, "Not paused".to_string(), true));
+            self.repl_input.clear();
+            return;
+        };
+
+        let Some(session) = &self.session else {
+            self.repl_history
+                .push((input, "No session".to_string(), true));
+            self.repl_input.clear();
+            return;
+        };
+
+        let result = session.bridge.send_sync(|reply| UiCommand::Evaluate {
+            expression: input.clone(),
+            frame_id,
+            reply,
+        });
+
+        match result {
+            Ok(eval) => {
+                self.repl_history.push((input, eval.output, eval.error));
+            }
+            Err(e) => {
+                self.repl_history.push((input, format!("{e}"), true));
+            }
+        }
+
+        self.repl_input.clear();
+    }
+
+    /// Navigate REPL input history upward.
+    pub fn repl_history_up(&mut self) {
+        if self.repl_input_history.is_empty() {
+            return;
+        }
+        match self.repl_history_cursor {
+            None => {
+                self.repl_history_cursor = Some(self.repl_input_history.len() - 1);
+                self.repl_input = self.repl_input_history.last().unwrap().clone();
+            }
+            Some(0) => {} // Already at oldest
+            Some(ref mut idx) => {
+                *idx -= 1;
+                self.repl_input = self.repl_input_history[*idx].clone();
+            }
+        }
+    }
+
+    /// Navigate REPL input history downward.
+    pub fn repl_history_down(&mut self) {
+        match self.repl_history_cursor {
+            None => {} // Not navigating
+            Some(idx) if idx >= self.repl_input_history.len() - 1 => {
+                self.repl_history_cursor = None;
+                self.repl_input.clear();
+            }
+            Some(ref mut idx) => {
+                *idx += 1;
+                self.repl_input = self.repl_input_history[*idx].clone();
+            }
+        }
+    }
+
+    // ── Variable operations ───────────────────────────────────────────
+
+    /// Fetch child variables for an expandable variable.
+    pub fn fetch_variables(&mut self, reference: i64) {
+        if self.variables_cache.contains_key(&reference) {
+            return; // Already cached
+        }
+
+        let Some(session) = &self.session else {
+            return;
+        };
+
+        let result = session
+            .bridge
+            .send_sync(|reply| UiCommand::FetchVariables { reference, reply });
+
+        match result {
+            Ok(vars) => {
+                self.variables_cache.insert(reference, vars);
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "failed to fetch variables");
+                self.status_error = Some(format!("Fetch variables: {e}"));
+            }
+        }
+    }
+
+    /// Copy a variable's value to the system clipboard via OSC 52 escape sequence.
+    pub fn yank_variable_value(&self, value: &str) {
+        use std::io::Write;
+        let encoded = data_encoding::BASE64.encode(value.as_bytes());
+        // OSC 52: \x1b]52;c;<base64>\x07
+        let osc52 = format!("\x1b]52;c;{encoded}\x07");
+        let _ = std::io::stdout().write_all(osc52.as_bytes());
+        let _ = std::io::stdout().flush();
     }
 }

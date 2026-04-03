@@ -178,6 +178,7 @@ impl SyntaxHighlighter {
         search_matches: &[(usize, usize, usize)],
         current_match_idx: usize,
         exec_line: Option<usize>,
+        breakpoint_lines: &std::collections::HashSet<usize>,
     ) -> Vec<Line<'static>> {
         let match_bg = Color::Rgb(100, 100, 0);
         let current_match_bg = Color::Rgb(180, 120, 0);
@@ -202,10 +203,25 @@ impl SyntaxHighlighter {
                     Color::Reset
                 };
 
-                // Line number gutter with execution marker
-                let gutter_marker = if is_exec { "\u{25b6}" } else { " " };
+                // Line number gutter with execution/breakpoint markers
+                let has_bp = breakpoint_lines.contains(&line_num);
+                let gutter_marker = if is_exec && has_bp {
+                    "\u{25b6}" // ▶ (exec takes precedence, but on a bp line)
+                } else if is_exec {
+                    "\u{25b6}" // ▶
+                } else if has_bp {
+                    "\u{25cf}" // ●
+                } else {
+                    " "
+                };
                 let gutter_style = if is_exec {
                     Style::default().fg(Color::Yellow).bg(exec_bg)
+                } else if has_bp {
+                    Style::default().fg(Color::Red).bg(if is_cursor {
+                        cursor_bg
+                    } else {
+                        Color::Reset
+                    })
                 } else if is_cursor {
                     Style::default().fg(Color::White).bg(cursor_bg)
                 } else {

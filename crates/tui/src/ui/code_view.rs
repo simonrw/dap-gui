@@ -96,6 +96,14 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
                 None
             });
 
+            // Collect breakpoint lines (1-indexed) for the current file
+            let breakpoint_lines: std::collections::HashSet<usize> = app
+                .ui_breakpoints
+                .iter()
+                .filter(|bp| bp.path == *path)
+                .map(|bp| bp.line)
+                .collect();
+
             let lines = SyntaxHighlighter::build_lines(
                 &highlighted,
                 start_line,
@@ -104,6 +112,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
                 &app.search.matches,
                 app.search.current_match,
                 exec_line,
+                &breakpoint_lines,
             );
 
             let paragraph = Paragraph::new(lines);

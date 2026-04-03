@@ -12,6 +12,7 @@ use crate::session::DebuggerState;
 /// Render the call stack panel showing stack frames when paused.
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let border = super::border_style(app, super::Focus::CallStack);
+    let is_focused = app.focus == super::Focus::CallStack;
 
     let items: Vec<ListItem> = if let Some(session) = &app.session {
         if let DebuggerState::Paused {
@@ -22,9 +23,11 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         {
             stack
                 .iter()
-                .map(|sf| {
+                .enumerate()
+                .map(|(idx, sf)| {
                     let is_current = sf.id == paused_frame.frame.id;
-                    let marker = if is_current { ">" } else { " " };
+                    let is_selected = is_focused && idx == app.call_stack_cursor;
+                    let marker = if is_current { "\u{25b6}" } else { " " };
 
                     let source_info = sf
                         .source
@@ -33,7 +36,11 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
                         .unwrap_or("?");
                     let text = format!("{marker} {}:{} ({})", sf.name, sf.line, source_info);
 
-                    let style = if is_current {
+                    let style = if is_selected {
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD | Modifier::REVERSED)
+                    } else if is_current {
                         Style::default()
                             .fg(Color::Yellow)
                             .add_modifier(Modifier::BOLD)
