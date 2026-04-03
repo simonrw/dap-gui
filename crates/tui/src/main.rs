@@ -11,6 +11,8 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 
 mod app;
 mod event;
+mod input;
+mod syntax;
 mod ui;
 
 use app::App;

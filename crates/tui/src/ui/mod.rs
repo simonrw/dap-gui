@@ -2,6 +2,8 @@ pub mod breakpoints;
 pub mod call_stack;
 pub mod code_view;
 pub mod controls_bar;
+pub mod file_picker;
+pub mod help;
 pub mod output;
 pub mod repl;
 pub mod status_bar;
@@ -29,7 +31,7 @@ fn unfocused_border() -> Style {
 }
 
 /// Return the appropriate border style for a pane.
-fn border_style(app: &App, pane: Focus) -> Style {
+pub fn border_style(app: &App, pane: Focus) -> Style {
     if app.focus == pane {
         focused_border()
     } else {
@@ -38,7 +40,7 @@ fn border_style(app: &App, pane: Focus) -> Style {
 }
 
 /// Render the full application layout.
-pub fn render(app: &App, frame: &mut Frame) {
+pub fn render(app: &mut App, frame: &mut Frame) {
     let size = frame.area();
 
     // Top-level vertical split:
@@ -69,13 +71,23 @@ pub fn render(app: &App, frame: &mut Frame) {
         .split(outer[1]);
 
     render_sidebar(app, frame, middle[0]);
-    render_code_view(app, frame, middle[1]);
+
+    // Code view needs &mut App for scroll/search state updates
+    code_view::render(app, frame, middle[1]);
 
     // Bottom tabbed panel
     render_bottom_panel(app, frame, outer[2]);
 
     // Status bar
     status_bar::render(app, frame, outer[3]);
+
+    // Overlays (rendered last so they draw on top)
+    if app.file_picker.open {
+        file_picker::render(app, frame);
+    }
+    if app.show_help {
+        help::render(frame);
+    }
 }
 
 /// Render the left sidebar: call stack, breakpoints, threads stacked vertically.
@@ -92,11 +104,6 @@ fn render_sidebar(app: &App, frame: &mut Frame, area: Rect) {
     call_stack::render(app, frame, chunks[0]);
     breakpoints::render(app, frame, chunks[1]);
     threads::render(app, frame, chunks[2]);
-}
-
-/// Render the code view in the centre.
-fn render_code_view(app: &App, frame: &mut Frame, area: Rect) {
-    code_view::render(app, frame, area);
 }
 
 /// Render the bottom tabbed panel (variables / output / REPL).
