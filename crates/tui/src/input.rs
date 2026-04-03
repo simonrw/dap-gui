@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::app::{App, BottomTab, Focus, InputMode};
+use crate::app::{App, AppMode, BottomTab, Focus, InputMode};
+use crate::async_bridge::UiCommand;
 
 /// Central keybinding dispatcher. Routes key events based on input mode and focus.
 pub fn handle_key(app: &mut App, key: KeyEvent) {
@@ -143,6 +144,70 @@ fn handle_normal_key(app: &mut App, key: KeyEvent) {
         }
         KeyCode::Char('3') if key.modifiers.contains(KeyModifiers::ALT) => {
             app.bottom_tab = BottomTab::Repl;
+            return;
+        }
+        _ => {}
+    }
+
+    // Debugger keybindings
+    match key.code {
+        KeyCode::F(5) if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            // Shift+F5: terminate / shutdown
+            match app.mode {
+                AppMode::Running | AppMode::Paused | AppMode::Initialising => {
+                    app.stop_session();
+                }
+                AppMode::Terminated => {
+                    app.shutdown_session();
+                }
+                AppMode::NoSession => {}
+            }
+            return;
+        }
+        KeyCode::F(5) => {
+            // F5: start session or continue
+            match app.mode {
+                AppMode::NoSession | AppMode::Terminated => {
+                    // Clean up old session first
+                    if app.mode == AppMode::Terminated {
+                        app.shutdown_session();
+                    }
+                    app.start_session();
+                }
+                AppMode::Paused => {
+                    if let Some(session) = &app.session {
+                        session.bridge.send(UiCommand::Continue);
+                    }
+                }
+                _ => {}
+            }
+            return;
+        }
+        KeyCode::F(10) => {
+            // F10: step over
+            if app.mode == AppMode::Paused {
+                if let Some(session) = &app.session {
+                    session.bridge.send(UiCommand::StepOver);
+                }
+            }
+            return;
+        }
+        KeyCode::F(11) if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            // Shift+F11: step out
+            if app.mode == AppMode::Paused {
+                if let Some(session) = &app.session {
+                    session.bridge.send(UiCommand::StepOut);
+                }
+            }
+            return;
+        }
+        KeyCode::F(11) => {
+            // F11: step in
+            if app.mode == AppMode::Paused {
+                if let Some(session) = &app.session {
+                    session.bridge.send(UiCommand::StepIn);
+                }
+            }
             return;
         }
         _ => {}

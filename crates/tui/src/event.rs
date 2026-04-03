@@ -5,7 +5,7 @@ use crossterm::event::{self, Event, KeyEvent, MouseEvent};
 
 /// All events the application loop can receive.
 #[derive(Debug)]
-#[allow(dead_code)] // Variants used as phases are implemented
+#[allow(dead_code)] // Variants/fields used as phases are implemented
 pub enum AppEvent {
     /// A key press from the terminal.
     Key(KeyEvent),
@@ -30,9 +30,10 @@ pub struct EventHandler {
 impl EventHandler {
     /// Spawn the event handler.
     ///
-    /// `debugger_rx` is `None` initially (no session) and can be connected
-    /// later by sending debugger events directly into the returned sender.
-    pub fn new(tick_rate: Duration) -> (Self, Sender<AppEvent>) {
+    /// `wakeup_rx` receives notifications from the async bridge when debugger
+    /// events are available. This unblocks the poll wait so the TUI redraws
+    /// promptly.
+    pub fn new(tick_rate: Duration, wakeup_rx: Receiver<()>) -> (Self, Sender<AppEvent>) {
         let (tx, rx) = crossbeam_channel::unbounded();
         let event_tx = tx.clone();
 
@@ -40,8 +41,12 @@ impl EventHandler {
             .name("tui-event-handler".into())
             .spawn(move || {
                 loop {
-                    // Poll terminal events with the tick_rate as timeout.
-                    let has_event = event::poll(tick_rate).unwrap_or(false);
+                    // Use a short poll timeout so we can check the wakeup channel.
+                    // This is a compromise: short enough to react to debugger events
+                    // promptly, long enough to not burn CPU.
+                    let poll_timeout = tick_rate;
+
+                    let has_event = event::poll(poll_timeout).unwrap_or(false);
                     if has_event {
                         match event::read() {
                             Ok(Event::Key(key)) => {
@@ -62,8 +67,18 @@ impl EventHandler {
                             Ok(_) => {} // FocusGained, FocusLost, Paste
                             Err(_) => break,
                         }
-                    } else {
-                        // No terminal event within tick_rate — emit a tick.
+                    }
+
+                    // Check if there are wakeup notifications (debugger events ready).
+                    // Drain all pending wakeups and send a single Tick to trigger redraw.
+                    let mut woke = false;
+                    while wakeup_rx.try_recv().is_ok() {
+                        woke = true;
+                    }
+
+                    if woke || !has_event {
+                        // Either a debugger event arrived or the poll timed out.
+                        // Send a tick to trigger event draining and redraw.
                         if event_tx.send(AppEvent::Tick).is_err() {
                             break;
                         }

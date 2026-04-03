@@ -1,10 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use crossterm::event::KeyEvent;
 use launch_configuration::LaunchConfiguration;
+use state::StateManager;
 
+use crate::async_bridge::UiCommand;
 use crate::event::AppEvent;
+use crate::session::Session;
 
 /// The current mode of the application.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -340,7 +343,6 @@ impl FilePickerState {
 
 // ── Main app struct ───────────────────────────────────────────────────────
 
-#[allow(dead_code)] // Fields used as phases are implemented
 pub struct App {
     pub mode: AppMode,
     pub focus: Focus,
@@ -352,8 +354,29 @@ pub struct App {
     pub configs: Vec<LaunchConfiguration>,
     pub config_names: Vec<String>,
     pub selected_config_index: usize,
+    #[allow(dead_code)] // Used in Phase 5 for session restart
     pub config_path: PathBuf,
     pub debug_root_dir: PathBuf,
+
+    // Session
+    pub session: Option<Session>,
+    /// Wakeup sender passed to new sessions so they can nudge the event loop.
+    pub wakeup_tx: crossbeam_channel::Sender<()>,
+
+    // UI breakpoints (survive across sessions)
+    pub ui_breakpoints: HashSet<debugger::Breakpoint>,
+
+    // Output buffer: (category, text)
+    pub output_lines: Vec<(String, String)>,
+
+    // Thread info: (thread_id, reason)
+    pub threads: Vec<(i64, String)>,
+
+    // Variables child cache: variables_reference -> children
+    pub variables_cache: HashMap<i64, Vec<dap_types::Variable>>,
+
+    // Persistence
+    pub state_manager: StateManager,
 
     // File content cache: path -> content
     pub file_cache: HashMap<PathBuf, String>,
@@ -369,6 +392,14 @@ pub struct App {
 
     // Help overlay
     pub show_help: bool,
+
+    // REPL
+    pub repl_input: String,
+    pub repl_history: Vec<(String, String, bool)>, // (input, output, is_error)
+
+    // Status line messages
+    pub status_message: Option<String>,
+    pub status_error: Option<String>,
 }
 
 impl App {
@@ -378,6 +409,9 @@ impl App {
         selected_config_index: usize,
         config_path: PathBuf,
         debug_root_dir: PathBuf,
+        state_manager: StateManager,
+        wakeup_tx: crossbeam_channel::Sender<()>,
+        initial_breakpoints: Vec<debugger::Breakpoint>,
     ) -> Self {
         Self {
             mode: AppMode::NoSession,
@@ -390,11 +424,22 @@ impl App {
             selected_config_index,
             config_path,
             debug_root_dir,
+            session: None,
+            wakeup_tx,
+            ui_breakpoints: initial_breakpoints.into_iter().collect(),
+            output_lines: Vec::new(),
+            threads: Vec::new(),
+            variables_cache: HashMap::new(),
+            state_manager,
             file_cache: HashMap::new(),
             code_view: CodeViewState::default(),
             search: SearchState::default(),
             file_picker: FilePickerState::default(),
             show_help: false,
+            repl_input: String::new(),
+            repl_history: Vec::new(),
+            status_message: None,
+            status_error: None,
         }
     }
 
@@ -403,14 +448,195 @@ impl App {
         match event {
             AppEvent::Key(key) => self.handle_key(key),
             AppEvent::Resize(_, _) => {} // ratatui handles resize automatically
-            AppEvent::Tick => {}         // triggers a redraw
-            AppEvent::Mouse(_) => {}     // mouse support later
-            AppEvent::Debugger(_) => {}  // wired up in Phase 3
+            AppEvent::Tick => self.drain_debugger_events(),
+            AppEvent::Mouse(_) => {}
+            AppEvent::Debugger(_) => {} // events arrive via session channel, drained on tick
         }
     }
 
     fn handle_key(&mut self, key: KeyEvent) {
         crate::input::handle_key(self, key);
+    }
+
+    /// Drain all pending debugger events from the session's channel.
+    pub fn drain_debugger_events(&mut self) {
+        // Collect events and errors while briefly borrowing the session
+        let (events, errors) = {
+            let Some(session) = &mut self.session else {
+                return;
+            };
+            let events: Vec<debugger::Event> = session.debugger_event_rx.try_iter().collect();
+            let errors = session.bridge.drain_errors();
+            (events, errors)
+        };
+
+        for err in errors {
+            tracing::error!(operation = err.operation, error = %err.error, "bridge error");
+            self.status_error = Some(format!("{}: {}", err.operation, err.error));
+        }
+
+        for event in &events {
+            // Update session state (borrows self.session briefly)
+            if let Some(session) = &mut self.session {
+                session.handle_event(event);
+            }
+
+            // Handle event side effects (borrows self freely)
+            match event {
+                debugger::Event::Paused(state) => {
+                    self.mode = AppMode::Paused;
+                    self.ui_breakpoints = state.breakpoints.iter().cloned().collect();
+                    self.variables_cache.clear();
+                    self.jump_to_execution_line(state);
+                }
+                debugger::Event::ScopeChange(state) => {
+                    self.mode = AppMode::Paused;
+                    self.ui_breakpoints = state.breakpoints.iter().cloned().collect();
+                    self.variables_cache.clear();
+                    self.jump_to_execution_line(state);
+                }
+                debugger::Event::Running => {
+                    self.mode = AppMode::Running;
+                    self.status_message = Some("Running...".to_string());
+                }
+                debugger::Event::Initialised => {
+                    self.mode = AppMode::Running;
+                    self.status_message = Some("Debugger initialised".to_string());
+                }
+                debugger::Event::Ended => {
+                    self.mode = AppMode::Terminated;
+                    self.status_message = Some("Debugee terminated".to_string());
+                }
+                debugger::Event::Output { category, output } => {
+                    self.output_lines.push((category.clone(), output.clone()));
+                }
+                debugger::Event::Thread { reason, thread_id } => match reason.as_str() {
+                    "started" => {
+                        self.threads.push((*thread_id, reason.clone()));
+                    }
+                    "exited" => {
+                        self.threads.retain(|(id, _)| *id != *thread_id);
+                    }
+                    _ => {}
+                },
+                debugger::Event::Error(msg) => {
+                    tracing::error!(msg, "debugger error event");
+                    self.status_error = Some(msg.clone());
+                }
+                debugger::Event::Uninitialised => {}
+            }
+        }
+    }
+
+    /// Jump code view to the current execution line.
+    fn jump_to_execution_line(&mut self, state: &debugger::ProgramState) {
+        let frame = &state.paused_frame.frame;
+        if let Some(source) = &frame.source {
+            if let Some(path) = &source.path {
+                // Open the file if it's different from the current one
+                if self.code_view.file_path.as_ref() != Some(path) {
+                    self.open_file(path.clone());
+                }
+                // Jump cursor to execution line (DAP lines are 1-indexed)
+                let line = (frame.line as usize).saturating_sub(1);
+                self.code_view.cursor_line = line;
+            }
+        }
+    }
+
+    /// Start a debug session with the currently selected configuration.
+    pub fn start_session(&mut self) {
+        if self.session.is_some() {
+            self.status_error = Some("Session already active".to_string());
+            return;
+        }
+
+        if self.configs.is_empty() {
+            self.status_error = Some("No launch configurations available".to_string());
+            return;
+        }
+
+        let config = self.configs[self.selected_config_index].clone();
+        let breakpoints: Vec<debugger::Breakpoint> = self.collect_all_breakpoints();
+
+        self.mode = AppMode::Initialising;
+        self.status_message = Some("Starting debug session...".to_string());
+        self.status_error = None;
+        self.output_lines.clear();
+        self.threads.clear();
+        self.variables_cache.clear();
+
+        match Session::start(
+            &config,
+            &breakpoints,
+            &mut self.debug_root_dir,
+            self.wakeup_tx.clone(),
+        ) {
+            Ok(session) => {
+                self.session = Some(session);
+                self.mode = AppMode::Running;
+                self.status_message = Some("Session started".to_string());
+            }
+            Err(e) => {
+                self.mode = AppMode::NoSession;
+                self.status_error = Some(format!("Failed to start session: {e}"));
+                tracing::error!(error = %e, "failed to start debug session");
+            }
+        }
+    }
+
+    /// Stop the current debug session.
+    pub fn stop_session(&mut self) {
+        if let Some(session) = &self.session {
+            session.bridge.send(UiCommand::Terminate);
+        }
+    }
+
+    /// Shut down the current debug session and clean up.
+    pub fn shutdown_session(&mut self) {
+        if let Some(session) = &self.session {
+            session.bridge.send(UiCommand::Shutdown);
+        }
+        self.session = None;
+        self.mode = AppMode::NoSession;
+        self.status_message = Some("Session ended".to_string());
+    }
+
+    /// Collect all breakpoints (UI + persisted) for session start.
+    fn collect_all_breakpoints(&self) -> Vec<debugger::Breakpoint> {
+        let mut bps: Vec<debugger::Breakpoint> = self.ui_breakpoints.iter().cloned().collect();
+
+        // Add persisted breakpoints
+        if let Some(project_state) = self
+            .state_manager
+            .current()
+            .projects
+            .iter()
+            .find(|p| debugger::utils::normalise_path(&p.path) == self.debug_root_dir)
+        {
+            for bp in &project_state.breakpoints {
+                let normalised = debugger::utils::normalise_path(&bp.path).into_owned();
+                let mut bp = bp.clone();
+                bp.path = std::fs::canonicalize(&normalised).unwrap_or(normalised);
+                if !bps.contains(&bp) {
+                    bps.push(bp);
+                }
+            }
+        }
+
+        bps
+    }
+
+    /// Persist current breakpoints to state file.
+    #[allow(dead_code)] // Used in Phase 4 for breakpoint toggle
+    pub fn persist_breakpoints(&mut self) {
+        let breakpoints: Vec<_> = self.ui_breakpoints.iter().cloned().collect();
+        if let Err(e) = self
+            .state_manager
+            .set_project_breakpoints(self.debug_root_dir.clone(), breakpoints)
+        {
+            tracing::warn!(error = %e, "failed to persist breakpoints");
+        }
     }
 
     /// Open a file in the code view. Loads from cache or reads from disk.

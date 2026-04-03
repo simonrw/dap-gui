@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::{App, Focus, InputMode};
+use crate::session::DebuggerState;
 use crate::syntax::SyntaxHighlighter;
 
 use super::border_style;
@@ -82,6 +83,19 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
                     .highlight_lines(&content_owned, start_line, end_line)
             });
 
+            // Determine execution line (0-indexed) if paused at current file
+            let exec_line: Option<usize> = app.session.as_ref().and_then(|session| {
+                if let DebuggerState::Paused { paused_frame, .. } = &session.state {
+                    let frame = &paused_frame.frame;
+                    if let Some(source) = &frame.source {
+                        if source.path.as_ref() == Some(path) {
+                            return Some((frame.line as usize).saturating_sub(1));
+                        }
+                    }
+                }
+                None
+            });
+
             let lines = SyntaxHighlighter::build_lines(
                 &highlighted,
                 start_line,
@@ -89,6 +103,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
                 app.code_view.cursor_line,
                 &app.search.matches,
                 app.search.current_match,
+                exec_line,
             );
 
             let paragraph = Paragraph::new(lines);

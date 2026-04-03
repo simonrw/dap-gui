@@ -1,4 +1,4 @@
-use std::{io, path::PathBuf, time::Duration};
+use std::{fs::create_dir_all, io, path::PathBuf, time::Duration};
 
 use clap::Parser;
 use crossterm::{
@@ -8,10 +8,13 @@ use crossterm::{
 };
 use eyre::Context;
 use ratatui::{Terminal, backend::CrosstermBackend};
+use state::StateManager;
 
 mod app;
+mod async_bridge;
 mod event;
 mod input;
+mod session;
 mod syntax;
 mod ui;
 
@@ -37,7 +40,7 @@ fn main() -> eyre::Result<()> {
 
     let args = Args::parse();
 
-    // Tracing must go to a file — stdout is the terminal.
+    // Tracing must go to a file -- stdout is the terminal.
     let log_dir = dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
         .join("dapgui");
@@ -72,12 +75,38 @@ fn main() -> eyre::Result<()> {
         .and_then(|p| std::fs::canonicalize(&p))
         .wrap_err("resolving current directory")?;
 
+    // State manager for breakpoint persistence
+    let state_path = dirs::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join("dapgui")
+        .join("state.json");
+    if !state_path.parent().unwrap().is_dir() {
+        create_dir_all(state_path.parent().unwrap()).context("creating state directory")?;
+    }
+    let state_manager = StateManager::new(state_path).wrap_err("loading state")?;
+    state_manager.save().wrap_err("saving initial state")?;
+
+    // Parse CLI breakpoints
+    let initial_breakpoints: Vec<debugger::Breakpoint> = args
+        .breakpoints
+        .iter()
+        .map(|bp_str| debugger::Breakpoint::parse(bp_str, &debug_root_dir))
+        .collect::<eyre::Result<Vec<_>>>()
+        .wrap_err("parsing --breakpoint arguments")?;
+
+    // Wakeup channel: the async bridge sends notifications here to unblock
+    // the event handler when debugger events arrive.
+    let (wakeup_tx, wakeup_rx) = crossbeam_channel::unbounded();
+
     let mut app = App::new(
         configs,
         config_names,
         selected_config_index,
         args.config_path,
         debug_root_dir,
+        state_manager,
+        wakeup_tx,
+        initial_breakpoints,
     );
 
     // Install a panic hook that restores the terminal before printing.
@@ -96,9 +125,14 @@ fn main() -> eyre::Result<()> {
     let mut terminal = Terminal::new(backend).wrap_err("creating terminal")?;
 
     // Event loop
-    let (events, _event_tx) = EventHandler::new(Duration::from_millis(250));
+    let (events, _event_tx) = EventHandler::new(Duration::from_millis(250), wakeup_rx);
 
     let result = run_loop(&mut terminal, &mut app, &events);
+
+    // Clean shutdown: drop session before restoring terminal
+    if app.session.is_some() {
+        app.shutdown_session();
+    }
 
     // Restore terminal
     restore_terminal()?;

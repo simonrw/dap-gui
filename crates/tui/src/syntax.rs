@@ -177,10 +177,12 @@ impl SyntaxHighlighter {
         cursor_line: usize,
         search_matches: &[(usize, usize, usize)],
         current_match_idx: usize,
+        exec_line: Option<usize>,
     ) -> Vec<Line<'static>> {
         let match_bg = Color::Rgb(100, 100, 0);
         let current_match_bg = Color::Rgb(180, 120, 0);
         let cursor_bg = Color::Rgb(40, 44, 52);
+        let exec_bg = Color::Rgb(50, 60, 30); // greenish background for execution line
 
         highlighted
             .iter()
@@ -189,14 +191,27 @@ impl SyntaxHighlighter {
                 let line_idx = start_line + i;
                 let line_num = line_idx + 1;
                 let is_cursor = line_idx == cursor_line;
+                let is_exec = exec_line == Some(line_idx);
 
-                // Line number gutter
-                let gutter_style = if is_cursor {
+                // Pick the background color: exec > cursor > none
+                let bg = if is_exec {
+                    exec_bg
+                } else if is_cursor {
+                    cursor_bg
+                } else {
+                    Color::Reset
+                };
+
+                // Line number gutter with execution marker
+                let gutter_marker = if is_exec { "\u{25b6}" } else { " " };
+                let gutter_style = if is_exec {
+                    Style::default().fg(Color::Yellow).bg(exec_bg)
+                } else if is_cursor {
                     Style::default().fg(Color::White).bg(cursor_bg)
                 } else {
                     Style::default().fg(Color::DarkGray)
                 };
-                let num_str = format!("{:>width$} ", line_num, width = gutter_width);
+                let num_str = format!("{gutter_marker}{:>width$} ", line_num, width = gutter_width);
 
                 let mut line_spans: Vec<Span<'static>> = vec![Span::styled(num_str, gutter_style)];
 
@@ -210,10 +225,10 @@ impl SyntaxHighlighter {
 
                 // Build the code spans, overlaying search highlights
                 if line_matches.is_empty() {
-                    // No search matches: just apply cursor highlight if needed
+                    // No search matches: just apply line highlight if needed
                     for (style, text) in spans {
-                        let style = if is_cursor {
-                            style.bg(cursor_bg)
+                        let style = if bg != Color::Reset {
+                            style.bg(bg)
                         } else {
                             *style
                         };
@@ -225,8 +240,8 @@ impl SyntaxHighlighter {
                     for (style, text) in spans {
                         let span_start = byte_pos;
                         let span_end = byte_pos + text.len();
-                        let base_style = if is_cursor {
-                            style.bg(cursor_bg)
+                        let base_style = if bg != Color::Reset {
+                            style.bg(bg)
                         } else {
                             *style
                         };
