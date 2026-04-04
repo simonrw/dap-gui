@@ -367,3 +367,393 @@ impl SyntaxHighlighter {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::{HashMap, HashSet};
+
+    // ── SyntaxHighlighter::highlight_lines ────────────────────────────
+
+    #[test]
+    fn highlight_lines_no_syntax_returns_unstyled() {
+        let mut h = SyntaxHighlighter::new();
+        h.set_file(Path::new("/tmp/file.unknownext"));
+
+        let content = "line one\nline two\nline three\n";
+        let result = h.highlight_lines(content, 0, 3);
+
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].len(), 1);
+        assert_eq!(result[0][0].1, "line one");
+        assert_eq!(result[0][0].0, Style::default());
+    }
+
+    #[test]
+    fn highlight_lines_python_returns_styled_spans() {
+        let mut h = SyntaxHighlighter::new();
+        h.set_file(Path::new("/tmp/test.py"));
+
+        let content = "def hello():\n    pass\n";
+        let result = h.highlight_lines(content, 0, 2);
+
+        assert_eq!(result.len(), 2);
+        // Python keywords should produce multiple styled spans
+        assert!(!result[0].is_empty());
+        // At least one span should have a non-default foreground color
+        let has_color = result[0]
+            .iter()
+            .any(|(style, _)| style.fg != Some(Color::Reset) && style.fg.is_some());
+        assert!(has_color, "expected syntax-colored spans for Python");
+    }
+
+    #[test]
+    fn highlight_lines_respects_range() {
+        let mut h = SyntaxHighlighter::new();
+        h.set_file(Path::new("/tmp/test.py"));
+
+        let content = "line0\nline1\nline2\nline3\nline4\n";
+        let result = h.highlight_lines(content, 2, 4);
+
+        assert_eq!(result.len(), 2); // lines 2 and 3
+    }
+
+    #[test]
+    fn highlight_lines_empty_content() {
+        let mut h = SyntaxHighlighter::new();
+        h.set_file(Path::new("/tmp/test.py"));
+
+        let result = h.highlight_lines("", 0, 0);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn highlight_lines_range_beyond_content_is_clamped() {
+        let mut h = SyntaxHighlighter::new();
+        h.set_file(Path::new("/tmp/test.py"));
+
+        let content = "line0\nline1\n";
+        let result = h.highlight_lines(content, 0, 100);
+
+        assert_eq!(result.len(), 2); // only 2 lines exist
+    }
+
+    // ── Checkpoint caching ────────────────────────────────────────────
+
+    #[test]
+    fn set_file_clears_checkpoints() {
+        let mut h = SyntaxHighlighter::new();
+        h.set_file(Path::new("/tmp/a.py"));
+
+        // Generate enough lines to trigger checkpoints
+        let content: String = (0..150).map(|i| format!("x = {i}\n")).collect();
+        h.highlight_lines(&content, 0, 150);
+        assert!(!h.checkpoints.is_empty());
+
+        // Switch file: checkpoints cleared
+        h.set_file(Path::new("/tmp/b.py"));
+        assert!(h.checkpoints.is_empty());
+    }
+
+    #[test]
+    fn highlighting_same_range_twice_uses_cache() {
+        let mut h = SyntaxHighlighter::new();
+        h.set_file(Path::new("/tmp/test.py"));
+
+        let content: String = (0..200).map(|i| format!("x = {i}\n")).collect();
+
+        let r1 = h.highlight_lines(&content, 100, 110);
+        let checkpoint_count = h.checkpoints.len();
+
+        // Highlighting again should reuse existing checkpoints
+        let r2 = h.highlight_lines(&content, 100, 110);
+        assert_eq!(h.checkpoints.len(), checkpoint_count);
+        assert_eq!(r1.len(), r2.len());
+    }
+
+    // ── build_lines ──────────────────────────────────────────────────
+
+    fn make_plain_spans(lines: &[&str]) -> Vec<Vec<StyledSegment>> {
+        lines
+            .iter()
+            .map(|l| vec![(Style::default(), l.to_string())])
+            .collect()
+    }
+
+    #[test]
+    fn build_lines_basic_gutter_numbers() {
+        let spans = make_plain_spans(&["hello", "world"]);
+        let lines = SyntaxHighlighter::build_lines(
+            &spans,
+            0,    // start_line
+            2,    // gutter_width
+            0,    // cursor_line
+            &[],  // search_matches
+            0,    // current_match_idx
+            None, // exec_line
+            &HashSet::new(),
+            None, // selection_range
+            &HashMap::new(),
+        );
+
+        assert_eq!(lines.len(), 2);
+        // First span of each line should be the gutter
+        let gutter0 = &lines[0].spans[0];
+        assert!(
+            gutter0.content.contains(" 1 "),
+            "gutter should show line 1, got: {:?}",
+            gutter0.content
+        );
+
+        let gutter1 = &lines[1].spans[0];
+        assert!(
+            gutter1.content.contains(" 2 "),
+            "gutter should show line 2, got: {:?}",
+            gutter1.content
+        );
+    }
+
+    #[test]
+    fn build_lines_cursor_line_has_background() {
+        let spans = make_plain_spans(&["line0", "line1", "line2"]);
+        let lines = SyntaxHighlighter::build_lines(
+            &spans,
+            0,
+            1,
+            1, // cursor on line 1
+            &[],
+            0,
+            None,
+            &HashSet::new(),
+            None,
+            &HashMap::new(),
+        );
+
+        // The code spans on cursor line (index 1) should have a background
+        let cursor_code_span = &lines[1].spans[1]; // span after gutter
+        assert!(
+            cursor_code_span.style.bg.is_some(),
+            "cursor line should have a background color"
+        );
+
+        // Non-cursor lines should have no background (Reset)
+        let other_code_span = &lines[0].spans[1];
+        assert!(
+            other_code_span.style.bg.is_none() || other_code_span.style.bg == Some(Color::Reset),
+            "non-cursor line should have no background"
+        );
+    }
+
+    #[test]
+    fn build_lines_breakpoint_marker() {
+        let spans = make_plain_spans(&["line0", "line1"]);
+        let mut bp_lines = HashSet::new();
+        bp_lines.insert(2); // line 2 (1-indexed) = index 1
+
+        let lines = SyntaxHighlighter::build_lines(
+            &spans,
+            0,
+            1,
+            0,
+            &[],
+            0,
+            None,
+            &bp_lines,
+            None,
+            &HashMap::new(),
+        );
+
+        // The gutter of line 1 (0-indexed) should have the breakpoint marker ●
+        let gutter = &lines[1].spans[0];
+        assert!(
+            gutter.content.contains('\u{25cf}'),
+            "breakpoint line gutter should contain ●, got: {:?}",
+            gutter.content
+        );
+    }
+
+    #[test]
+    fn build_lines_execution_line_marker() {
+        let spans = make_plain_spans(&["line0", "line1"]);
+        let lines = SyntaxHighlighter::build_lines(
+            &spans,
+            0,
+            1,
+            0,
+            &[],
+            0,
+            Some(1), // exec line at index 1
+            &HashSet::new(),
+            None,
+            &HashMap::new(),
+        );
+
+        // Gutter should contain the execution marker ▶
+        let gutter = &lines[1].spans[0];
+        assert!(
+            gutter.content.contains('\u{25b6}'),
+            "exec line gutter should contain ▶, got: {:?}",
+            gutter.content
+        );
+
+        // Should have exec background
+        let code_span = &lines[1].spans[1];
+        assert!(
+            code_span.style.bg.is_some(),
+            "exec line should have a background"
+        );
+    }
+
+    #[test]
+    fn build_lines_selection_range_has_background() {
+        let spans = make_plain_spans(&["a", "b", "c", "d"]);
+        let lines = SyntaxHighlighter::build_lines(
+            &spans,
+            0,
+            1,
+            0,
+            &[],
+            0,
+            None,
+            &HashSet::new(),
+            Some((1, 2)), // select lines 1-2
+            &HashMap::new(),
+        );
+
+        // Lines 1 and 2 should have selection background
+        let sel1 = &lines[1].spans[1];
+        assert!(
+            sel1.style.bg.is_some(),
+            "selected line should have background"
+        );
+
+        let sel2 = &lines[2].spans[1];
+        assert!(
+            sel2.style.bg.is_some(),
+            "selected line should have background"
+        );
+
+        // Line 3 should not
+        let non_sel = &lines[3].spans[1];
+        assert!(
+            non_sel.style.bg.is_none() || non_sel.style.bg == Some(Color::Reset),
+            "non-selected line should have no background"
+        );
+    }
+
+    #[test]
+    fn build_lines_inline_evaluation_appended() {
+        let spans = make_plain_spans(&["x = 1", "y = 2"]);
+        let mut evals = HashMap::new();
+        evals.insert(0, "= 42".to_string());
+
+        let lines = SyntaxHighlighter::build_lines(
+            &spans,
+            0,
+            1,
+            0,
+            &[],
+            0,
+            None,
+            &HashSet::new(),
+            None,
+            &evals,
+        );
+
+        // Last span of line 0 should contain the eval annotation
+        let last_span = lines[0].spans.last().unwrap();
+        assert!(
+            last_span.content.contains("= 42"),
+            "should have inline eval, got: {:?}",
+            last_span.content
+        );
+        assert_eq!(last_span.style.fg, Some(Color::Green));
+    }
+
+    #[test]
+    fn build_lines_inline_error_evaluation_is_red() {
+        let spans = make_plain_spans(&["bad"]);
+        let mut evals = HashMap::new();
+        evals.insert(0, "!! NameError".to_string());
+
+        let lines = SyntaxHighlighter::build_lines(
+            &spans,
+            0,
+            1,
+            0,
+            &[],
+            0,
+            None,
+            &HashSet::new(),
+            None,
+            &evals,
+        );
+
+        let last_span = lines[0].spans.last().unwrap();
+        assert!(last_span.content.contains("!! NameError"));
+        assert_eq!(last_span.style.fg, Some(Color::Red));
+    }
+
+    #[test]
+    fn build_lines_search_match_highlighted() {
+        let spans = make_plain_spans(&["hello world"]);
+        let matches = vec![crate::app::SearchMatch {
+            line: 0,
+            byte_start_in_line: 0,
+            byte_offset: 0,
+            length: 5,
+        }];
+
+        let lines = SyntaxHighlighter::build_lines(
+            &spans,
+            0,
+            1,
+            99, // cursor elsewhere
+            &matches,
+            0, // current match index = 0
+            None,
+            &HashSet::new(),
+            None,
+            &HashMap::new(),
+        );
+
+        // Should have at least 3 spans: gutter, matched "hello", remaining " world"
+        assert!(
+            lines[0].spans.len() >= 3,
+            "expected split spans for search match, got {} spans",
+            lines[0].spans.len()
+        );
+
+        // The match span should have a special background
+        let match_span = &lines[0].spans[1]; // first code span = the match
+        assert!(
+            match_span.style.bg.is_some() && match_span.style.bg != Some(Color::Reset),
+            "search match should have highlight background"
+        );
+    }
+
+    #[test]
+    fn build_lines_with_start_line_offset() {
+        let spans = make_plain_spans(&["mid1", "mid2"]);
+        let lines = SyntaxHighlighter::build_lines(
+            &spans,
+            10, // start_line = 10
+            3,
+            10,
+            &[],
+            0,
+            None,
+            &HashSet::new(),
+            None,
+            &HashMap::new(),
+        );
+
+        assert_eq!(lines.len(), 2);
+        let gutter0 = &lines[0].spans[0];
+        assert!(
+            gutter0.content.contains(" 11 "),
+            "first visible line should be 11, got: {:?}",
+            gutter0.content
+        );
+    }
+}
