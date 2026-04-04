@@ -10,7 +10,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         InputMode::FilePicker => handle_file_picker_key(app, key),
         InputMode::Search => handle_search_key(app, key),
         InputMode::BreakpointInput => handle_breakpoint_input_key(app, key),
-        InputMode::Repl => handle_repl_input_key(app, key),
         InputMode::FileBrowser => handle_file_browser_input_key(app, key),
         InputMode::Normal => handle_normal_key(app, key),
     }
@@ -116,32 +115,6 @@ fn handle_breakpoint_input_key(app: &mut App, key: KeyEvent) {
             if let Some(ref mut input) = app.breakpoint_input {
                 input.push(c);
             }
-        }
-        _ => {}
-    }
-}
-
-// ── REPL input mode ───────────────────────────────────────────────────────
-
-fn handle_repl_input_key(app: &mut App, key: KeyEvent) {
-    match key.code {
-        KeyCode::Esc => {
-            app.input_mode = InputMode::Normal;
-        }
-        KeyCode::Enter => {
-            app.evaluate_repl();
-        }
-        KeyCode::Up => {
-            app.repl_history_up();
-        }
-        KeyCode::Down => {
-            app.repl_history_down();
-        }
-        KeyCode::Backspace => {
-            app.repl_input.pop();
-        }
-        KeyCode::Char(c) => {
-            app.repl_input.push(c);
         }
         _ => {}
     }
@@ -613,11 +586,31 @@ fn handle_output_key(app: &mut App, key: KeyEvent) {
 }
 
 fn handle_repl_focus_key(app: &mut App, key: KeyEvent) {
+    let is_paused = app.mode == AppMode::Paused;
+
     match key.code {
-        // Enter REPL input mode
-        KeyCode::Enter | KeyCode::Char('i') => {
-            if app.mode == AppMode::Paused {
-                app.input_mode = InputMode::Repl;
+        // Evaluate expression
+        KeyCode::Enter => {
+            if is_paused {
+                app.evaluate_repl();
+            }
+        }
+        // History navigation
+        KeyCode::Up => {
+            app.repl_history_up();
+        }
+        KeyCode::Down => {
+            app.repl_history_down();
+        }
+        // Editing
+        KeyCode::Backspace => {
+            app.repl_input.pop();
+        }
+        // Type directly into the REPL input
+        KeyCode::Char(c) => {
+            // Don't capture global shortcuts that use modifiers
+            if key.modifiers.is_empty() || key.modifiers == KeyModifiers::SHIFT {
+                app.repl_input.push(c);
             }
         }
         _ => {}

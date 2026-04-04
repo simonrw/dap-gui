@@ -94,14 +94,13 @@ pub fn render(frame: &mut Frame) {
         Line::from(""),
         Line::from(Span::styled("── REPL ──", section_style)),
         binding_line(
-            "Enter / i",
-            "Start typing (when paused)",
+            "(type)",
+            "Input goes directly to REPL",
             key_style,
             desc_style,
         ),
         binding_line("Enter", "Evaluate expression", key_style, desc_style),
         binding_line("Up / Down", "Navigate input history", key_style, desc_style),
-        binding_line("Esc", "Stop typing", key_style, desc_style),
     ];
 
     let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });

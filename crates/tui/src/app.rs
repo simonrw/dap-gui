@@ -75,8 +75,6 @@ pub enum InputMode {
     Search,
     /// Typing into breakpoint add input.
     BreakpointInput,
-    /// Typing into REPL input.
-    Repl,
     /// Typing into file browser search in sidebar.
     FileBrowser,
 }
