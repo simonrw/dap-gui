@@ -962,6 +962,51 @@ pub(crate) mod test_helpers {
         std::fs::write(&file_path, content).expect("failed to write temp file");
         (dir, file_path)
     }
+
+    /// Create a mock `Session` backed by channels.
+    ///
+    /// Returns the session and a sender for injecting debugger events.
+    /// The `AsyncBridge` is a dummy that silently drops commands.
+    pub fn mock_session() -> (Session, crossbeam_channel::Sender<debugger::Event>) {
+        let (event_tx, event_rx) = crossbeam_channel::unbounded();
+        let (bridge, _error_tx) = crate::async_bridge::AsyncBridge::dummy();
+        let session = Session::new_for_test(bridge, event_rx);
+        (session, event_tx)
+    }
+
+    /// Helper to create a `ProgramState` for Paused/ScopeChange events.
+    pub fn make_program_state(file: &str, line: usize) -> debugger::ProgramState {
+        use dap_types::{Source, StackFrame};
+        debugger::ProgramState {
+            stack: vec![],
+            breakpoints: vec![],
+            paused_frame: debugger::PausedFrame {
+                frame: StackFrame {
+                    id: 1,
+                    name: "test_fn".to_string(),
+                    line,
+                    column: 0,
+                    source: Some(Source {
+                        path: Some(PathBuf::from(file)),
+                        name: None,
+                        adapter_data: None,
+                        checksums: None,
+                        origin: None,
+                        presentation_hint: None,
+                        source_reference: None,
+                        sources: None,
+                    }),
+                    can_restart: None,
+                    end_column: None,
+                    end_line: None,
+                    instruction_pointer_reference: None,
+                    module_id: None,
+                    presentation_hint: None,
+                },
+                variables: vec![],
+            },
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1304,5 +1349,344 @@ mod tests {
             assert!(app.repl_input.is_empty());
             assert!(app.output_auto_scroll);
         });
+    }
+
+    // ── Event draining integration tests ──────────────────────────────
+
+    #[test]
+    fn drain_paused_event_sets_mode_and_breakpoints() {
+        let (_dir, file_path) = write_temp_file("line1\nline2\nline3\n");
+        with_test_app(|app| {
+            let (session, event_tx) = mock_session();
+            app.session = Some(session);
+            app.mode = AppMode::Running;
+
+            let mut state = make_program_state(file_path.to_str().unwrap(), 2);
+            state.breakpoints.push(debugger::Breakpoint {
+                name: None,
+                path: file_path.clone(),
+                line: 1,
+            });
+            event_tx.send(debugger::Event::Paused(state)).unwrap();
+
+            app.drain_debugger_events();
+
+            assert_eq!(app.mode, AppMode::Paused);
+            assert_eq!(app.ui_breakpoints.len(), 1);
+            assert!(app.variables_cache.is_empty());
+            assert!(app.inline_evaluations.is_empty());
+            // Cursor should jump to execution line (line 2, 0-indexed = 1)
+            assert_eq!(app.code_view.cursor_line, 1);
+        });
+    }
+
+    #[test]
+    fn drain_running_event_sets_mode_and_clears_inline_evals() {
+        with_test_app(|app| {
+            let (session, event_tx) = mock_session();
+            app.session = Some(session);
+            app.mode = AppMode::Paused;
+            app.inline_evaluations.insert(0, "= 42".to_string());
+
+            event_tx.send(debugger::Event::Running).unwrap();
+            app.drain_debugger_events();
+
+            assert_eq!(app.mode, AppMode::Running);
+            assert!(app.inline_evaluations.is_empty());
+            assert_eq!(app.status_message.as_deref(), Some("Running..."));
+        });
+    }
+
+    #[test]
+    fn drain_ended_event_sets_terminated_mode() {
+        with_test_app(|app| {
+            let (session, event_tx) = mock_session();
+            app.session = Some(session);
+            app.mode = AppMode::Running;
+
+            event_tx.send(debugger::Event::Ended).unwrap();
+            app.drain_debugger_events();
+
+            assert_eq!(app.mode, AppMode::Terminated);
+            assert_eq!(app.status_message.as_deref(), Some("Debugee terminated"));
+        });
+    }
+
+    #[test]
+    fn drain_initialised_event_sets_running_mode() {
+        with_test_app(|app| {
+            let (session, event_tx) = mock_session();
+            app.session = Some(session);
+            app.mode = AppMode::Initialising;
+
+            event_tx.send(debugger::Event::Initialised).unwrap();
+            app.drain_debugger_events();
+
+            assert_eq!(app.mode, AppMode::Running);
+            assert_eq!(app.status_message.as_deref(), Some("Debugger initialised"));
+        });
+    }
+
+    #[test]
+    fn drain_output_events_append_to_output_lines() {
+        with_test_app(|app| {
+            let (session, event_tx) = mock_session();
+            app.session = Some(session);
+            app.mode = AppMode::Running;
+
+            event_tx
+                .send(debugger::Event::Output {
+                    category: "stdout".into(),
+                    output: "Hello".into(),
+                })
+                .unwrap();
+            event_tx
+                .send(debugger::Event::Output {
+                    category: "stderr".into(),
+                    output: "Oops".into(),
+                })
+                .unwrap();
+            app.drain_debugger_events();
+
+            assert_eq!(app.output_lines.len(), 2);
+            assert_eq!(
+                app.output_lines[0],
+                ("stdout".to_string(), "Hello".to_string())
+            );
+            assert_eq!(
+                app.output_lines[1],
+                ("stderr".to_string(), "Oops".to_string())
+            );
+        });
+    }
+
+    #[test]
+    fn drain_thread_started_adds_thread() {
+        with_test_app(|app| {
+            let (session, event_tx) = mock_session();
+            app.session = Some(session);
+            app.mode = AppMode::Running;
+
+            event_tx
+                .send(debugger::Event::Thread {
+                    reason: "started".into(),
+                    thread_id: 42,
+                })
+                .unwrap();
+            app.drain_debugger_events();
+
+            assert_eq!(app.threads.len(), 1);
+            assert_eq!(app.threads[0], (42, "started".to_string()));
+        });
+    }
+
+    #[test]
+    fn drain_thread_exited_removes_thread() {
+        with_test_app(|app| {
+            let (session, event_tx) = mock_session();
+            app.session = Some(session);
+            app.mode = AppMode::Running;
+            app.threads.push((42, "started".to_string()));
+
+            event_tx
+                .send(debugger::Event::Thread {
+                    reason: "exited".into(),
+                    thread_id: 42,
+                })
+                .unwrap();
+            app.drain_debugger_events();
+
+            assert!(app.threads.is_empty());
+        });
+    }
+
+    #[test]
+    fn drain_error_event_sets_status_error() {
+        with_test_app(|app| {
+            let (session, event_tx) = mock_session();
+            app.session = Some(session);
+            app.mode = AppMode::Running;
+
+            event_tx
+                .send(debugger::Event::Error("something broke".into()))
+                .unwrap();
+            app.drain_debugger_events();
+
+            assert_eq!(app.status_error.as_deref(), Some("something broke"));
+        });
+    }
+
+    #[test]
+    fn drain_scope_change_updates_mode_and_clears_variable_cache() {
+        let (_dir, file_path) = write_temp_file("line1\nline2\nline3\n");
+        with_test_app(|app| {
+            let (session, event_tx) = mock_session();
+            app.session = Some(session);
+            app.mode = AppMode::Paused;
+            app.variables_cache.insert(1, vec![]);
+
+            let state = make_program_state(file_path.to_str().unwrap(), 3);
+            event_tx.send(debugger::Event::ScopeChange(state)).unwrap();
+            app.drain_debugger_events();
+
+            assert_eq!(app.mode, AppMode::Paused);
+            assert!(app.variables_cache.is_empty());
+            assert_eq!(app.code_view.cursor_line, 2);
+        });
+    }
+
+    #[test]
+    fn drain_no_session_is_noop() {
+        with_test_app(|app| {
+            assert!(app.session.is_none());
+            // Should not panic
+            app.drain_debugger_events();
+            assert_eq!(app.mode, AppMode::NoSession);
+        });
+    }
+
+    #[test]
+    fn drain_multiple_events_processes_all() {
+        with_test_app(|app| {
+            let (session, event_tx) = mock_session();
+            app.session = Some(session);
+            app.mode = AppMode::Initialising;
+
+            // Send a sequence: Initialised -> Output -> Ended
+            event_tx.send(debugger::Event::Initialised).unwrap();
+            event_tx
+                .send(debugger::Event::Output {
+                    category: "stdout".into(),
+                    output: "Done".into(),
+                })
+                .unwrap();
+            event_tx.send(debugger::Event::Ended).unwrap();
+            app.drain_debugger_events();
+
+            // Final state should be Terminated (last event wins)
+            assert_eq!(app.mode, AppMode::Terminated);
+            assert_eq!(app.output_lines.len(), 1);
+            assert_eq!(app.output_lines[0].1, "Done");
+        });
+    }
+
+    // ── Breakpoint persistence tests ──────────────────────────────────
+
+    #[test]
+    fn persist_and_restore_breakpoints() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state_path = dir.path().join("state.json");
+        let state_manager = StateManager::new(&state_path).expect("StateManager");
+        let (wakeup_tx, _wakeup_rx) = crossbeam_channel::unbounded();
+
+        let mut app = App::new(
+            vec![],
+            vec![],
+            0,
+            std::path::PathBuf::from("/home/user/project"),
+            std::path::PathBuf::from("/home/user/project"),
+            state_manager,
+            wakeup_tx,
+            vec![],
+        );
+
+        // Add a breakpoint and persist
+        app.ui_breakpoints.insert(debugger::Breakpoint {
+            name: None,
+            path: std::path::PathBuf::from("/home/user/project/main.py"),
+            line: 42,
+        });
+        app.persist_breakpoints();
+
+        // Create a new app with the same state manager and collect breakpoints
+        let state_manager2 = StateManager::new(&state_path).expect("StateManager2");
+        let (wakeup_tx2, _) = crossbeam_channel::unbounded();
+        let app2 = App::new(
+            vec![],
+            vec![],
+            0,
+            std::path::PathBuf::from("/home/user/project"),
+            std::path::PathBuf::from("/home/user/project"),
+            state_manager2,
+            wakeup_tx2,
+            vec![],
+        );
+
+        let restored = ui_core::breakpoints::collect_all_breakpoints(
+            &app2.state_manager,
+            &app2.debug_root_dir,
+            &app2.ui_breakpoints,
+        );
+        assert_eq!(restored.len(), 1);
+        assert_eq!(
+            restored[0].path,
+            std::path::PathBuf::from("/home/user/project/main.py")
+        );
+        assert_eq!(restored[0].line, 42);
+    }
+
+    #[test]
+    fn collect_all_breakpoints_merges_ui_and_persisted() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state_path = dir.path().join("state.json");
+        let state_manager = StateManager::new(&state_path).expect("StateManager");
+        let (wakeup_tx, _wakeup_rx) = crossbeam_channel::unbounded();
+
+        // Persist a breakpoint via a first app instance
+        let mut app1 = App::new(
+            vec![],
+            vec![],
+            0,
+            std::path::PathBuf::from("/home/user/project"),
+            std::path::PathBuf::from("/home/user/project"),
+            state_manager,
+            wakeup_tx,
+            vec![],
+        );
+        app1.ui_breakpoints.insert(debugger::Breakpoint {
+            name: None,
+            path: std::path::PathBuf::from("/home/user/project/a.py"),
+            line: 10,
+        });
+        app1.persist_breakpoints();
+
+        // Second app: different ui_breakpoints but same state file
+        let state_manager2 = StateManager::new(&state_path).expect("StateManager2");
+        let (wakeup_tx2, _) = crossbeam_channel::unbounded();
+        let mut app2 = App::new(
+            vec![],
+            vec![],
+            0,
+            std::path::PathBuf::from("/home/user/project"),
+            std::path::PathBuf::from("/home/user/project"),
+            state_manager2,
+            wakeup_tx2,
+            vec![],
+        );
+        app2.ui_breakpoints.insert(debugger::Breakpoint {
+            name: None,
+            path: std::path::PathBuf::from("/home/user/project/b.py"),
+            line: 20,
+        });
+
+        let all = ui_core::breakpoints::collect_all_breakpoints(
+            &app2.state_manager,
+            &app2.debug_root_dir,
+            &app2.ui_breakpoints,
+        );
+        // Should contain both persisted (a.py:10) and UI (b.py:20)
+        assert!(
+            all.len() >= 2,
+            "expected at least 2 breakpoints, got {}",
+            all.len()
+        );
+        assert!(
+            all.iter()
+                .any(|bp| bp.path.ends_with("a.py") && bp.line == 10)
+        );
+        assert!(
+            all.iter()
+                .any(|bp| bp.path.ends_with("b.py") && bp.line == 20)
+        );
     }
 }

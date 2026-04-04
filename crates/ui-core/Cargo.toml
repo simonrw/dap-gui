@@ -3,6 +3,9 @@ name = "ui-core"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+testing = []
+
 [dependencies]
 debugger = { path = "../debugger" }
 dap-types = { path = "../dap-types" }

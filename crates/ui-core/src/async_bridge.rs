@@ -212,4 +212,27 @@ impl AsyncBridge {
     pub fn drain_errors(&self) -> Vec<CommandError> {
         self.error_rx.try_iter().collect()
     }
+
+    /// Create a dummy bridge for testing. Commands sent to this bridge are
+    /// silently dropped, `drain_errors` returns whatever was pushed into the
+    /// returned error sender, and `send_sync` always returns a channel-closed
+    /// error.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn dummy() -> (Self, crossbeam_channel::Sender<CommandError>) {
+        let (command_tx, _command_rx) = mpsc::unbounded_channel::<UiCommand>();
+        let (error_tx, error_rx) = crossbeam_channel::unbounded::<CommandError>();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test tokio runtime");
+        let handle = runtime.handle().clone();
+        // Keep the runtime alive by leaking it (test-only).
+        std::mem::forget(runtime);
+        let bridge = Self {
+            command_tx,
+            error_rx,
+            runtime_handle: handle,
+        };
+        (bridge, error_tx)
+    }
 }

@@ -30,3 +30,4 @@ data-encoding = "2"
 [dev-dependencies]
 tempfile = "3"
 insta = "1"
+ui-core = { path = "../ui-core", features = ["testing"] }
