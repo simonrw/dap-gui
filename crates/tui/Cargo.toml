@@ -15,6 +15,7 @@ state = { path = "../state" }
 launch_configuration = { path = "../launch_configuration" }
 fuzzy = { path = "../fuzzy" }
 async-transport = { path = "../async-transport" }
+ui-core = { path = "../ui-core" }
 clap.workspace = true
 eyre.workspace = true
 color-eyre.workspace = true

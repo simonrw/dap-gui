@@ -210,7 +210,7 @@ fn handle_normal_key(app: &mut App, key: KeyEvent) {
             return;
         }
         KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.file_picker.open();
+            app.file_picker.open(&app.debug_root_dir);
             app.input_mode = InputMode::FilePicker;
             return;
         }

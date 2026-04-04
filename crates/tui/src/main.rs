@@ -1,4 +1,4 @@
-use std::{fs::create_dir_all, io, path::PathBuf, time::Duration};
+use std::{io, path::PathBuf, time::Duration};
 
 use clap::Parser;
 use crossterm::{
@@ -8,7 +8,7 @@ use crossterm::{
 };
 use eyre::Context;
 use ratatui::{Terminal, backend::CrosstermBackend};
-use state::StateManager;
+use ui_core::bootstrap::{self, Args};
 
 mod app;
 mod async_bridge;
@@ -20,20 +20,6 @@ mod ui;
 
 use app::App;
 use event::EventHandler;
-
-#[derive(Parser)]
-struct Args {
-    /// Path to a launch.json or VS Code workspace file.
-    config_path: PathBuf,
-
-    /// Select a specific configuration by name.
-    #[clap(short, long)]
-    name: Option<String>,
-
-    /// Initial breakpoints in `file:line` format.
-    #[clap(short, long)]
-    breakpoints: Vec<String>,
-}
 
 fn main() -> eyre::Result<()> {
     let _ = color_eyre::install();
@@ -54,62 +40,21 @@ fn main() -> eyre::Result<()> {
         )
         .init();
 
-    // Load configurations
-    let configs = launch_configuration::load_all_from_path(&args.config_path)
-        .wrap_err("loading launch configurations")?;
-    if configs.is_empty() {
-        eyre::bail!("no configurations found in {}", args.config_path.display());
-    }
-    let config_names: Vec<String> = configs.iter().map(|c| c.name().to_string()).collect();
-
-    let debug_root_dir = std::env::current_dir()
-        .and_then(|p| std::fs::canonicalize(&p))
-        .wrap_err("resolving current directory")?;
-
-    // State manager for breakpoint persistence and TUI preferences
-    let state_path = dirs::data_local_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("dapgui")
-        .join("state.json");
-    if !state_path.parent().unwrap().is_dir() {
-        create_dir_all(state_path.parent().unwrap()).context("creating state directory")?;
-    }
-    let state_manager = StateManager::new(state_path).wrap_err("loading state")?;
-    state_manager.save().wrap_err("saving initial state")?;
-
-    let selected_config_index = if let Some(ref name) = args.name {
-        config_names
-            .iter()
-            .position(|n| n == name)
-            .ok_or_else(|| eyre::eyre!("no configuration named '{name}' found"))?
-    } else if let Some(ref last) = state_manager.current().last_selected_config {
-        // Restore last selected config from persisted state
-        config_names.iter().position(|n| n == last).unwrap_or(0)
-    } else {
-        0
-    };
-
-    // Parse CLI breakpoints
-    let initial_breakpoints: Vec<debugger::Breakpoint> = args
-        .breakpoints
-        .iter()
-        .map(|bp_str| debugger::Breakpoint::parse(bp_str, &debug_root_dir))
-        .collect::<eyre::Result<Vec<_>>>()
-        .wrap_err("parsing --breakpoint arguments")?;
+    let boot = bootstrap::bootstrap(&args)?;
 
     // Wakeup channel: the async bridge sends notifications here to unblock
     // the event handler when debugger events arrive.
     let (wakeup_tx, wakeup_rx) = crossbeam_channel::unbounded();
 
     let mut app = App::new(
-        configs,
-        config_names,
-        selected_config_index,
+        boot.configs,
+        boot.config_names,
+        boot.selected_config_index,
         args.config_path,
-        debug_root_dir,
-        state_manager,
+        boot.debug_root_dir,
+        boot.state_manager,
         wakeup_tx,
-        initial_breakpoints,
+        boot.initial_breakpoints,
     );
 
     // Install a panic hook that restores the terminal before printing.

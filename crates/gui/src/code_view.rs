@@ -9,101 +9,67 @@ use eframe::{
 use syntect::highlighting::{self, ThemeSet};
 use syntect::parsing::SyntaxSet;
 
-/// A single match position in the source content
-#[derive(Clone, Debug)]
-pub struct SearchMatch {
-    /// Byte offset in the source string
-    pub byte_offset: usize,
-    /// Length in bytes
-    pub length: usize,
-}
+/// Re-export shared SearchMatch for use in code_view rendering.
+pub use ui_core::search::SearchMatch;
 
-/// State for the in-file text search
-#[derive(Default)]
-pub struct SearchState {
-    /// Whether the search bar is currently visible
-    pub active: bool,
-    /// The current search query
-    pub query: String,
-    /// The query that was used to compute the current matches (for cache invalidation)
-    last_query: String,
-    /// The file path that was used to compute the current matches
-    last_file: PathBuf,
-    /// Cached match positions
-    pub matches: Vec<SearchMatch>,
-    /// Index of the current (active) match
-    pub current_match: usize,
-    /// Whether we should request focus on the search input this frame
+/// GUI-specific search state wrapping the shared `SearchState`.
+///
+/// Adds `request_focus` and `scroll_to_match` rendering hints that are
+/// specific to the egui frontend.
+pub struct GuiSearchState {
+    pub inner: ui_core::search::SearchState,
+    /// Whether we should request focus on the search input this frame.
     pub request_focus: bool,
-    /// Whether we need to scroll to the current match
+    /// Whether we need to scroll to the current match.
     pub scroll_to_match: bool,
 }
 
-impl SearchState {
-    /// Recompute matches if the query or file content changed
+impl Default for GuiSearchState {
+    fn default() -> Self {
+        Self {
+            inner: Default::default(),
+            request_focus: false,
+            scroll_to_match: false,
+        }
+    }
+}
+
+impl std::ops::Deref for GuiSearchState {
+    type Target = ui_core::search::SearchState;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl std::ops::DerefMut for GuiSearchState {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl GuiSearchState {
+    /// Recompute matches, setting scroll_to_match if matches were found.
     pub fn update(&mut self, content: &str, file_path: &Path) {
-        if self.query == self.last_query && file_path == self.last_file {
-            return;
+        if self.inner.update(content, file_path) {
+            self.scroll_to_match = !self.inner.matches.is_empty();
         }
-        self.last_query = self.query.clone();
-        self.last_file = file_path.to_path_buf();
-        self.matches.clear();
-        self.current_match = 0;
-
-        if self.query.is_empty() {
-            return;
-        }
-
-        let query_lower = self.query.to_lowercase();
-        let content_lower = content.to_lowercase();
-        let mut start = 0;
-        while let Some(pos) = content_lower[start..].find(&query_lower) {
-            let byte_offset = start + pos;
-            self.matches.push(SearchMatch {
-                byte_offset,
-                length: self.query.len(),
-            });
-            start = byte_offset + 1;
-        }
-        self.scroll_to_match = !self.matches.is_empty();
     }
 
-    /// Clear matches and reset (e.g. when file changes)
-    pub fn recompute_for_new_file(&mut self) {
-        self.last_query.clear();
-        self.last_file = PathBuf::new();
-    }
-
-    /// Navigate to the next match (wrapping)
+    /// Navigate to the next match and request scroll.
     pub fn next_match(&mut self) {
-        if !self.matches.is_empty() {
-            self.current_match = (self.current_match + 1) % self.matches.len();
-            self.scroll_to_match = true;
-        }
+        self.inner.next_match();
+        self.scroll_to_match = true;
     }
 
-    /// Navigate to the previous match (wrapping)
+    /// Navigate to the previous match and request scroll.
     pub fn prev_match(&mut self) {
-        if !self.matches.is_empty() {
-            self.current_match = if self.current_match == 0 {
-                self.matches.len() - 1
-            } else {
-                self.current_match - 1
-            };
-            self.scroll_to_match = true;
-        }
+        self.inner.prev_match();
+        self.scroll_to_match = true;
     }
 
-    /// Get the line number (1-indexed) of the current match
-    pub fn current_match_line(&self, content: &str) -> Option<usize> {
-        let m = self.matches.get(self.current_match)?;
-        Some(
-            content[..m.byte_offset]
-                .chars()
-                .filter(|&c| c == '\n')
-                .count()
-                + 1,
-        )
+    /// Reset the cache for a new file.
+    pub fn recompute_for_new_file(&mut self) {
+        self.inner.reset();
     }
 }
 

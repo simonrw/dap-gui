@@ -1,0 +1,21 @@
+[package]
+name = "ui-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+debugger = { path = "../debugger" }
+dap-types = { path = "../dap-types" }
+server = { path = "../server" }
+state = { path = "../state" }
+launch_configuration = { path = "../launch_configuration" }
+fuzzy = { path = "../fuzzy" }
+async-transport = { path = "../async-transport" }
+crossbeam-channel.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "macros"] }
+eyre.workspace = true
+tracing.workspace = true
+dirs.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true

@@ -66,10 +66,12 @@ impl<'s> Renderer<'s> {
 
         // Handle Ctrl+P to toggle file picker
         if ctx.input(|i| i.key_pressed(Key::P) && i.modifiers.matches_exact(Modifiers::CTRL)) {
-            self.state.file_picker_open = !self.state.file_picker_open;
-            if !self.state.file_picker_open {
-                self.state.file_picker_input.clear();
-                self.state.file_picker_cursor = 0;
+            if self.state.file_picker.open {
+                self.state.file_picker.close();
+            } else {
+                self.state
+                    .file_picker
+                    .open(&self.state.debug_root_dir.clone());
             }
         }
 
@@ -80,8 +82,10 @@ impl<'s> Renderer<'s> {
 
         // Handle Shift+F5: stop session
         if ctx.input(|i| i.key_pressed(Key::F5) && i.modifiers.matches_exact(Modifiers::SHIFT)) {
-            if self.state.session.is_some() {
-                self.state.session = None;
+            if let Some(session) = self.state.session.take() {
+                session
+                    .bridge
+                    .send(crate::async_bridge::UiCommand::Terminate);
                 self.state.variables_cache.clear();
                 *self.state.repl_output.borrow_mut() = String::new();
             }
@@ -105,7 +109,7 @@ impl<'s> Renderer<'s> {
         }
 
         // Render file picker overlay if open
-        if self.state.file_picker_open {
+        if self.state.file_picker.open {
             if let FilePickerResult::Selected(path) = file_picker::show(ctx, self.state) {
                 self.state.file_override = Some(std::fs::canonicalize(&path).unwrap_or(path));
             }
@@ -119,14 +123,6 @@ impl<'s> Renderer<'s> {
 
         let current_state = self.state.session.as_ref().unwrap().state.clone();
         match current_state {
-            State::Initialising => {
-                self.render_controls_window(ctx);
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.centered_and_justified(|ui| {
-                        ui.label("Initialising debugger...");
-                    });
-                });
-            }
             State::Running => {
                 if let Some(State::Paused {
                     stack,
@@ -187,8 +183,12 @@ impl<'s> Renderer<'s> {
     }
 
     fn start_session(&mut self) {
-        // Drop existing session first
-        self.state.session = None;
+        // Gracefully terminate existing session first
+        if let Some(session) = self.state.session.take() {
+            session
+                .bridge
+                .send(crate::async_bridge::UiCommand::Terminate);
+        }
         self.state.variables_cache.clear();
         *self.state.repl_output.borrow_mut() = String::new();
 
@@ -226,45 +226,29 @@ impl<'s> Renderer<'s> {
                 .unwrap_or_else(|_| normalised.into_owned());
             if resolved != self.state.debug_root_dir {
                 self.state.debug_root_dir = resolved;
-                self.state.git_files_loaded = false;
+                self.state.file_picker.git_files_loaded = false;
                 self.state.file_override = None;
                 self.state.file_cache.clear();
             }
         }
 
-        // Lazy-load git files for the file browser
-        if !self.state.git_files_loaded {
-            self.state.git_files_loaded = true;
-            match fuzzy::list_git_files(&self.state.debug_root_dir) {
-                Ok(files) => self.state.git_files = files,
-                Err(e) => {
-                    tracing::warn!(error = %e, "failed to list git files");
-                    if let Some(root) = fuzzy::find_repo_root() {
-                        if let Ok(files) = fuzzy::list_git_files(&root) {
-                            self.state.git_files = files;
-                        }
-                    }
-                }
-            }
-            self.state.file_picker_results =
-                fuzzy::fuzzy_filter(&self.state.git_files, &self.state.file_picker_input);
-        }
+        // Lazy-load git files for the file picker
+        self.state
+            .file_picker
+            .ensure_loaded(&self.state.debug_root_dir);
 
         // Handle keyboard for file picker navigation
         ctx.input(|i| {
-            if i.key_pressed(Key::ArrowDown) && !self.state.file_picker_results.is_empty() {
-                self.state.file_picker_cursor = (self.state.file_picker_cursor + 1)
-                    .min(self.state.file_picker_results.len() - 1);
+            if i.key_pressed(Key::ArrowDown) {
+                self.state.file_picker.cursor_down();
             }
             if i.key_pressed(Key::ArrowUp) {
-                self.state.file_picker_cursor = self.state.file_picker_cursor.saturating_sub(1);
+                self.state.file_picker.cursor_up();
             }
-            if i.key_pressed(Key::Enter) && !self.state.file_picker_results.is_empty() {
-                let selected = &self.state.file_picker_results[self.state.file_picker_cursor];
-                self.state.file_override = Some(
-                    std::fs::canonicalize(&selected.file.absolute_path)
-                        .unwrap_or_else(|_| selected.file.absolute_path.clone()),
-                );
+            if i.key_pressed(Key::Enter) {
+                if let Some(path) = self.state.file_picker.select() {
+                    self.state.file_override = Some(path);
+                }
             }
         });
 
@@ -292,32 +276,18 @@ impl<'s> Renderer<'s> {
                 ui.separator();
 
                 let _input_response = ui.add(
-                    egui::TextEdit::singleline(&mut self.state.file_picker_input)
+                    egui::TextEdit::singleline(&mut self.state.file_picker.query)
                         .hint_text("Search files...")
                         .desired_width(f32::INFINITY),
                 );
 
-                let prev_len = self.state.file_picker_results.len();
-                self.state.file_picker_results =
-                    fuzzy::fuzzy_filter(&self.state.git_files, &self.state.file_picker_input);
-
-                if self.state.file_picker_results.is_empty() {
-                    self.state.file_picker_cursor = 0;
-                } else {
-                    if self.state.file_picker_results.len() != prev_len {
-                        self.state.file_picker_cursor = 0;
-                    }
-                    self.state.file_picker_cursor = self
-                        .state
-                        .file_picker_cursor
-                        .min(self.state.file_picker_results.len() - 1);
-                }
+                self.state.file_picker.refilter();
 
                 ui.separator();
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    for (i, m) in self.state.file_picker_results.iter().enumerate() {
-                        let is_selected = i == self.state.file_picker_cursor;
+                    for (i, m) in self.state.file_picker.results.iter().enumerate() {
+                        let is_selected = i == self.state.file_picker.cursor;
                         let path_str = m.file.relative_path.to_string_lossy();
 
                         let mut job = eframe::epaint::text::LayoutJob::default();
@@ -363,7 +333,7 @@ impl<'s> Renderer<'s> {
                                 std::fs::canonicalize(&m.file.absolute_path)
                                     .unwrap_or_else(|_| m.file.absolute_path.clone()),
                             );
-                            self.state.file_picker_cursor = i;
+                            self.state.file_picker.cursor = i;
                         }
                     }
                 });
@@ -400,12 +370,9 @@ impl<'s> Renderer<'s> {
             let contents = self
                 .state
                 .file_cache
-                .entry(display_path.clone())
-                .or_insert_with(|| {
-                    std::fs::read_to_string(&display_path)
-                        .unwrap_or_else(|e| format!("Error reading file: {e}"))
-                })
-                .clone();
+                .get_or_load(&display_path)
+                .unwrap_or("")
+                .to_string();
 
             // Update search matches if query or file changed
             if self.state.search_state.active {
@@ -426,7 +393,7 @@ impl<'s> Renderer<'s> {
 
             let scroll_to_line = if self.state.search_state.scroll_to_match {
                 self.state.search_state.scroll_to_match = false;
-                self.state.search_state.current_match_line(&contents)
+                self.state.search_state.current_match_line().map(|l| l + 1)
             } else {
                 None
             };
@@ -535,7 +502,11 @@ impl<'s> Renderer<'s> {
 
                 if has_session && !is_terminated {
                     if ui.button("⏹ Stop").clicked() {
-                        self.state.session = None;
+                        if let Some(session) = self.state.session.take() {
+                            session
+                                .bridge
+                                .send(crate::async_bridge::UiCommand::Terminate);
+                        }
                         self.state.variables_cache.clear();
                         *self.state.repl_output.borrow_mut() = String::new();
                     }
@@ -858,12 +829,9 @@ impl<'s> Renderer<'s> {
         let contents = self
             .state
             .file_cache
-            .entry(display_path.clone())
-            .or_insert_with(|| {
-                std::fs::read_to_string(&display_path)
-                    .unwrap_or_else(|e| format!("Error reading file: {e}"))
-            })
-            .clone();
+            .get_or_load(&display_path)
+            .unwrap_or("")
+            .to_string();
 
         // Update search matches if query or file changed
         if self.state.search_state.active {
@@ -885,7 +853,7 @@ impl<'s> Renderer<'s> {
         // Compute scroll target for search match navigation
         let scroll_to_line = if self.state.search_state.scroll_to_match {
             self.state.search_state.scroll_to_match = false;
-            self.state.search_state.current_match_line(&contents)
+            self.state.search_state.current_match_line().map(|l| l + 1)
         } else {
             None
         };

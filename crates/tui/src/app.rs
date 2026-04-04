@@ -81,284 +81,21 @@ pub enum InputMode {
     EvaluatePopup,
 }
 
-// ── Code view state ───────────────────────────────────────────────────────
+// ── Code view state ──────────────────────────��────────────────────────────
 
-/// State for the source code viewer.
-pub struct CodeViewState {
-    /// Currently displayed file path.
-    pub file_path: Option<PathBuf>,
-    /// Cursor line (0-indexed) -- the line the user is "on" for navigation.
-    pub cursor_line: usize,
-    /// Scroll offset (first visible line, 0-indexed).
-    pub scroll_offset: usize,
-    /// Total lines in the current file.
-    pub total_lines: usize,
-    /// Visual selection anchor line (0-indexed). When set, selection spans
-    /// from anchor to cursor_line (inclusive, in either direction).
-    pub selection_anchor: Option<usize>,
-}
-
-impl Default for CodeViewState {
-    fn default() -> Self {
-        Self {
-            file_path: None,
-            cursor_line: 0,
-            scroll_offset: 0,
-            total_lines: 0,
-            selection_anchor: None,
-        }
-    }
-}
-
-impl CodeViewState {
-    /// Open a file, resetting cursor and scroll.
-    pub fn open_file(&mut self, path: PathBuf, total_lines: usize) {
-        self.file_path = Some(path);
-        self.cursor_line = 0;
-        self.scroll_offset = 0;
-        self.total_lines = total_lines;
-        self.selection_anchor = None;
-    }
-
-    /// Move cursor down by `n` lines, clamping to file bounds.
-    pub fn move_cursor_down(&mut self, n: usize) {
-        if self.total_lines == 0 {
-            return;
-        }
-        self.cursor_line = (self.cursor_line + n).min(self.total_lines - 1);
-    }
-
-    /// Move cursor up by `n` lines, clamping to 0.
-    pub fn move_cursor_up(&mut self, n: usize) {
-        self.cursor_line = self.cursor_line.saturating_sub(n);
-    }
-
-    /// Jump to top of file.
-    pub fn go_to_top(&mut self) {
-        self.cursor_line = 0;
-    }
-
-    /// Jump to bottom of file.
-    pub fn go_to_bottom(&mut self) {
-        if self.total_lines > 0 {
-            self.cursor_line = self.total_lines - 1;
-        }
-    }
-
-    /// Ensure the cursor is visible by adjusting scroll_offset.
-    /// `viewport_height` is the number of visible lines in the widget.
-    pub fn ensure_cursor_visible(&mut self, viewport_height: usize) {
-        if viewport_height == 0 {
-            return;
-        }
-        let margin = 3.min(viewport_height / 2);
-        if self.cursor_line < self.scroll_offset + margin {
-            self.scroll_offset = self.cursor_line.saturating_sub(margin);
-        } else if self.cursor_line >= self.scroll_offset + viewport_height - margin {
-            self.scroll_offset = self
-                .cursor_line
-                .saturating_sub(viewport_height - margin - 1);
-        }
-    }
-
-    /// Get the selection range (start, end) inclusive, 0-indexed. None if no selection.
-    pub fn selection_range(&self) -> Option<(usize, usize)> {
-        self.selection_anchor.map(|anchor| {
-            let start = anchor.min(self.cursor_line);
-            let end = anchor.max(self.cursor_line);
-            (start, end)
-        })
-    }
-}
+/// Re-export the shared code view state.
+pub use ui_core::code_view::CodeViewState;
 
 // ── Search state ──────────────────────────────────────────────────────────
 
 /// State for in-file text search.
-pub struct SearchState {
-    /// Whether the search bar is visible.
-    pub active: bool,
-    /// Current query text.
-    pub query: String,
-    /// Cached matches: (line_index_0based, byte_start_in_line, byte_len).
-    pub matches: Vec<(usize, usize, usize)>,
-    /// Index of the current highlighted match.
-    pub current_match: usize,
-    /// The query used to compute the current matches (cache key).
-    last_query: String,
-    /// The file path used to compute the current matches (cache key).
-    last_file: PathBuf,
-}
-
-impl Default for SearchState {
-    fn default() -> Self {
-        Self {
-            active: false,
-            query: String::new(),
-            matches: Vec::new(),
-            current_match: 0,
-            last_query: String::new(),
-            last_file: PathBuf::new(),
-        }
-    }
-}
-
-impl SearchState {
-    /// Recompute matches if the query or file changed.
-    pub fn update(&mut self, content: &str, file_path: &PathBuf) {
-        if self.query == self.last_query && file_path == &self.last_file {
-            return;
-        }
-        self.last_query = self.query.clone();
-        self.last_file = file_path.clone();
-        self.matches.clear();
-        self.current_match = 0;
-
-        if self.query.is_empty() {
-            return;
-        }
-
-        let query_lower = self.query.to_lowercase();
-        for (line_idx, line) in content.lines().enumerate() {
-            let line_lower = line.to_lowercase();
-            let mut start = 0;
-            while let Some(pos) = line_lower[start..].find(&query_lower) {
-                let byte_start = start + pos;
-                self.matches.push((line_idx, byte_start, self.query.len()));
-                start = byte_start + 1;
-            }
-        }
-    }
-
-    /// Navigate to next match.
-    pub fn next_match(&mut self) {
-        if !self.matches.is_empty() {
-            self.current_match = (self.current_match + 1) % self.matches.len();
-        }
-    }
-
-    /// Navigate to previous match.
-    pub fn prev_match(&mut self) {
-        if !self.matches.is_empty() {
-            self.current_match = if self.current_match == 0 {
-                self.matches.len() - 1
-            } else {
-                self.current_match - 1
-            };
-        }
-    }
-
-    /// Get the line (0-indexed) of the current match, if any.
-    pub fn current_match_line(&self) -> Option<usize> {
-        self.matches
-            .get(self.current_match)
-            .map(|&(line, _, _)| line)
-    }
-
-    /// Reset when file changes.
-    pub fn reset(&mut self) {
-        self.last_query.clear();
-        self.last_file = PathBuf::new();
-        self.matches.clear();
-        self.current_match = 0;
-    }
-}
+/// Re-export the shared search state.
+pub use ui_core::search::{SearchMatch, SearchState};
 
 // ── File picker state ─────────────────────────────────────────────────────
 
-/// State for the fuzzy file picker popup.
-pub struct FilePickerState {
-    /// Whether the file picker is open.
-    pub open: bool,
-    /// Current filter query.
-    pub query: String,
-    /// Selected cursor index in filtered results.
-    pub cursor: usize,
-    /// Cached git file list.
-    pub git_files: Vec<fuzzy::TrackedFile>,
-    /// Whether git files have been loaded.
-    pub git_files_loaded: bool,
-    /// Current filtered results.
-    pub results: Vec<fuzzy::FuzzyMatch>,
-}
-
-impl Default for FilePickerState {
-    fn default() -> Self {
-        Self {
-            open: false,
-            query: String::new(),
-            cursor: 0,
-            git_files: Vec::new(),
-            git_files_loaded: false,
-            results: Vec::new(),
-        }
-    }
-}
-
-impl FilePickerState {
-    /// Ensure git files are loaded (lazy).
-    pub fn ensure_loaded(&mut self) {
-        if self.git_files_loaded {
-            return;
-        }
-        self.git_files_loaded = true;
-        if let Some(root) = fuzzy::find_repo_root() {
-            match fuzzy::list_git_files(&root) {
-                Ok(files) => self.git_files = files,
-                Err(e) => tracing::warn!(error = %e, "failed to list git files"),
-            }
-        }
-        self.refilter();
-    }
-
-    /// Recompute filtered results from current query.
-    pub fn refilter(&mut self) {
-        self.results = fuzzy::fuzzy_filter(&self.git_files, &self.query);
-        // Clamp cursor
-        if self.results.is_empty() {
-            self.cursor = 0;
-        } else {
-            self.cursor = self.cursor.min(self.results.len() - 1);
-        }
-    }
-
-    /// Move cursor down.
-    pub fn cursor_down(&mut self) {
-        if !self.results.is_empty() {
-            self.cursor = (self.cursor + 1).min(self.results.len() - 1);
-        }
-    }
-
-    /// Move cursor up.
-    pub fn cursor_up(&mut self) {
-        self.cursor = self.cursor.saturating_sub(1);
-    }
-
-    /// Select the current item and close the picker. Returns the selected path if any.
-    pub fn select(&mut self) -> Option<PathBuf> {
-        if self.results.is_empty() {
-            return None;
-        }
-        let path = self.results[self.cursor].file.absolute_path.clone();
-        self.close();
-        Some(path)
-    }
-
-    /// Close picker and reset query.
-    pub fn close(&mut self) {
-        self.open = false;
-        self.query.clear();
-        self.cursor = 0;
-    }
-
-    /// Open the picker.
-    pub fn open(&mut self) {
-        self.open = true;
-        self.query.clear();
-        self.cursor = 0;
-        self.ensure_loaded();
-        self.refilter();
-    }
-}
+/// Re-export the shared file picker state.
+pub use ui_core::file_picker::FilePickerState;
 
 // ── Main app struct ───────────────────────────────────────────────────────
 
@@ -402,7 +139,7 @@ pub struct App {
     pub state_manager: StateManager,
 
     // File content cache: path -> content
-    pub file_cache: HashMap<PathBuf, String>,
+    pub file_cache: ui_core::file_cache::FileCache,
 
     // Code view
     pub code_view: CodeViewState,
@@ -486,7 +223,7 @@ impl App {
             variables_cursor: 0,
             call_stack_cursor: 0,
             state_manager,
-            file_cache: HashMap::new(),
+            file_cache: Default::default(),
             code_view: CodeViewState::default(),
             search: SearchState::default(),
             file_picker: FilePickerState::default(),
@@ -703,56 +440,28 @@ impl App {
 
     /// Collect all breakpoints (UI + persisted) for session start.
     fn collect_all_breakpoints(&self) -> Vec<debugger::Breakpoint> {
-        let mut bps: Vec<debugger::Breakpoint> = self.ui_breakpoints.iter().cloned().collect();
-
-        // Add persisted breakpoints
-        if let Some(project_state) = self
-            .state_manager
-            .current()
-            .projects
-            .iter()
-            .find(|p| debugger::utils::normalise_path(&p.path) == self.debug_root_dir)
-        {
-            for bp in &project_state.breakpoints {
-                let normalised = debugger::utils::normalise_path(&bp.path).into_owned();
-                let mut bp = bp.clone();
-                bp.path = std::fs::canonicalize(&normalised).unwrap_or(normalised);
-                if !bps.contains(&bp) {
-                    bps.push(bp);
-                }
-            }
-        }
-
-        bps
+        ui_core::breakpoints::collect_all_breakpoints(
+            &self.state_manager,
+            &self.debug_root_dir,
+            &self.ui_breakpoints,
+        )
     }
 
     /// Persist current breakpoints to state file.
     pub fn persist_breakpoints(&mut self) {
-        let breakpoints: Vec<_> = self.ui_breakpoints.iter().cloned().collect();
-        if let Err(e) = self
-            .state_manager
-            .set_project_breakpoints(self.debug_root_dir.clone(), breakpoints)
-        {
-            tracing::warn!(error = %e, "failed to persist breakpoints");
-        }
+        ui_core::breakpoints::persist_breakpoints(
+            &mut self.state_manager,
+            &self.debug_root_dir,
+            &self.ui_breakpoints,
+        );
     }
 
     /// Open a file in the code view. Loads from cache or reads from disk.
     pub fn open_file(&mut self, path: PathBuf) {
         // Load content if not cached
-        if !self.file_cache.contains_key(&path) {
-            match std::fs::read_to_string(&path) {
-                Ok(content) => {
-                    self.file_cache.insert(path.clone(), content);
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, path = %path.display(), "failed to read file");
-                    return;
-                }
-            }
-        }
-
-        let content = &self.file_cache[&path];
+        let Some(content) = self.file_cache.get_or_load(&path) else {
+            return;
+        };
         let total_lines = content.lines().count();
         self.code_view.open_file(path, total_lines);
         self.search.reset();
@@ -761,7 +470,7 @@ impl App {
     /// Get the current file content, if a file is open.
     pub fn current_file_content(&self) -> Option<&str> {
         let path = self.code_view.file_path.as_ref()?;
-        self.file_cache.get(path).map(|s| s.as_str())
+        self.file_cache.get(path)
     }
 
     // ── Breakpoint operations ─────────────────────────────────────────
