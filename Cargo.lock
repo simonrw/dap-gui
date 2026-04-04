@@ -4994,6 +4994,7 @@ dependencies = [
  "server",
  "state",
  "syntect",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",

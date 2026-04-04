@@ -886,3 +886,423 @@ impl App {
         self.focus = Focus::CodeView;
     }
 }
+
+// ── Test helpers ──────────────────────────────────────────────────────────
+
+#[cfg(test)]
+pub(crate) mod test_helpers {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// Create a temporary `App` and run a closure against it.
+    ///
+    /// The closure receives `&mut App`. The `TempDir` that backs the
+    /// `StateManager` stays alive for the duration of the closure, so all
+    /// persistence operations work correctly.
+    pub fn with_test_app(f: impl FnOnce(&mut App)) {
+        let dir = tempfile::tempdir().expect("failed to create tempdir");
+        let state_path = dir.path().join("state.json");
+        let state_manager = StateManager::new(&state_path).expect("failed to create StateManager");
+        let (wakeup_tx, _wakeup_rx) = crossbeam_channel::unbounded();
+
+        let mut app = App::new(
+            vec![], // no configs
+            vec![], // no config names
+            0,
+            PathBuf::from("/tmp/test"), // fake config_path
+            PathBuf::from("/tmp/test"), // fake debug_root_dir
+            state_manager,
+            wakeup_tx,
+            vec![], // no initial breakpoints
+        );
+
+        f(&mut app);
+    }
+
+    /// Create a temporary `App` with named configs.
+    pub fn with_test_app_configs(config_names: Vec<String>, f: impl FnOnce(&mut App)) {
+        let dir = tempfile::tempdir().expect("failed to create tempdir");
+        let state_path = dir.path().join("state.json");
+        let state_manager = StateManager::new(&state_path).expect("failed to create StateManager");
+        let (wakeup_tx, _wakeup_rx) = crossbeam_channel::unbounded();
+
+        // Create dummy LaunchConfigurations from JSON for each name
+        let configs: Vec<LaunchConfiguration> = config_names
+            .iter()
+            .map(|name| {
+                let json = serde_json::json!({
+                    "name": name,
+                    "type": "python",
+                    "request": "launch",
+                    "program": "/tmp/test.py"
+                });
+                serde_json::from_value(json).expect("failed to create test config")
+            })
+            .collect();
+
+        let mut app = App::new(
+            configs,
+            config_names,
+            0,
+            PathBuf::from("/tmp/test"),
+            PathBuf::from("/tmp/test"),
+            state_manager,
+            wakeup_tx,
+            vec![],
+        );
+
+        f(&mut app);
+    }
+
+    /// Create a temporary file with the given content and return its path.
+    /// The `TempDir` is returned so the caller can keep it alive.
+    pub fn write_temp_file(content: &str) -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().expect("failed to create tempdir");
+        let file_path = dir.path().join("test.py");
+        std::fs::write(&file_path, content).expect("failed to write temp file");
+        (dir, file_path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_helpers::*;
+    use super::*;
+
+    // ── Focus cycling ─────────────────────────────────────────────────
+
+    #[test]
+    fn focus_next_cycles_through_all_panes() {
+        let mut f = Focus::CodeView;
+        f = f.next();
+        assert_eq!(f, Focus::CallStack);
+        f = f.next();
+        assert_eq!(f, Focus::Breakpoints);
+        f = f.next();
+        assert_eq!(f, Focus::Variables);
+        f = f.next();
+        assert_eq!(f, Focus::Output);
+        f = f.next();
+        assert_eq!(f, Focus::Repl);
+        f = f.next();
+        assert_eq!(f, Focus::CodeView); // wraps
+    }
+
+    #[test]
+    fn focus_prev_cycles_backwards() {
+        let mut f = Focus::CodeView;
+        f = f.prev();
+        assert_eq!(f, Focus::Repl);
+        f = f.prev();
+        assert_eq!(f, Focus::Output);
+        f = f.prev();
+        assert_eq!(f, Focus::Variables);
+        f = f.prev();
+        assert_eq!(f, Focus::Breakpoints);
+        f = f.prev();
+        assert_eq!(f, Focus::CallStack);
+        f = f.prev();
+        assert_eq!(f, Focus::CodeView); // wraps
+    }
+
+    // ── App::open_file ────────────────────────────────────────────────
+
+    #[test]
+    fn open_file_loads_content_and_sets_code_view() {
+        let (_dir, file_path) = write_temp_file("line1\nline2\nline3\n");
+
+        with_test_app(|app| {
+            app.open_file(file_path.clone());
+
+            assert_eq!(app.code_view.file_path.as_ref(), Some(&file_path));
+            assert_eq!(app.code_view.total_lines, 3);
+            assert_eq!(app.code_view.cursor_line, 0);
+            assert_eq!(app.code_view.scroll_offset, 0);
+        });
+    }
+
+    #[test]
+    fn open_file_resets_search_matches() {
+        let (_dir, file_path) = write_temp_file("hello world\n");
+
+        with_test_app(|app| {
+            // Set up some search state with cached matches
+            app.search.query = "hello".to_string();
+            app.search.active = true;
+            app.search.matches.push(ui_core::search::SearchMatch {
+                line: 0,
+                byte_start_in_line: 0,
+                byte_offset: 0,
+                length: 5,
+            });
+            app.search.current_match = 0;
+
+            app.open_file(file_path);
+
+            // Matches should be cleared (reset), but query/active are preserved
+            assert!(app.search.matches.is_empty());
+        });
+    }
+
+    #[test]
+    fn open_file_nonexistent_is_noop() {
+        with_test_app(|app| {
+            app.open_file(PathBuf::from("/nonexistent/file.py"));
+
+            assert!(app.code_view.file_path.is_none());
+        });
+    }
+
+    #[test]
+    fn current_file_content_returns_cached_content() {
+        let (_dir, file_path) = write_temp_file("hello\nworld\n");
+
+        with_test_app(|app| {
+            assert!(app.current_file_content().is_none());
+
+            app.open_file(file_path);
+
+            let content = app.current_file_content().unwrap();
+            assert_eq!(content, "hello\nworld\n");
+        });
+    }
+
+    // ── Breakpoint operations ─────────────────────────────────────────
+
+    #[test]
+    fn toggle_breakpoint_adds_and_removes() {
+        let (_dir, file_path) = write_temp_file("line1\nline2\nline3\n");
+
+        with_test_app(|app| {
+            app.open_file(file_path.clone());
+            app.code_view.cursor_line = 1; // 0-indexed
+
+            // Toggle on
+            app.toggle_breakpoint_at_cursor();
+            assert_eq!(app.ui_breakpoints.len(), 1);
+
+            let bp = app.ui_breakpoints.iter().next().unwrap();
+            assert_eq!(bp.path, file_path);
+            assert_eq!(bp.line, 2); // DAP is 1-indexed
+
+            // Toggle off
+            app.toggle_breakpoint_at_cursor();
+            assert!(app.ui_breakpoints.is_empty());
+        });
+    }
+
+    #[test]
+    fn toggle_breakpoint_without_file_is_noop() {
+        with_test_app(|app| {
+            app.toggle_breakpoint_at_cursor();
+            assert!(app.ui_breakpoints.is_empty());
+        });
+    }
+
+    #[test]
+    fn add_breakpoint_from_str_valid() {
+        with_test_app(|app| {
+            app.add_breakpoint_from_str("/tmp/test.py:42");
+            assert_eq!(app.ui_breakpoints.len(), 1);
+
+            let bp = app.ui_breakpoints.iter().next().unwrap();
+            assert_eq!(bp.path, PathBuf::from("/tmp/test.py"));
+            assert_eq!(bp.line, 42);
+        });
+    }
+
+    #[test]
+    fn add_breakpoint_from_str_invalid_sets_error() {
+        with_test_app(|app| {
+            app.add_breakpoint_from_str("not_a_breakpoint");
+            assert!(app.ui_breakpoints.is_empty());
+            assert!(app.status_error.is_some());
+            assert!(
+                app.status_error
+                    .as_ref()
+                    .unwrap()
+                    .contains("Invalid breakpoint")
+            );
+        });
+    }
+
+    #[test]
+    fn remove_breakpoint_by_index_works() {
+        with_test_app(|app| {
+            // Add two breakpoints
+            app.ui_breakpoints.insert(debugger::Breakpoint {
+                name: None,
+                path: PathBuf::from("/a.py"),
+                line: 1,
+            });
+            app.ui_breakpoints.insert(debugger::Breakpoint {
+                name: None,
+                path: PathBuf::from("/b.py"),
+                line: 2,
+            });
+            assert_eq!(app.ui_breakpoints.len(), 2);
+
+            // Remove by index (sorted: /a.py:1, /b.py:2)
+            app.remove_breakpoint_by_index(0);
+            assert_eq!(app.ui_breakpoints.len(), 1);
+
+            let remaining = app.ui_breakpoints.iter().next().unwrap();
+            assert_eq!(remaining.path, PathBuf::from("/b.py"));
+        });
+    }
+
+    // ── REPL history ──────────────────────────────────────────────────
+
+    #[test]
+    fn repl_history_up_and_down() {
+        with_test_app(|app| {
+            app.repl_input_history = vec![
+                "expr1".to_string(),
+                "expr2".to_string(),
+                "expr3".to_string(),
+            ];
+
+            // Up from fresh (cursor = None)
+            app.repl_history_up();
+            assert_eq!(app.repl_input, "expr3");
+            assert_eq!(app.repl_history_cursor, Some(2));
+
+            app.repl_history_up();
+            assert_eq!(app.repl_input, "expr2");
+            assert_eq!(app.repl_history_cursor, Some(1));
+
+            app.repl_history_up();
+            assert_eq!(app.repl_input, "expr1");
+            assert_eq!(app.repl_history_cursor, Some(0));
+
+            // Already at oldest - stays
+            app.repl_history_up();
+            assert_eq!(app.repl_input, "expr1");
+            assert_eq!(app.repl_history_cursor, Some(0));
+
+            // Down
+            app.repl_history_down();
+            assert_eq!(app.repl_input, "expr2");
+            assert_eq!(app.repl_history_cursor, Some(1));
+
+            app.repl_history_down();
+            assert_eq!(app.repl_input, "expr3");
+            assert_eq!(app.repl_history_cursor, Some(2));
+
+            // Down past end clears
+            app.repl_history_down();
+            assert!(app.repl_input.is_empty());
+            assert_eq!(app.repl_history_cursor, None);
+        });
+    }
+
+    #[test]
+    fn repl_history_up_empty_is_noop() {
+        with_test_app(|app| {
+            app.repl_history_up();
+            assert!(app.repl_input.is_empty());
+            assert_eq!(app.repl_history_cursor, None);
+        });
+    }
+
+    #[test]
+    fn repl_history_down_from_fresh_is_noop() {
+        with_test_app(|app| {
+            app.repl_input_history = vec!["expr1".to_string()];
+            // Without first going up, down is a no-op
+            app.repl_history_down();
+            assert!(app.repl_input.is_empty());
+            assert_eq!(app.repl_history_cursor, None);
+        });
+    }
+
+    // ── Start session edge cases ──────────────────────────────────────
+
+    #[test]
+    fn start_session_no_configs_sets_error() {
+        with_test_app(|app| {
+            app.start_session();
+            assert_eq!(app.mode, AppMode::NoSession); // unchanged
+            assert!(
+                app.status_error
+                    .as_ref()
+                    .unwrap()
+                    .contains("No launch configurations")
+            );
+        });
+    }
+
+    // ── Evaluate popup ────────────────────────────────────────────────
+
+    #[test]
+    fn open_evaluate_popup_sets_state() {
+        with_test_app(|app| {
+            app.open_evaluate_popup();
+            assert!(app.evaluate_popup_open);
+            assert_eq!(app.input_mode, InputMode::EvaluatePopup);
+            assert!(app.evaluate_result.is_none());
+        });
+    }
+
+    #[test]
+    fn close_evaluate_popup_resets_state() {
+        with_test_app(|app| {
+            app.open_evaluate_popup();
+            app.evaluate_input = "some_expr".to_string();
+            app.evaluate_result = Some(("result".to_string(), false));
+
+            app.close_evaluate_popup();
+
+            assert!(!app.evaluate_popup_open);
+            assert!(app.evaluate_input.is_empty());
+            assert!(app.evaluate_result.is_none());
+            assert_eq!(app.input_mode, InputMode::Normal);
+        });
+    }
+
+    // ── Word under cursor ─────────────────────────────────────────────
+
+    #[test]
+    fn word_under_cursor_returns_trimmed_line() {
+        let (_dir, file_path) = write_temp_file("  hello world  \n");
+
+        with_test_app(|app| {
+            app.open_file(file_path);
+            app.code_view.cursor_line = 0;
+
+            let word = app.word_under_cursor();
+            assert_eq!(word.as_deref(), Some("hello world"));
+        });
+    }
+
+    #[test]
+    fn word_under_cursor_returns_none_for_empty_line() {
+        let (_dir, file_path) = write_temp_file("  \nhello\n");
+
+        with_test_app(|app| {
+            app.open_file(file_path);
+            app.code_view.cursor_line = 0;
+
+            assert!(app.word_under_cursor().is_none());
+        });
+    }
+
+    // ── Initial state ─────────────────────────────────────────────────
+
+    #[test]
+    fn app_initial_state() {
+        with_test_app(|app| {
+            assert_eq!(app.mode, AppMode::NoSession);
+            assert_eq!(app.focus, Focus::CodeView);
+            assert_eq!(app.bottom_tab, BottomTab::Variables);
+            assert_eq!(app.input_mode, InputMode::Normal);
+            assert!(!app.should_quit);
+            assert!(app.session.is_none());
+            assert!(app.ui_breakpoints.is_empty());
+            assert!(app.output_lines.is_empty());
+            assert!(!app.show_help);
+            assert!(app.repl_input.is_empty());
+            assert!(app.output_auto_scroll);
+        });
+    }
+}
