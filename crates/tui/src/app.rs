@@ -93,6 +93,9 @@ pub struct CodeViewState {
     pub scroll_offset: usize,
     /// Total lines in the current file.
     pub total_lines: usize,
+    /// Visual selection anchor line (0-indexed). When set, selection spans
+    /// from anchor to cursor_line (inclusive, in either direction).
+    pub selection_anchor: Option<usize>,
 }
 
 impl Default for CodeViewState {
@@ -102,6 +105,7 @@ impl Default for CodeViewState {
             cursor_line: 0,
             scroll_offset: 0,
             total_lines: 0,
+            selection_anchor: None,
         }
     }
 }
@@ -113,6 +117,7 @@ impl CodeViewState {
         self.cursor_line = 0;
         self.scroll_offset = 0;
         self.total_lines = total_lines;
+        self.selection_anchor = None;
     }
 
     /// Move cursor down by `n` lines, clamping to file bounds.
@@ -154,6 +159,15 @@ impl CodeViewState {
                 .cursor_line
                 .saturating_sub(viewport_height - margin - 1);
         }
+    }
+
+    /// Get the selection range (start, end) inclusive, 0-indexed. None if no selection.
+    pub fn selection_range(&self) -> Option<(usize, usize)> {
+        self.selection_anchor.map(|anchor| {
+            let start = anchor.min(self.cursor_line);
+            let end = anchor.max(self.cursor_line);
+            (start, end)
+        })
     }
 }
 
@@ -917,14 +931,28 @@ impl App {
 
     // ── Evaluate expression operations ────────────────────────────────
 
-    /// Open the evaluate expression popup, optionally pre-filling with the word under cursor.
+    /// Open the evaluate expression popup, optionally pre-filling with selection or cursor line.
     pub fn open_evaluate_popup(&mut self) {
         self.evaluate_popup_open = true;
         self.evaluate_result = None;
         self.input_mode = InputMode::EvaluatePopup;
 
-        // Pre-fill with word under cursor if in code view
+        // Pre-fill with visual selection if active
         if self.focus == Focus::CodeView {
+            if let Some((start, end)) = self.code_view.selection_range() {
+                if let Some(content) = self.current_file_content() {
+                    let text: String = content
+                        .lines()
+                        .skip(start)
+                        .take(end - start + 1)
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    self.evaluate_input = text;
+                    self.code_view.selection_anchor = None;
+                    return;
+                }
+            }
+            // Fall back to trimmed cursor line
             if let Some(word) = self.word_under_cursor() {
                 self.evaluate_input = word;
                 return;

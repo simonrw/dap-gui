@@ -60,6 +60,8 @@ pub fn render(frame: &mut Frame) {
         binding_line("Ctrl+D/U", "Half-page down/up", key_style, desc_style),
         binding_line("g / G", "Go to top / bottom", key_style, desc_style),
         binding_line("b", "Toggle breakpoint at cursor", key_style, desc_style),
+        binding_line("v", "Toggle visual line selection", key_style, desc_style),
+        binding_line("Esc", "Clear selection", key_style, desc_style),
         binding_line("n / N", "Next / prev search match", key_style, desc_style),
         Line::from(""),
         Line::from(Span::styled("── Evaluate Expression ──", section_style)),

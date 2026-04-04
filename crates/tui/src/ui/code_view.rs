@@ -104,6 +104,9 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
                 .map(|bp| bp.line)
                 .collect();
 
+            // Visual selection range
+            let selection_range = app.code_view.selection_range();
+
             let lines = SyntaxHighlighter::build_lines(
                 &highlighted,
                 start_line,
@@ -113,6 +116,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
                 app.search.current_match,
                 exec_line,
                 &breakpoint_lines,
+                selection_range,
             );
 
             let paragraph = Paragraph::new(lines);

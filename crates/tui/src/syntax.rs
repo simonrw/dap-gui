@@ -179,11 +179,13 @@ impl SyntaxHighlighter {
         current_match_idx: usize,
         exec_line: Option<usize>,
         breakpoint_lines: &std::collections::HashSet<usize>,
+        selection_range: Option<(usize, usize)>,
     ) -> Vec<Line<'static>> {
         let match_bg = Color::Rgb(100, 100, 0);
         let current_match_bg = Color::Rgb(180, 120, 0);
         let cursor_bg = Color::Rgb(40, 44, 52);
         let exec_bg = Color::Rgb(50, 60, 30); // greenish background for execution line
+        let selection_bg = Color::Rgb(40, 50, 70); // bluish background for visual selection
 
         highlighted
             .iter()
@@ -193,10 +195,14 @@ impl SyntaxHighlighter {
                 let line_num = line_idx + 1;
                 let is_cursor = line_idx == cursor_line;
                 let is_exec = exec_line == Some(line_idx);
+                let is_selected = selection_range
+                    .map_or(false, |(start, end)| line_idx >= start && line_idx <= end);
 
-                // Pick the background color: exec > cursor > none
+                // Pick the background color: exec > selection > cursor > none
                 let bg = if is_exec {
                     exec_bg
+                } else if is_selected {
+                    selection_bg
                 } else if is_cursor {
                     cursor_bg
                 } else {

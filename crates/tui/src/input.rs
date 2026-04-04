@@ -407,6 +407,19 @@ fn handle_code_view_key(app: &mut App, key: KeyEvent) {
         KeyCode::Char('b') => {
             app.toggle_breakpoint_at_cursor();
         }
+        // Visual line selection
+        KeyCode::Char('v') => {
+            if app.code_view.selection_anchor.is_some() {
+                app.code_view.selection_anchor = None;
+            } else {
+                app.code_view.selection_anchor = Some(app.code_view.cursor_line);
+            }
+        }
+        KeyCode::Esc => {
+            if app.code_view.selection_anchor.is_some() {
+                app.code_view.selection_anchor = None;
+            }
+        }
         // Search navigation
         KeyCode::Char('n') => {
             app.search.next_match();
