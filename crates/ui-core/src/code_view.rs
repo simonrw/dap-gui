@@ -91,3 +91,207 @@ impl CodeViewState {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    fn cv_with_file(total_lines: usize) -> CodeViewState {
+        let mut cv = CodeViewState::default();
+        cv.open_file(PathBuf::from("/tmp/test.py"), total_lines);
+        cv
+    }
+
+    // ── open_file ────────────────────────────────────────────────────
+
+    #[test]
+    fn open_file_sets_path_and_total_lines() {
+        let mut cv = CodeViewState::default();
+        cv.open_file(PathBuf::from("/project/main.py"), 42);
+        assert_eq!(cv.file_path.as_deref(), Some(Path::new("/project/main.py")));
+        assert_eq!(cv.total_lines, 42);
+    }
+
+    #[test]
+    fn open_file_resets_cursor_and_scroll() {
+        let mut cv = cv_with_file(100);
+        cv.cursor_line = 50;
+        cv.scroll_offset = 40;
+        cv.selection_anchor = Some(45);
+
+        cv.open_file(PathBuf::from("/other.py"), 20);
+        assert_eq!(cv.cursor_line, 0);
+        assert_eq!(cv.scroll_offset, 0);
+        assert_eq!(cv.selection_anchor, None);
+        assert_eq!(cv.total_lines, 20);
+    }
+
+    // ── move_cursor_down ─────────────────────────────────────────────
+
+    #[test]
+    fn move_cursor_down_basic() {
+        let mut cv = cv_with_file(10);
+        cv.move_cursor_down(3);
+        assert_eq!(cv.cursor_line, 3);
+    }
+
+    #[test]
+    fn move_cursor_down_clamps_to_last_line() {
+        let mut cv = cv_with_file(10);
+        cv.move_cursor_down(100);
+        assert_eq!(cv.cursor_line, 9);
+    }
+
+    #[test]
+    fn move_cursor_down_on_empty_file_is_noop() {
+        let mut cv = cv_with_file(0);
+        cv.move_cursor_down(5);
+        assert_eq!(cv.cursor_line, 0);
+    }
+
+    #[test]
+    fn move_cursor_down_from_last_line_stays() {
+        let mut cv = cv_with_file(5);
+        cv.cursor_line = 4;
+        cv.move_cursor_down(1);
+        assert_eq!(cv.cursor_line, 4);
+    }
+
+    // ── move_cursor_up ───────────────────────────────────────────────
+
+    #[test]
+    fn move_cursor_up_basic() {
+        let mut cv = cv_with_file(10);
+        cv.cursor_line = 5;
+        cv.move_cursor_up(2);
+        assert_eq!(cv.cursor_line, 3);
+    }
+
+    #[test]
+    fn move_cursor_up_clamps_to_zero() {
+        let mut cv = cv_with_file(10);
+        cv.cursor_line = 3;
+        cv.move_cursor_up(100);
+        assert_eq!(cv.cursor_line, 0);
+    }
+
+    #[test]
+    fn move_cursor_up_at_zero_stays() {
+        let mut cv = cv_with_file(10);
+        cv.move_cursor_up(1);
+        assert_eq!(cv.cursor_line, 0);
+    }
+
+    // ── go_to_top / go_to_bottom ─────────────────────────────────────
+
+    #[test]
+    fn go_to_top() {
+        let mut cv = cv_with_file(10);
+        cv.cursor_line = 7;
+        cv.go_to_top();
+        assert_eq!(cv.cursor_line, 0);
+    }
+
+    #[test]
+    fn go_to_bottom() {
+        let mut cv = cv_with_file(10);
+        cv.go_to_bottom();
+        assert_eq!(cv.cursor_line, 9);
+    }
+
+    #[test]
+    fn go_to_bottom_on_empty_file_stays_at_zero() {
+        let mut cv = cv_with_file(0);
+        cv.go_to_bottom();
+        assert_eq!(cv.cursor_line, 0);
+    }
+
+    // ── ensure_cursor_visible ────────────────────────────────────────
+
+    #[test]
+    fn ensure_cursor_visible_zero_viewport_is_noop() {
+        let mut cv = cv_with_file(100);
+        cv.cursor_line = 50;
+        cv.scroll_offset = 10;
+        cv.ensure_cursor_visible(0);
+        assert_eq!(cv.scroll_offset, 10); // unchanged
+    }
+
+    #[test]
+    fn ensure_cursor_visible_scrolls_down_when_cursor_below_viewport() {
+        let mut cv = cv_with_file(100);
+        cv.cursor_line = 30;
+        cv.scroll_offset = 0;
+        cv.ensure_cursor_visible(20);
+        // cursor should be within viewport; margin = 3
+        // scroll_offset = cursor_line - (viewport_height - margin - 1) = 30 - 16 = 14
+        assert!(cv.scroll_offset > 0);
+        assert!(cv.cursor_line < cv.scroll_offset + 20);
+    }
+
+    #[test]
+    fn ensure_cursor_visible_scrolls_up_when_cursor_above_viewport() {
+        let mut cv = cv_with_file(100);
+        cv.cursor_line = 5;
+        cv.scroll_offset = 20;
+        cv.ensure_cursor_visible(20);
+        // scroll should have come down to make cursor visible
+        assert!(cv.scroll_offset <= cv.cursor_line);
+    }
+
+    #[test]
+    fn ensure_cursor_visible_no_change_when_cursor_in_viewport() {
+        let mut cv = cv_with_file(100);
+        cv.cursor_line = 15;
+        cv.scroll_offset = 10;
+        cv.ensure_cursor_visible(20);
+        // cursor at 15, viewport 10..30, margin 3 -> cursor is at offset 5 from start
+        // 15 >= 10 + 3 = 13 and 15 < 10 + 20 - 3 = 27, so no scroll change
+        assert_eq!(cv.scroll_offset, 10);
+    }
+
+    #[test]
+    fn ensure_cursor_visible_small_viewport_margin_clamped() {
+        // viewport=4 => margin = min(3, 4/2) = 2
+        let mut cv = cv_with_file(100);
+        cv.cursor_line = 50;
+        cv.scroll_offset = 0;
+        cv.ensure_cursor_visible(4);
+        // Should scroll so cursor is visible with margin=2
+        assert!(cv.cursor_line >= cv.scroll_offset);
+        assert!(cv.cursor_line < cv.scroll_offset + 4);
+    }
+
+    // ── selection_range ──────────────────────────────────────────────
+
+    #[test]
+    fn selection_range_none_when_no_anchor() {
+        let cv = cv_with_file(10);
+        assert_eq!(cv.selection_range(), None);
+    }
+
+    #[test]
+    fn selection_range_anchor_before_cursor() {
+        let mut cv = cv_with_file(10);
+        cv.selection_anchor = Some(2);
+        cv.cursor_line = 7;
+        assert_eq!(cv.selection_range(), Some((2, 7)));
+    }
+
+    #[test]
+    fn selection_range_anchor_after_cursor() {
+        let mut cv = cv_with_file(10);
+        cv.selection_anchor = Some(7);
+        cv.cursor_line = 2;
+        assert_eq!(cv.selection_range(), Some((2, 7)));
+    }
+
+    #[test]
+    fn selection_range_anchor_equals_cursor() {
+        let mut cv = cv_with_file(10);
+        cv.selection_anchor = Some(5);
+        cv.cursor_line = 5;
+        assert_eq!(cv.selection_range(), Some((5, 5)));
+    }
+}
