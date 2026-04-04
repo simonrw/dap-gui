@@ -2,6 +2,7 @@ pub mod breakpoints;
 pub mod call_stack;
 pub mod code_view;
 pub mod controls_bar;
+pub mod evaluate_popup;
 pub mod file_browser;
 pub mod file_picker;
 pub mod help;
@@ -85,6 +86,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     // Overlays (rendered last so they draw on top)
     if app.file_picker.open {
         file_picker::render(app, frame);
+    }
+    if app.evaluate_popup_open {
+        evaluate_popup::render(app, frame);
     }
     if app.show_help {
         help::render(frame);

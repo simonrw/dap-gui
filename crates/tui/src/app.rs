@@ -77,6 +77,8 @@ pub enum InputMode {
     BreakpointInput,
     /// Typing into file browser search in sidebar.
     FileBrowser,
+    /// Typing into evaluate expression popup.
+    EvaluatePopup,
 }
 
 // ── Code view state ───────────────────────────────────────────────────────
@@ -429,6 +431,11 @@ pub struct App {
     pub file_browser_results: Vec<fuzzy::FuzzyMatch>,
     pub file_browser_files: Vec<fuzzy::TrackedFile>,
     pub file_browser_loaded: bool,
+
+    // Evaluate expression popup
+    pub evaluate_popup_open: bool,
+    pub evaluate_input: String,
+    pub evaluate_result: Option<(String, bool)>, // (result_text, is_error)
 }
 
 impl App {
@@ -483,6 +490,9 @@ impl App {
             file_browser_results: Vec::new(),
             file_browser_files: Vec::new(),
             file_browser_loaded: false,
+            evaluate_popup_open: false,
+            evaluate_input: String::new(),
+            evaluate_result: None,
         }
     }
 
@@ -903,6 +913,82 @@ impl App {
                 self.repl_input = self.repl_input_history[*idx].clone();
             }
         }
+    }
+
+    // ── Evaluate expression operations ────────────────────────────────
+
+    /// Open the evaluate expression popup, optionally pre-filling with the word under cursor.
+    pub fn open_evaluate_popup(&mut self) {
+        self.evaluate_popup_open = true;
+        self.evaluate_result = None;
+        self.input_mode = InputMode::EvaluatePopup;
+
+        // Pre-fill with word under cursor if in code view
+        if self.focus == Focus::CodeView {
+            if let Some(word) = self.word_under_cursor() {
+                self.evaluate_input = word;
+                return;
+            }
+        }
+        self.evaluate_input.clear();
+    }
+
+    /// Close the evaluate popup.
+    pub fn close_evaluate_popup(&mut self) {
+        self.evaluate_popup_open = false;
+        self.evaluate_input.clear();
+        self.evaluate_result = None;
+        self.input_mode = InputMode::Normal;
+    }
+
+    /// Evaluate the expression currently in the evaluate popup input.
+    pub fn evaluate_popup_expression(&mut self) {
+        let input = self.evaluate_input.trim().to_string();
+        if input.is_empty() {
+            return;
+        }
+
+        // Save to shared input history (reuse REPL history)
+        self.repl_input_history.push(input.clone());
+        self.repl_history_cursor = None;
+
+        let frame_id = self.session.as_ref().and_then(|s| s.current_frame_id);
+
+        let Some(frame_id) = frame_id else {
+            self.evaluate_result = Some(("Not paused".to_string(), true));
+            return;
+        };
+
+        let Some(session) = &self.session else {
+            self.evaluate_result = Some(("No session".to_string(), true));
+            return;
+        };
+
+        let result = session.bridge.send_sync(|reply| UiCommand::Evaluate {
+            expression: input,
+            frame_id,
+            reply,
+        });
+
+        match result {
+            Ok(eval) => {
+                self.evaluate_result = Some((eval.output, eval.error));
+            }
+            Err(e) => {
+                self.evaluate_result = Some((format!("{e}"), true));
+            }
+        }
+    }
+
+    /// Extract the trimmed content of the cursor line in the code view.
+    fn word_under_cursor(&self) -> Option<String> {
+        let content = self.current_file_content()?;
+        let line = content.lines().nth(self.code_view.cursor_line)?;
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        Some(trimmed.to_string())
     }
 
     // ── Variable operations ───────────────────────────────────────────

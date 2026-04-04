@@ -11,6 +11,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         InputMode::Search => handle_search_key(app, key),
         InputMode::BreakpointInput => handle_breakpoint_input_key(app, key),
         InputMode::FileBrowser => handle_file_browser_input_key(app, key),
+        InputMode::EvaluatePopup => handle_evaluate_popup_key(app, key),
         InputMode::Normal => handle_normal_key(app, key),
     }
 }
@@ -154,6 +155,35 @@ fn handle_file_browser_input_key(app: &mut App, key: KeyEvent) {
     }
 }
 
+// ── Evaluate popup input mode ─────────────────────────────────────────────
+
+fn handle_evaluate_popup_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Esc => {
+            app.close_evaluate_popup();
+        }
+        KeyCode::Enter => {
+            app.evaluate_popup_expression();
+        }
+        KeyCode::Up => {
+            // Navigate shared input history
+            app.repl_history_up();
+            app.evaluate_input = app.repl_input.clone();
+        }
+        KeyCode::Down => {
+            app.repl_history_down();
+            app.evaluate_input = app.repl_input.clone();
+        }
+        KeyCode::Backspace => {
+            app.evaluate_input.pop();
+        }
+        KeyCode::Char(c) => {
+            app.evaluate_input.push(c);
+        }
+        _ => {}
+    }
+}
+
 // ── Normal mode ───────────────────────────────────────────────────────────
 
 fn handle_normal_key(app: &mut App, key: KeyEvent) {
@@ -187,6 +217,12 @@ fn handle_normal_key(app: &mut App, key: KeyEvent) {
         KeyCode::Char('f') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             app.search.active = true;
             app.input_mode = InputMode::Search;
+            return;
+        }
+        KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            if app.mode == AppMode::Paused {
+                app.open_evaluate_popup();
+            }
             return;
         }
         KeyCode::Esc => {
