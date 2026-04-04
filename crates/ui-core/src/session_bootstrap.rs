@@ -58,7 +58,7 @@ pub fn connect_debugger(
                             host: connect.map(|c| c.host),
                             language: debugger::Language::DebugPy,
                             path_mappings,
-                            just_my_code: None,
+                            just_my_code: debugpy.just_my_code,
                         };
 
                         let port = attach_args.port.unwrap_or(server::DEFAULT_DAP_PORT);
