@@ -117,6 +117,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
                 exec_line,
                 &breakpoint_lines,
                 selection_range,
+                &app.inline_evaluations,
             );
 
             let paragraph = Paragraph::new(lines);

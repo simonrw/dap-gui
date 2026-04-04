@@ -450,6 +450,9 @@ pub struct App {
     pub evaluate_popup_open: bool,
     pub evaluate_input: String,
     pub evaluate_result: Option<(String, bool)>, // (result_text, is_error)
+
+    // Inline evaluation annotations: line (0-indexed) -> result string
+    pub inline_evaluations: HashMap<usize, String>,
 }
 
 impl App {
@@ -507,6 +510,7 @@ impl App {
             evaluate_popup_open: false,
             evaluate_input: String::new(),
             evaluate_result: None,
+            inline_evaluations: HashMap::new(),
         }
     }
 
@@ -554,6 +558,7 @@ impl App {
                     self.mode = AppMode::Paused;
                     self.ui_breakpoints = state.breakpoints.iter().cloned().collect();
                     self.variables_cache.clear();
+                    self.inline_evaluations.clear();
                     self.jump_to_execution_line(state);
                 }
                 debugger::Event::ScopeChange(state) => {
@@ -564,6 +569,7 @@ impl App {
                 }
                 debugger::Event::Running => {
                     self.mode = AppMode::Running;
+                    self.inline_evaluations.clear();
                     self.status_message = Some("Running...".to_string());
                 }
                 debugger::Event::Initialised => {
@@ -1017,6 +1023,78 @@ impl App {
             return None;
         }
         Some(trimmed.to_string())
+    }
+
+    /// Evaluate the current cursor line (or selection) and show result as inline annotation.
+    pub fn evaluate_inline(&mut self) {
+        if self.mode != AppMode::Paused {
+            return;
+        }
+
+        let (expression, target_line) = if let Some((start, end)) = self.code_view.selection_range()
+        {
+            // Evaluate selected lines
+            if let Some(content) = self.current_file_content() {
+                let text: String = content
+                    .lines()
+                    .skip(start)
+                    .take(end - start + 1)
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                (text, end) // Annotate the last selected line
+            } else {
+                return;
+            }
+        } else {
+            // Evaluate current cursor line (trimmed)
+            if let Some(content) = self.current_file_content() {
+                let line = content
+                    .lines()
+                    .nth(self.code_view.cursor_line)
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                (line, self.code_view.cursor_line)
+            } else {
+                return;
+            }
+        };
+
+        if expression.is_empty() {
+            return;
+        }
+
+        let frame_id = self.session.as_ref().and_then(|s| s.current_frame_id);
+        let Some(frame_id) = frame_id else {
+            return;
+        };
+        let Some(session) = &self.session else {
+            return;
+        };
+
+        let result = session.bridge.send_sync(|reply| UiCommand::Evaluate {
+            expression,
+            frame_id,
+            reply,
+        });
+
+        match result {
+            Ok(eval) => {
+                let display = if eval.error {
+                    format!("!! {}", eval.output)
+                } else {
+                    format!("= {}", eval.output)
+                };
+                self.inline_evaluations.insert(target_line, display);
+            }
+            Err(e) => {
+                self.inline_evaluations
+                    .insert(target_line, format!("!! {e}"));
+            }
+        }
+
+        // Clear selection after evaluating
+        self.code_view.selection_anchor = None;
     }
 
     // ── Variable operations ───────────────────────────────────────────

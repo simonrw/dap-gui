@@ -180,6 +180,7 @@ impl SyntaxHighlighter {
         exec_line: Option<usize>,
         breakpoint_lines: &std::collections::HashSet<usize>,
         selection_range: Option<(usize, usize)>,
+        inline_evals: &std::collections::HashMap<usize, String>,
     ) -> Vec<Line<'static>> {
         let match_bg = Color::Rgb(100, 100, 0);
         let current_match_bg = Color::Rgb(180, 120, 0);
@@ -305,6 +306,18 @@ impl SyntaxHighlighter {
                         }
                         byte_pos = span_end;
                     }
+                }
+
+                // Append inline evaluation annotation if present
+                if let Some(eval_text) = inline_evals.get(&line_idx) {
+                    let eval_style = if eval_text.starts_with("!!") {
+                        Style::default().fg(Color::Red).add_modifier(Modifier::DIM)
+                    } else {
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::DIM)
+                    };
+                    line_spans.push(Span::styled(format!("  {eval_text}"), eval_style));
                 }
 
                 Line::from(line_spans)

@@ -437,6 +437,13 @@ fn handle_code_view_key(app: &mut App, key: KeyEvent) {
             app.search.active = true;
             app.input_mode = InputMode::Search;
         }
+        // Inline evaluation
+        KeyCode::Char('e') => {
+            app.evaluate_inline();
+        }
+        KeyCode::Char('x') => {
+            app.inline_evaluations.clear();
+        }
         _ => {}
     }
 }
