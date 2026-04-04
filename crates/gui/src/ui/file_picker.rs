@@ -19,16 +19,10 @@ pub(crate) enum FilePickerResult {
 /// whether a file was selected.
 pub(crate) fn show(ctx: &Context, state: &mut DebuggerAppState) -> FilePickerResult {
     // Lazy-load git files on first open
-    if !state.git_files_loaded {
-        state.git_files_loaded = true;
-        if let Some(root) = fuzzy::find_repo_root() {
-            match fuzzy::list_git_files(&root) {
-                Ok(files) => state.git_files = files,
-                Err(e) => tracing::warn!(error = %e, "failed to list git files"),
-            }
-        }
-        state.file_picker_results = fuzzy::fuzzy_filter(&state.git_files, &state.file_picker_input);
-    }
+    state
+        .file_picker
+        .ensure_loaded(&state.debug_root_dir.clone());
+    let fp = &mut state.file_picker;
 
     let mut result = FilePickerResult::None;
 
@@ -39,25 +33,20 @@ pub(crate) fn show(ctx: &Context, state: &mut DebuggerAppState) -> FilePickerRes
             close = true;
         }
         if i.key_pressed(Key::ArrowDown) {
-            if !state.file_picker_results.is_empty() {
-                state.file_picker_cursor =
-                    (state.file_picker_cursor + 1).min(state.file_picker_results.len() - 1);
-            }
+            fp.cursor_down();
         }
         if i.key_pressed(Key::ArrowUp) {
-            state.file_picker_cursor = state.file_picker_cursor.saturating_sub(1);
+            fp.cursor_up();
         }
-        if i.key_pressed(Key::Enter) && !state.file_picker_results.is_empty() {
-            let selected = &state.file_picker_results[state.file_picker_cursor];
+        if i.key_pressed(Key::Enter) && !fp.results.is_empty() {
+            let selected = &fp.results[fp.cursor];
             result = FilePickerResult::Selected(selected.file.absolute_path.clone());
             close = true;
         }
     });
 
     if close {
-        state.file_picker_open = false;
-        state.file_picker_input.clear();
-        state.file_picker_cursor = 0;
+        fp.close();
         return result;
     }
 
@@ -73,7 +62,7 @@ pub(crate) fn show(ctx: &Context, state: &mut DebuggerAppState) -> FilePickerRes
         .show(ctx, |ui| {
             // Search input
             let input_response = ui.add(
-                TextEdit::singleline(&mut state.file_picker_input)
+                TextEdit::singleline(&mut fp.query)
                     .hint_text("Search files...")
                     .desired_width(f32::INFINITY),
             );
@@ -82,22 +71,7 @@ pub(crate) fn show(ctx: &Context, state: &mut DebuggerAppState) -> FilePickerRes
             input_response.request_focus();
 
             // Re-filter on every frame (input may have changed)
-            let prev_len = state.file_picker_results.len();
-            state.file_picker_results =
-                fuzzy::fuzzy_filter(&state.git_files, &state.file_picker_input);
-
-            // Clamp cursor
-            if state.file_picker_results.is_empty() {
-                state.file_picker_cursor = 0;
-            } else {
-                // Reset cursor when results change significantly
-                if state.file_picker_results.len() != prev_len {
-                    state.file_picker_cursor = 0;
-                }
-                state.file_picker_cursor = state
-                    .file_picker_cursor
-                    .min(state.file_picker_results.len() - 1);
-            }
+            fp.refilter();
 
             ui.separator();
 
@@ -106,13 +80,8 @@ pub(crate) fn show(ctx: &Context, state: &mut DebuggerAppState) -> FilePickerRes
             egui::ScrollArea::vertical()
                 .max_height(260.0)
                 .show(ui, |ui| {
-                    for (i, m) in state
-                        .file_picker_results
-                        .iter()
-                        .take(max_visible)
-                        .enumerate()
-                    {
-                        let is_selected = i == state.file_picker_cursor;
+                    for (i, m) in fp.results.iter().take(max_visible).enumerate() {
+                        let is_selected = i == fp.cursor;
                         let path_str = m.file.relative_path.to_string_lossy();
 
                         // Build a LayoutJob with highlighted match characters

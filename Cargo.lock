@@ -2045,6 +2045,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "ui-core",
 ]
 
 [[package]]
@@ -4996,6 +4997,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "ui-core",
 ]
 
 [[package]]
@@ -5022,6 +5024,27 @@ dependencies = [
  "memoffset",
  "tempfile",
  "winapi",
+]
+
+[[package]]
+name = "ui-core"
+version = "0.1.0"
+dependencies = [
+ "async-transport",
+ "clap",
+ "crossbeam-channel",
+ "dap-types",
+ "debugger",
+ "dirs 6.0.0",
+ "eyre",
+ "fuzzy",
+ "launch_configuration",
+ "serde",
+ "serde_json",
+ "server",
+ "state",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -175,7 +175,7 @@ impl SyntaxHighlighter {
         start_line: usize,
         gutter_width: usize,
         cursor_line: usize,
-        search_matches: &[(usize, usize, usize)],
+        search_matches: &[crate::app::SearchMatch],
         current_match_idx: usize,
         exec_line: Option<usize>,
         breakpoint_lines: &std::collections::HashSet<usize>,
@@ -242,8 +242,8 @@ impl SyntaxHighlighter {
                 let line_matches: Vec<(usize, usize, bool)> = search_matches
                     .iter()
                     .enumerate()
-                    .filter(|(_, (l, _, _))| *l == line_idx)
-                    .map(|(idx, (_, start, len))| (*start, *len, idx == current_match_idx))
+                    .filter(|(_, m)| m.line == line_idx)
+                    .map(|(idx, m)| (m.byte_start_in_line, m.length, idx == current_match_idx))
                     .collect();
 
                 // Build the code spans, overlaying search highlights
