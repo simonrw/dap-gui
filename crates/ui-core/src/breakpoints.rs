@@ -48,13 +48,25 @@ pub fn collect_persisted_breakpoints(
 /// Collect all breakpoints (UI + persisted) for session start.
 ///
 /// Merges the current UI breakpoints with any persisted breakpoints,
-/// avoiding duplicates.
+/// avoiding duplicates.  UI breakpoint paths are canonicalised before
+/// comparison so they match the canonical paths used by persisted
+/// breakpoints.
 pub fn collect_all_breakpoints(
     state_manager: &StateManager,
     debug_root_dir: &Path,
     ui_breakpoints: &HashSet<Breakpoint>,
 ) -> Vec<Breakpoint> {
-    let mut bps: Vec<Breakpoint> = ui_breakpoints.iter().cloned().collect();
+    // Canonicalise UI breakpoint paths so comparisons with the
+    // (already-canonicalised) persisted breakpoints are consistent.
+    let mut bps: Vec<Breakpoint> = ui_breakpoints
+        .iter()
+        .cloned()
+        .map(|mut bp| {
+            bp.path = std::fs::canonicalize(&bp.path).unwrap_or(bp.path);
+            bp
+        })
+        .collect();
+
     let persisted = collect_persisted_breakpoints(state_manager, debug_root_dir);
     for bp in persisted {
         if !bps.contains(&bp) {
