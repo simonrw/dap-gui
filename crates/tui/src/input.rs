@@ -225,6 +225,13 @@ fn handle_normal_key(app: &mut App, key: KeyEvent) {
             }
             return;
         }
+        KeyCode::Char('z') => {
+            app.zen_mode = !app.zen_mode;
+            if app.zen_mode {
+                app.focus = Focus::CodeView;
+            }
+            return;
+        }
         KeyCode::Esc => {
             // Close help, dismiss search highlights
             if app.show_help {
@@ -235,18 +242,28 @@ fn handle_normal_key(app: &mut App, key: KeyEvent) {
                 app.search.active = false;
                 return;
             }
+            if app.zen_mode {
+                app.zen_mode = false;
+                return;
+            }
         }
-        // Focus cycling
+        // Focus cycling (disabled in zen mode — only code view is visible)
         KeyCode::Tab if key.modifiers.contains(KeyModifiers::SHIFT) => {
-            app.focus = app.focus.prev();
+            if !app.zen_mode {
+                app.focus = app.focus.prev();
+            }
             return;
         }
         KeyCode::Tab => {
-            app.focus = app.focus.next();
+            if !app.zen_mode {
+                app.focus = app.focus.next();
+            }
             return;
         }
         KeyCode::BackTab => {
-            app.focus = app.focus.prev();
+            if !app.zen_mode {
+                app.focus = app.focus.prev();
+            }
             return;
         }
         // Bottom tab switching
@@ -1281,6 +1298,62 @@ mod tests {
             // No configs -> error, mode stays NoSession
             assert_eq!(app.mode, AppMode::NoSession);
             assert!(app.status_error.is_some());
+        });
+    }
+
+    // ── Zen mode ──────────────────────────────────────────────────────
+
+    #[test]
+    fn z_toggles_zen_mode() {
+        with_test_app(|app| {
+            assert!(!app.zen_mode);
+            handle_key(app, key(KeyCode::Char('z')));
+            assert!(app.zen_mode);
+            assert_eq!(app.focus, Focus::CodeView);
+
+            handle_key(app, key(KeyCode::Char('z')));
+            assert!(!app.zen_mode);
+        });
+    }
+
+    #[test]
+    fn z_forces_focus_to_code_view() {
+        with_test_app(|app| {
+            app.focus = Focus::Variables;
+            handle_key(app, key(KeyCode::Char('z')));
+            assert!(app.zen_mode);
+            assert_eq!(app.focus, Focus::CodeView);
+        });
+    }
+
+    #[test]
+    fn esc_exits_zen_mode() {
+        with_test_app(|app| {
+            app.zen_mode = true;
+            handle_key(app, key(KeyCode::Esc));
+            assert!(!app.zen_mode);
+        });
+    }
+
+    #[test]
+    fn esc_dismisses_help_before_zen_mode() {
+        with_test_app(|app| {
+            app.zen_mode = true;
+            app.show_help = true;
+            handle_key(app, key(KeyCode::Esc));
+            // Help closed first, zen mode still on
+            assert!(!app.show_help);
+            assert!(app.zen_mode);
+        });
+    }
+
+    #[test]
+    fn tab_is_noop_in_zen_mode() {
+        with_test_app(|app| {
+            app.zen_mode = true;
+            app.focus = Focus::CodeView;
+            handle_key(app, key(KeyCode::Tab));
+            assert_eq!(app.focus, Focus::CodeView);
         });
     }
 }

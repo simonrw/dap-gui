@@ -30,6 +30,16 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
 
     spans.push(Span::raw(" "));
 
+    // Zen mode indicator
+    if app.zen_mode {
+        spans.push(Span::styled(
+            "[Zen: z] ",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
     // Config name
     if !app.config_names.is_empty() {
         spans.push(Span::styled(

@@ -42,6 +42,12 @@ pub fn render(frame: &mut Frame) {
         binding_line("Tab / S-Tab", "Cycle focus fwd/back", key_style, desc_style),
         binding_line("Alt+1/2/3", "Switch bottom tab", key_style, desc_style),
         binding_line("Esc", "Close popup / cancel", key_style, desc_style),
+        binding_line(
+            "z",
+            "Toggle zen mode (maximize code)",
+            key_style,
+            desc_style,
+        ),
         Line::from(""),
         Line::from(Span::styled("── Config ──", section_style)),
         binding_line("h / Left", "Previous config", key_style, desc_style),

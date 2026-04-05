@@ -153,6 +153,9 @@ pub struct App {
     // Help overlay
     pub show_help: bool,
 
+    // Zen mode: hide all panels except code view and status bar
+    pub zen_mode: bool,
+
     // REPL
     pub repl_input: String,
     pub repl_history: Vec<(String, String, bool)>, // (input, output, is_error)
@@ -228,6 +231,7 @@ impl App {
             search: SearchState::default(),
             file_picker: FilePickerState::default(),
             show_help: false,
+            zen_mode: false,
             repl_input: String::new(),
             repl_history: Vec::new(),
             repl_input_history: Vec::new(),
@@ -1346,6 +1350,7 @@ mod tests {
             assert!(app.ui_breakpoints.is_empty());
             assert!(app.output_lines.is_empty());
             assert!(!app.show_help);
+            assert!(!app.zen_mode);
             assert!(app.repl_input.is_empty());
             assert!(app.output_auto_scroll);
         });
