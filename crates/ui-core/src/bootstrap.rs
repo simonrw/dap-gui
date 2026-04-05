@@ -14,6 +14,7 @@ use state::StateManager;
         Connects to any debug adapter that speaks DAP (e.g. debugpy, codelldb, \
         go-delve) using a VS Code-style launch.json configuration file.",
     after_help = "EXAMPLES:\n    \
+        dap-tui\n    \
         dap-tui launch.json\n    \
         dap-tui launch.json --name 'Attach to server'\n    \
         dap-tui launch.json -b src/main.rs:42 -b src/lib.rs:10"
@@ -24,6 +25,7 @@ pub struct Args {
     /// The file is read to discover available debug configurations.
     /// Both standalone launch.json files and VS Code .code-workspace
     /// files are supported.
+    #[clap(default_value = ".vscode/launch.json")]
     pub config_path: PathBuf,
 
     /// Select a specific configuration by name.
