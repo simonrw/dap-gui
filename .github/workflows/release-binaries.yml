@@ -52,14 +52,14 @@ jobs:
       - name: Package binary (unix)
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf ../../../tui-${{ github.ref_name }}-${{ matrix.target }}.tar.gz tui
+          tar czf ../../../dap-tui-${{ github.ref_name }}-${{ matrix.target }}.tar.gz dap-tui
           cd ../../..
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tui-${{ matrix.target }}
-          path: tui-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+          name: dap-tui-${{ matrix.target }}
+          path: dap-tui-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
 
   release:
     name: Publish release
@@ -72,12 +72,12 @@ jobs:
           merge-multiple: true
 
       - name: Generate checksums
-        run: sha256sum tui-*.tar.gz > checksums-sha256.txt
+        run: sha256sum dap-tui-*.tar.gz > checksums-sha256.txt
 
       - name: Upload to GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            tui-*.tar.gz
+            dap-tui-*.tar.gz
             checksums-sha256.txt
           fail_on_unmatched_files: true
