@@ -7,15 +7,37 @@ use state::StateManager;
 
 /// CLI arguments shared by both TUI and GUI frontends.
 #[derive(Parser, Clone)]
+#[command(
+    version,
+    about = "A terminal debugger built on the Debug Adapter Protocol (DAP)",
+    long_about = "A terminal debugger built on the Debug Adapter Protocol (DAP).\n\n\
+        Connects to any debug adapter that speaks DAP (e.g. debugpy, codelldb, \
+        go-delve) using a VS Code-style launch.json configuration file.",
+    after_help = "EXAMPLES:\n    \
+        dap-tui launch.json\n    \
+        dap-tui launch.json --name 'Attach to server'\n    \
+        dap-tui launch.json -b src/main.rs:42 -b src/lib.rs:10"
+)]
 pub struct Args {
     /// Path to a launch.json or VS Code workspace file.
+    ///
+    /// The file is read to discover available debug configurations.
+    /// Both standalone launch.json files and VS Code .code-workspace
+    /// files are supported.
     pub config_path: PathBuf,
 
     /// Select a specific configuration by name.
+    ///
+    /// When omitted the last-used configuration is restored, or the
+    /// first entry in the file is selected.
     #[clap(short, long)]
     pub name: Option<String>,
 
     /// Initial breakpoints in `file:line` format.
+    ///
+    /// May be repeated to set several breakpoints before the session
+    /// starts. Relative paths are resolved against the current
+    /// working directory.
     #[clap(short, long)]
     pub breakpoints: Vec<String>,
 }
