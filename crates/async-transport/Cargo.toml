@@ -1,9 +1,12 @@
 [package]
-name = "async-transport"
+name = "dap-gui-async-transport"
 version = "0.1.0"
 edition = "2024"
 description = "Async DAP transport layer using tokio"
 license = "MIT OR Apache-2.0"
+
+[lib]
+name = "async_transport"
 
 [dependencies]
 bytes.workspace = true

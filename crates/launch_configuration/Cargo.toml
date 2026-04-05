@@ -1,7 +1,10 @@
 [package]
-name = "launch_configuration"
+name = "dap-gui-launch-configuration"
 version = "0.1.0"
 edition = "2024"
+
+[lib]
+name = "launch_configuration"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

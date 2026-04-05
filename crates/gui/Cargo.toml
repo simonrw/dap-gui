@@ -1,5 +1,5 @@
 [package]
-name = "gui"
+name = "dap-gui-egui"
 version = "0.1.0"
 edition = "2024"
 
@@ -11,21 +11,21 @@ crossbeam-channel.workspace = true
 eyre.workspace = true
 tracing.workspace = true
 clap.workspace = true
-debugger = { path = "../debugger", version = "0.1.0" }
+debugger = { path = "../debugger", version = "0.1.0", package = "dap-gui-debugger" }
 tracing-subscriber.workspace = true
 sentry = { version = "0.45.0", optional = true, default-features = false, features = [ "reqwest", "rustls", "backtrace", "contexts", "panic", "debug-images" ] }
-dap-types = { path = "../dap-types", version = "0.1.0" }
-server = { path = "../server", version = "0.1.0" }
+dap-types = { path = "../dap-types", version = "0.1.0", package = "dap-gui-types" }
+server = { path = "../server", version = "0.1.0", package = "dap-gui-server" }
 color-eyre.workspace = true
-state = { path = "../state", version = "0.1.0" }
+state = { path = "../state", version = "0.1.0", package = "dap-gui-state" }
 dirs.workspace = true
-launch_configuration = { path = "../launch_configuration", version = "0.1.0" }
+launch_configuration = { path = "../launch_configuration", version = "0.1.0", package = "dap-gui-launch-configuration" }
 dark-light.workspace = true
-fuzzy = { path = "../fuzzy", version = "0.1.0" }
+fuzzy = { path = "../fuzzy", version = "0.1.0", package = "dap-gui-fuzzy" }
 syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "parsing", "regex-onig"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync", "macros"] }
-async-transport = { path = "../async-transport", version = "0.1.0" }
-ui-core = { path = "../ui-core", version = "0.1.0" }
+async-transport = { path = "../async-transport", version = "0.1.0", package = "dap-gui-async-transport" }
+ui-core = { path = "../ui-core", version = "0.1.0", package = "dap-gui-ui-core" }
 
 [features]
 sentry = ["dep:sentry"]

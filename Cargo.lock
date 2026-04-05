@@ -444,21 +444,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-transport"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "futures",
- "pin-project-lite",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "tokio-util",
- "tracing",
-]
-
-[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1076,11 +1061,193 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
-name = "dap-types"
+name = "dap-gui-async-transport"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "futures",
+ "pin-project-lite",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "dap-gui-debugger"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "ctor",
+ "dap-gui-async-transport",
+ "dap-gui-launch-configuration",
+ "dap-gui-server",
+ "dap-gui-types",
+ "dirs 6.0.0",
+ "eyre",
+ "futures",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "dap-gui-egui"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "crossbeam-channel",
+ "dap-gui-async-transport",
+ "dap-gui-debugger",
+ "dap-gui-fuzzy",
+ "dap-gui-launch-configuration",
+ "dap-gui-server",
+ "dap-gui-state",
+ "dap-gui-types",
+ "dap-gui-ui-core",
+ "dark-light",
+ "dirs 6.0.0",
+ "eframe",
+ "eyre",
+ "sentry",
+ "syntect",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "dap-gui-fuzzy"
+version = "0.1.0"
+dependencies = [
+ "nucleo-matcher",
+]
+
+[[package]]
+name = "dap-gui-launch-configuration"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "ctor",
+ "eyre",
+ "jsonc-parser",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "dap-gui-pcaplog"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "clap",
+ "color-eyre",
+ "ctor",
+ "dap-gui-async-transport",
+ "etherparse",
+ "eyre",
+ "glob",
+ "pcap-file",
+ "rstest",
+ "serde",
+ "serde_json",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "dap-gui-server"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "eyre",
+ "nix 0.30.1",
+ "tracing",
+ "tracing-subscriber",
+ "which",
+]
+
+[[package]]
+name = "dap-gui-state"
+version = "0.1.0"
+dependencies = [
+ "dap-gui-debugger",
+ "dirs 6.0.0",
+ "eyre",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "dap-gui-tui"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "crossbeam-channel",
+ "crossterm",
+ "dap-gui-async-transport",
+ "dap-gui-debugger",
+ "dap-gui-fuzzy",
+ "dap-gui-launch-configuration",
+ "dap-gui-server",
+ "dap-gui-state",
+ "dap-gui-types",
+ "dap-gui-ui-core",
+ "data-encoding",
+ "dirs 6.0.0",
+ "eyre",
+ "insta",
+ "ratatui",
+ "serde",
+ "serde_json",
+ "syntect",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "dap-gui-types"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "dap-gui-ui-core"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "crossbeam-channel",
+ "dap-gui-async-transport",
+ "dap-gui-debugger",
+ "dap-gui-fuzzy",
+ "dap-gui-launch-configuration",
+ "dap-gui-server",
+ "dap-gui-state",
+ "dap-gui-types",
+ "dirs 6.0.0",
+ "eyre",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1144,30 +1311,6 @@ name = "dconf_rs"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7046468a81e6a002061c01e6a7c83139daf91b11c30e66795b13217c2d885c8b"
-
-[[package]]
-name = "debugger"
-version = "0.1.0"
-dependencies = [
- "async-transport",
- "color-eyre",
- "ctor",
- "dap-types",
- "dirs 6.0.0",
- "eyre",
- "futures",
- "launch_configuration",
- "serde",
- "serde_json",
- "server",
- "tempfile",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
 
 [[package]]
 name = "debugid"
@@ -1821,13 +1964,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuzzy"
-version = "0.1.0"
-dependencies = [
- "nucleo-matcher",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2037,32 +2173,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdf242682df893b86f33a73828fb09ca4b2d3bb6cc95249707fc684d27484b91"
 dependencies = [
  "bitflags 2.11.0",
-]
-
-[[package]]
-name = "gui"
-version = "0.1.0"
-dependencies = [
- "async-transport",
- "clap",
- "color-eyre",
- "crossbeam-channel",
- "dap-types",
- "dark-light",
- "debugger",
- "dirs 6.0.0",
- "eframe",
- "eyre",
- "fuzzy",
- "launch_configuration",
- "sentry",
- "server",
- "state",
- "syntect",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "ui-core",
 ]
 
 [[package]]
@@ -2531,18 +2641,6 @@ name = "khronos_api"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
-
-[[package]]
-name = "launch_configuration"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "ctor",
- "eyre",
- "jsonc-parser",
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "lazy_static"
@@ -3421,27 +3519,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pcaplog"
-version = "0.1.0"
-dependencies = [
- "async-transport",
- "bytes",
- "clap",
- "color-eyre",
- "ctor",
- "etherparse",
- "eyre",
- "glob",
- "pcap-file",
- "rstest",
- "serde",
- "serde_json",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4290,18 +4367,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "server"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "eyre",
- "nix 0.30.1",
- "tracing",
- "tracing-subscriber",
- "which",
-]
-
-[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4487,19 +4552,6 @@ name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
-
-[[package]]
-name = "state"
-version = "0.1.0"
-dependencies = [
- "debugger",
- "dirs 6.0.0",
- "eyre",
- "serde",
- "serde_json",
- "tempfile",
- "tracing",
-]
 
 [[package]]
 name = "static_assertions"
@@ -5008,36 +5060,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 
 [[package]]
-name = "tui"
-version = "0.1.0"
-dependencies = [
- "async-transport",
- "clap",
- "color-eyre",
- "crossbeam-channel",
- "crossterm",
- "dap-types",
- "data-encoding",
- "debugger",
- "dirs 6.0.0",
- "eyre",
- "fuzzy",
- "insta",
- "launch_configuration",
- "ratatui",
- "serde",
- "serde_json",
- "server",
- "state",
- "syntect",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "ui-core",
-]
-
-[[package]]
 name = "type-map"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5061,28 +5083,6 @@ dependencies = [
  "memoffset",
  "tempfile",
  "winapi",
-]
-
-[[package]]
-name = "ui-core"
-version = "0.1.0"
-dependencies = [
- "async-transport",
- "clap",
- "crossbeam-channel",
- "dap-types",
- "debugger",
- "dirs 6.0.0",
- "eyre",
- "fuzzy",
- "launch_configuration",
- "serde",
- "serde_json",
- "server",
- "state",
- "tempfile",
- "tokio",
- "tracing",
 ]
 
 [[package]]

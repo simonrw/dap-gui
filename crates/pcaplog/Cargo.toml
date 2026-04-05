@@ -1,7 +1,10 @@
 [package]
-name = "pcaplog"
+name = "dap-gui-pcaplog"
 version = "0.1.0"
 edition = "2024"
+
+[lib]
+name = "pcaplog"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,7 +17,7 @@ serde_json.workspace = true
 serde.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-async-transport = { path = "../async-transport", version = "0.1.0" }
+async-transport = { path = "../async-transport", version = "0.1.0", package = "dap-gui-async-transport" }
 bytes.workspace = true
 tokio-util.workspace = true
 

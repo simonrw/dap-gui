@@ -1,19 +1,22 @@
 [package]
-name = "ui-core"
+name = "dap-gui-ui-core"
 version = "0.1.0"
 edition = "2024"
+
+[lib]
+name = "ui_core"
 
 [features]
 testing = []
 
 [dependencies]
-debugger = { path = "../debugger", version = "0.1.0" }
-dap-types = { path = "../dap-types", version = "0.1.0" }
-server = { path = "../server", version = "0.1.0" }
-state = { path = "../state", version = "0.1.0" }
-launch_configuration = { path = "../launch_configuration", version = "0.1.0" }
-fuzzy = { path = "../fuzzy", version = "0.1.0" }
-async-transport = { path = "../async-transport", version = "0.1.0" }
+debugger = { path = "../debugger", version = "0.1.0", package = "dap-gui-debugger" }
+dap-types = { path = "../dap-types", version = "0.1.0", package = "dap-gui-types" }
+server = { path = "../server", version = "0.1.0", package = "dap-gui-server" }
+state = { path = "../state", version = "0.1.0", package = "dap-gui-state" }
+launch_configuration = { path = "../launch_configuration", version = "0.1.0", package = "dap-gui-launch-configuration" }
+fuzzy = { path = "../fuzzy", version = "0.1.0", package = "dap-gui-fuzzy" }
+async-transport = { path = "../async-transport", version = "0.1.0", package = "dap-gui-async-transport" }
 crossbeam-channel.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "sync", "macros"] }
 eyre.workspace = true

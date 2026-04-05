@@ -1,7 +1,10 @@
 [package]
-name = "state"
+name = "dap-gui-state"
 version = "0.1.0"
 edition = "2024"
+
+[lib]
+name = "state"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -9,7 +12,7 @@ edition = "2024"
 serde.workspace = true
 serde_json.workspace = true
 eyre.workspace = true
-debugger = { path = "../debugger", version = "0.1.0" }
+debugger = { path = "../debugger", version = "0.1.0", package = "dap-gui-debugger" }
 dirs.workspace = true
 tracing.workspace = true
 
