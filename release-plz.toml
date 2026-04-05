@@ -12,3 +12,4 @@ changelog_update = true
 git_tag_name = "v{{ version }}"
 git_release_name = "v{{ version }}"
 git_release_enable = true
+release_commits = "all"
