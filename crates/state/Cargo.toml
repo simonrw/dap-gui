@@ -9,7 +9,7 @@ edition = "2024"
 serde.workspace = true
 serde_json.workspace = true
 eyre.workspace = true
-debugger = { path = "../debugger" }
+debugger = { path = "../debugger", version = "0.1.0" }
 dirs.workspace = true
 tracing.workspace = true
 

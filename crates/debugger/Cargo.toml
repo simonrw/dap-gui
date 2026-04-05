@@ -11,17 +11,17 @@ testing = []
 [dependencies]
 eyre.workspace = true
 tracing.workspace = true
-server = { path = "../server" }
+server = { path = "../server", version = "0.1.0" }
 serde.workspace = true
 serde_json.workspace = true
-dap-types = { path = "../dap-types" }
-async-transport = { path = "../async-transport" }
+dap-types = { path = "../dap-types", version = "0.1.0" }
+async-transport = { path = "../async-transport", version = "0.1.0" }
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 tokio-util.workspace = true
 tokio-stream = "0.1.16"
 futures = "0.3.31"
 dirs.workspace = true
-launch_configuration = { path = "../launch_configuration" }
+launch_configuration = { path = "../launch_configuration", version = "0.1.0" }
 uuid = { version = "1.18.1", features = ["v4"] }
 
 [dev-dependencies]
@@ -30,6 +30,6 @@ ctor.workspace = true
 tracing-subscriber.workspace = true
 serde_json.workspace = true
 tempfile = "3.23.0"
-dap-types = { path = "../dap-types" }
-server = { path = "../server" }
+dap-types = { path = "../dap-types", version = "0.1.0" }
+server = { path = "../server", version = "0.1.0" }
 tokio = { workspace = true, features = ["sync", "rt-multi-thread", "macros", "time"] }

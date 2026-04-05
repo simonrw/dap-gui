@@ -7,13 +7,13 @@ edition = "2024"
 testing = []
 
 [dependencies]
-debugger = { path = "../debugger" }
-dap-types = { path = "../dap-types" }
-server = { path = "../server" }
-state = { path = "../state" }
-launch_configuration = { path = "../launch_configuration" }
-fuzzy = { path = "../fuzzy" }
-async-transport = { path = "../async-transport" }
+debugger = { path = "../debugger", version = "0.1.0" }
+dap-types = { path = "../dap-types", version = "0.1.0" }
+server = { path = "../server", version = "0.1.0" }
+state = { path = "../state", version = "0.1.0" }
+launch_configuration = { path = "../launch_configuration", version = "0.1.0" }
+fuzzy = { path = "../fuzzy", version = "0.1.0" }
+async-transport = { path = "../async-transport", version = "0.1.0" }
 crossbeam-channel.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "sync", "macros"] }
 eyre.workspace = true
