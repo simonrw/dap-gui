@@ -10,6 +10,7 @@ pre-commit = "latest"
 "pipx:maturin" = "latest"
 "cargo:tokio-console" = "latest"
 rust-analyzer = "latest"
+release-plz = "latest"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
