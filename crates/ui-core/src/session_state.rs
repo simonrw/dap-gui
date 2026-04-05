@@ -74,3 +74,208 @@ impl SessionState {
         matches!(self, SessionState::Terminated)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// Build a minimal ProgramState for testing.
+    fn test_program_state() -> ProgramState {
+        let frame = test_stack_frame(1, "main", 10);
+        ProgramState {
+            stack: vec![frame.clone()],
+            paused_frame: debugger::PausedFrame {
+                frame,
+                variables: vec![],
+            },
+            breakpoints: vec![Breakpoint {
+                name: None,
+                path: PathBuf::from("/project/test.py"),
+                line: 10,
+            }],
+        }
+    }
+
+    fn test_stack_frame(id: i64, name: &str, line: usize) -> dap_types::StackFrame {
+        dap_types::StackFrame {
+            id,
+            name: name.to_string(),
+            line,
+            column: 0,
+            source: Some(dap_types::Source {
+                name: Some("test.py".to_string()),
+                path: Some(PathBuf::from("/project/test.py")),
+                ..Default::default()
+            }),
+            can_restart: None,
+            end_column: None,
+            end_line: None,
+            instruction_pointer_reference: None,
+            module_id: None,
+            presentation_hint: None,
+        }
+    }
+
+    // ── State transitions ────────────────────────────────────────────
+
+    #[test]
+    fn running_to_paused_on_paused_event() {
+        let state = SessionState::Running;
+        let ps = test_program_state();
+        let new = state.apply(&Event::Paused(ps));
+        assert!(new.is_paused());
+    }
+
+    #[test]
+    fn running_to_paused_on_scope_change_event() {
+        let state = SessionState::Running;
+        let ps = test_program_state();
+        let new = state.apply(&Event::ScopeChange(ps));
+        assert!(new.is_paused());
+    }
+
+    #[test]
+    fn running_to_terminated_on_ended() {
+        let state = SessionState::Running;
+        let new = state.apply(&Event::Ended);
+        assert!(new.is_terminated());
+    }
+
+    #[test]
+    fn paused_to_running_on_running_event() {
+        let ps = test_program_state();
+        let state = SessionState::Paused {
+            stack: ps.stack.clone(),
+            paused_frame: Box::new(ps.paused_frame.clone()),
+            breakpoints: ps.breakpoints.clone(),
+        };
+        let new = state.apply(&Event::Running);
+        assert!(new.is_running());
+    }
+
+    #[test]
+    fn paused_to_terminated_on_ended() {
+        let ps = test_program_state();
+        let state = SessionState::Paused {
+            stack: ps.stack.clone(),
+            paused_frame: Box::new(ps.paused_frame.clone()),
+            breakpoints: ps.breakpoints.clone(),
+        };
+        let new = state.apply(&Event::Ended);
+        assert!(new.is_terminated());
+    }
+
+    #[test]
+    fn terminated_to_running_on_initialised() {
+        let state = SessionState::Terminated;
+        let new = state.apply(&Event::Initialised);
+        assert!(new.is_running());
+    }
+
+    #[test]
+    fn terminated_to_running_on_running_event() {
+        let state = SessionState::Terminated;
+        let new = state.apply(&Event::Running);
+        assert!(new.is_running());
+    }
+
+    // ── Non-transitioning events ─────────────────────────────────────
+
+    #[test]
+    fn output_event_preserves_running_state() {
+        let state = SessionState::Running;
+        let new = state.apply(&Event::Output {
+            category: "stdout".to_string(),
+            output: "hello\n".to_string(),
+        });
+        assert!(new.is_running());
+    }
+
+    #[test]
+    fn thread_event_preserves_running_state() {
+        let state = SessionState::Running;
+        let new = state.apply(&Event::Thread {
+            reason: "started".to_string(),
+            thread_id: 1,
+        });
+        assert!(new.is_running());
+    }
+
+    #[test]
+    fn error_event_preserves_paused_state() {
+        let ps = test_program_state();
+        let state = SessionState::Paused {
+            stack: ps.stack.clone(),
+            paused_frame: Box::new(ps.paused_frame.clone()),
+            breakpoints: ps.breakpoints.clone(),
+        };
+        let new = state.apply(&Event::Error("something failed".to_string()));
+        assert!(new.is_paused());
+    }
+
+    #[test]
+    fn uninitialised_event_preserves_state() {
+        let state = SessionState::Running;
+        let new = state.apply(&Event::Uninitialised);
+        assert!(new.is_running());
+    }
+
+    // ── Helper methods ───────────────────────────────────────────────
+
+    #[test]
+    fn current_frame_id_when_paused() {
+        let ps = test_program_state();
+        let state = SessionState::Paused {
+            stack: ps.stack,
+            paused_frame: Box::new(ps.paused_frame),
+            breakpoints: ps.breakpoints,
+        };
+        assert_eq!(state.current_frame_id(), Some(1));
+    }
+
+    #[test]
+    fn current_frame_id_when_running() {
+        assert_eq!(SessionState::Running.current_frame_id(), None);
+    }
+
+    #[test]
+    fn current_frame_id_when_terminated() {
+        assert_eq!(SessionState::Terminated.current_frame_id(), None);
+    }
+
+    #[test]
+    fn boolean_helpers() {
+        assert!(SessionState::Running.is_running());
+        assert!(!SessionState::Running.is_paused());
+        assert!(!SessionState::Running.is_terminated());
+
+        assert!(SessionState::Terminated.is_terminated());
+        assert!(!SessionState::Terminated.is_running());
+        assert!(!SessionState::Terminated.is_paused());
+    }
+
+    // ── Paused state captures correct data ───────────────────────────
+
+    #[test]
+    fn paused_state_captures_stack_and_breakpoints() {
+        let state = SessionState::Running;
+        let ps = test_program_state();
+        let new = state.apply(&Event::Paused(ps));
+
+        if let SessionState::Paused {
+            stack,
+            paused_frame,
+            breakpoints,
+        } = new
+        {
+            assert_eq!(stack.len(), 1);
+            assert_eq!(stack[0].name, "main");
+            assert_eq!(paused_frame.frame.line, 10);
+            assert_eq!(breakpoints.len(), 1);
+            assert_eq!(breakpoints[0].line, 10);
+        } else {
+            panic!("expected Paused state");
+        }
+    }
+}

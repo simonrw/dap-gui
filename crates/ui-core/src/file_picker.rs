@@ -106,3 +106,149 @@ impl FilePickerState {
         self.refilter();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tracked(name: &str) -> fuzzy::TrackedFile {
+        fuzzy::TrackedFile {
+            relative_path: PathBuf::from(name),
+            absolute_path: PathBuf::from(format!("/project/{name}")),
+        }
+    }
+
+    fn picker_with_files(files: &[&str]) -> FilePickerState {
+        let git_files: Vec<fuzzy::TrackedFile> = files.iter().map(|n| tracked(n)).collect();
+        let results: Vec<fuzzy::FuzzyMatch> = git_files
+            .iter()
+            .map(|f| fuzzy::FuzzyMatch {
+                file: f.clone(),
+                score: 0,
+                matched_indices: vec![],
+            })
+            .collect();
+        FilePickerState {
+            open: true,
+            query: String::new(),
+            cursor: 0,
+            git_files,
+            git_files_loaded: true,
+            results,
+        }
+    }
+
+    // ── close ────────────────────────────────────────────────────────
+
+    #[test]
+    fn close_resets_state() {
+        let mut fp = picker_with_files(&["a.py", "b.py"]);
+        fp.query = "test".to_string();
+        fp.cursor = 1;
+
+        fp.close();
+
+        assert!(!fp.open);
+        assert!(fp.query.is_empty());
+        assert_eq!(fp.cursor, 0);
+    }
+
+    // ── cursor navigation ────────────────────────────────────────────
+
+    #[test]
+    fn cursor_down_increments() {
+        let mut fp = picker_with_files(&["a.py", "b.py", "c.py"]);
+        assert_eq!(fp.cursor, 0);
+        fp.cursor_down();
+        assert_eq!(fp.cursor, 1);
+        fp.cursor_down();
+        assert_eq!(fp.cursor, 2);
+    }
+
+    #[test]
+    fn cursor_down_clamps_at_last() {
+        let mut fp = picker_with_files(&["a.py", "b.py"]);
+        fp.cursor_down();
+        fp.cursor_down();
+        fp.cursor_down(); // past end
+        assert_eq!(fp.cursor, 1);
+    }
+
+    #[test]
+    fn cursor_down_on_empty_is_noop() {
+        let mut fp = picker_with_files(&[]);
+        fp.cursor_down();
+        assert_eq!(fp.cursor, 0);
+    }
+
+    #[test]
+    fn cursor_up_decrements() {
+        let mut fp = picker_with_files(&["a.py", "b.py", "c.py"]);
+        fp.cursor = 2;
+        fp.cursor_up();
+        assert_eq!(fp.cursor, 1);
+        fp.cursor_up();
+        assert_eq!(fp.cursor, 0);
+    }
+
+    #[test]
+    fn cursor_up_clamps_at_zero() {
+        let mut fp = picker_with_files(&["a.py"]);
+        fp.cursor_up();
+        assert_eq!(fp.cursor, 0);
+    }
+
+    // ── select ───────────────────────────────────────────────────────
+
+    #[test]
+    fn select_returns_path_and_closes() {
+        let mut fp = picker_with_files(&["src/main.py", "src/lib.py"]);
+        fp.cursor = 1;
+        let path = fp.select();
+        assert_eq!(path, Some(PathBuf::from("/project/src/lib.py")));
+        assert!(!fp.open);
+    }
+
+    #[test]
+    fn select_returns_none_when_empty() {
+        let mut fp = picker_with_files(&[]);
+        assert_eq!(fp.select(), None);
+    }
+
+    // ── refilter ─────────────────────────────────────────────────────
+
+    #[test]
+    fn refilter_clamps_cursor_when_results_shrink() {
+        let mut fp = picker_with_files(&["aaa.py", "bbb.py", "ccc.py"]);
+        fp.cursor = 2;
+
+        // Simulate filtering to fewer results
+        fp.query = "aaa".to_string();
+        fp.refilter();
+
+        // Cursor should be clamped
+        assert!(fp.cursor < fp.results.len() || fp.results.is_empty());
+    }
+
+    #[test]
+    fn refilter_with_empty_query_shows_all() {
+        let mut fp = picker_with_files(&["a.py", "b.py"]);
+        fp.query.clear();
+        fp.refilter();
+        // fuzzy_filter with empty query returns all files
+        assert_eq!(fp.results.len(), 2);
+    }
+
+    // ── default ──────────────────────────────────────────────────────
+
+    #[test]
+    fn default_state_is_closed_and_empty() {
+        let fp = FilePickerState::default();
+        assert!(!fp.open);
+        assert!(fp.query.is_empty());
+        assert_eq!(fp.cursor, 0);
+        assert!(fp.git_files.is_empty());
+        assert!(!fp.git_files_loaded);
+        assert!(fp.results.is_empty());
+    }
+}

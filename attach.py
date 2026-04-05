@@ -1,13 +1,16 @@
 import argparse
+import sys
 
 import debugpy
 
 
 a = 10
 
+
 def foo():
     print("Foo")
     return 5
+
 
 class Bar:
     def __init__(self, value):
@@ -22,6 +25,7 @@ def main():
     args = parser.parse_args()
 
     debugpy.listen(("127.0.0.1", args.port))
+    print("DAP server listening", file=sys.stderr, flush=True)
     debugpy.wait_for_client()
 
     print("Resuming")
@@ -33,6 +37,7 @@ def main():
 
     with open("out.txt", "w") as outfile:
         outfile.write("ok")
+
 
 if __name__ == "__main__":
     print("Main guard")

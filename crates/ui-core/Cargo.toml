@@ -3,6 +3,9 @@ name = "ui-core"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+testing = []
+
 [dependencies]
 debugger = { path = "../debugger" }
 dap-types = { path = "../dap-types" }
@@ -19,3 +22,6 @@ dirs.workspace = true
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+tempfile = "3.23.0"

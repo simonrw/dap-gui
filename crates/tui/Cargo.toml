@@ -26,3 +26,8 @@ syntect = { version = "5", default-features = false, features = ["default-syntax
 serde.workspace = true
 serde_json.workspace = true
 data-encoding = "2"
+
+[dev-dependencies]
+tempfile = "3.23.0"
+insta = "1"
+ui-core = { path = "../ui-core", features = ["testing"] }

@@ -81,4 +81,19 @@ impl Session {
             self.current_frame_id = None;
         }
     }
+
+    /// Create a test session with the given bridge and event receiver.
+    #[cfg(test)]
+    pub fn new_for_test(
+        bridge: crate::async_bridge::AsyncBridge,
+        debugger_event_rx: crossbeam_channel::Receiver<Event>,
+    ) -> Self {
+        Self {
+            bridge,
+            state: DebuggerState::Running,
+            current_frame_id: None,
+            debugger_event_rx,
+            _server: None,
+        }
+    }
 }

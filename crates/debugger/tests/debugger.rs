@@ -1,6 +1,11 @@
 use debugger::{PausedFrame, ProgramState};
 use eyre::WrapErr;
-use std::{io::IsTerminal, process::Child, time::Duration};
+use std::{
+    io::{BufRead, BufReader, IsTerminal},
+    process::Child,
+    sync::mpsc,
+    time::Duration,
+};
 use tracing_subscriber::EnvFilter;
 
 use dap_types::{Source, StackFrame};
@@ -83,22 +88,29 @@ async fn test_remote_attach() -> eyre::Result<()> {
     // Wrap in guard to ensure cleanup
     let mut child = ChildGuard(child);
 
-    // Give Python process time to start and bind to port
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
-    // Check if child process is still alive
-    if let Some(status) = child.try_wait().context("checking child status")? {
-        let stderr = child.stderr.take().map(|mut s| {
-            let mut buf = String::new();
-            std::io::Read::read_to_string(&mut s, &mut buf).ok();
-            buf
-        });
-        eyre::bail!(
-            "Python process exited early with status: {:?}\nstderr: {:?}",
-            status,
-            stderr
-        );
-    }
+    // Wait for the Python process to start and bind to the port by watching
+    // stderr for the readiness marker. This replaces a naive fixed sleep that
+    // was too short on CI, causing "Connection refused" errors.
+    let stderr = child.stderr.take().expect("stderr should be piped");
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            let line = match line {
+                Ok(l) => l,
+                Err(_) => break,
+            };
+            tracing::debug!(line = %line, "attach.py stderr");
+            if line.contains("DAP server listening") {
+                let _ = tx.send(());
+                break;
+            }
+        }
+    });
+    let readiness_timeout = Duration::from_secs(30);
+    rx.recv_timeout(readiness_timeout).map_err(|_| {
+        eyre::eyre!("timed out after {readiness_timeout:?} waiting for attach.py to become ready")
+    })?;
 
     let file_path = std::env::current_dir()
         .unwrap()
@@ -136,7 +148,7 @@ async fn test_remote_attach() -> eyre::Result<()> {
         }
     }
 
-    let breakpoint_line = 9;
+    let breakpoint_line = 11;
     debugger
         .add_breakpoint(&debugger::Breakpoint {
             path: file_path.clone(),
