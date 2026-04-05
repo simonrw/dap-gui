@@ -1191,36 +1191,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dap-gui-tui"
-version = "0.1.0"
-dependencies = [
- "clap",
- "color-eyre",
- "crossbeam-channel",
- "crossterm",
- "dap-gui-async-transport",
- "dap-gui-debugger",
- "dap-gui-fuzzy",
- "dap-gui-launch-configuration",
- "dap-gui-server",
- "dap-gui-state",
- "dap-gui-types",
- "dap-gui-ui-core",
- "data-encoding",
- "dirs 6.0.0",
- "eyre",
- "insta",
- "ratatui",
- "serde",
- "serde_json",
- "syntect",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "dap-gui-types"
 version = "0.1.0"
 dependencies = [
@@ -1248,6 +1218,36 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "dap-tui"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "crossbeam-channel",
+ "crossterm",
+ "dap-gui-async-transport",
+ "dap-gui-debugger",
+ "dap-gui-fuzzy",
+ "dap-gui-launch-configuration",
+ "dap-gui-server",
+ "dap-gui-state",
+ "dap-gui-types",
+ "dap-gui-ui-core",
+ "data-encoding",
+ "dirs 6.0.0",
+ "eyre",
+ "insta",
+ "ratatui",
+ "serde",
+ "serde_json",
+ "syntect",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
