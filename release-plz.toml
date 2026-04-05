@@ -3,6 +3,7 @@ release = false
 semver_check = false
 publish = false
 changelog_update = false
+release_commits = "all"
 
 [[package]]
 name = "dap-tui"
@@ -12,4 +13,3 @@ changelog_update = true
 git_tag_name = "v{{ version }}"
 git_release_name = "v{{ version }}"
 git_release_enable = true
-release_commits = "all"
