@@ -1,7 +1,10 @@
 [package]
-name = "fuzzy"
+name = "dap-gui-fuzzy"
 version = "0.1.0"
 edition = "2024"
+
+[lib]
+name = "fuzzy"
 
 [dependencies]
 nucleo-matcher = "0.3"

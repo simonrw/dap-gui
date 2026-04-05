@@ -1,7 +1,10 @@
 [package]
-name = "dap-types"
+name = "dap-gui-types"
 version = "0.1.0"
 edition = "2024"
+
+[lib]
+name = "dap_types"
 
 [dependencies]
 serde = { workspace = true }

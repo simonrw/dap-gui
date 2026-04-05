@@ -5,7 +5,7 @@ publish = false
 changelog_update = false
 
 [[package]]
-name = "tui"
+name = "dap-gui-tui"
 release = true
 git_only = true
 changelog_update = true

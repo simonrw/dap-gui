@@ -48,11 +48,11 @@ jobs:
 
       - name: Build binary (cross)
         if: matrix.use_cross
-        run: cross build --release --target ${{ matrix.target }} -p tui
+        run: cross build --release --target ${{ matrix.target }} -p dap-gui-tui
 
       - name: Build binary (cargo)
         if: ${{ !matrix.use_cross }}
-        run: cargo build --release --target ${{ matrix.target }} -p tui
+        run: cargo build --release --target ${{ matrix.target }} -p dap-gui-tui
 
       - name: Package binary (unix)
         run: |

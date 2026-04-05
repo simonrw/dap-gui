@@ -5,8 +5,7 @@ use std::path::Path;
 use std::{env, fs};
 
 fn main() {
-    let spec_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../spec/microsoft.github.io/debug-adapter-protocol/debugAdapterProtocol.json");
+    let spec_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("debugAdapterProtocol.json");
     println!("cargo::rerun-if-changed={}", spec_path.display());
     println!("cargo::rerun-if-changed=build.rs");
 

@@ -29,15 +29,15 @@ python-develop: ## Compile and install a development version of the debugger
 
 .PHONY: tui-attach
 tui-attach:
-	cargo r -p tui $(RELEASE) -- launch.json -n Attach -b attach.py:29
+	cargo r -p dap-gui-tui $(RELEASE) -- launch.json -n Attach -b attach.py:29
 
 .PHONY: tui-launch
 tui-launch:
-	cargo r -p tui $(RELEASE) -- launch.json -n Launch -b test.py:4
+	cargo r -p dap-gui-tui $(RELEASE) -- launch.json -n Launch -b test.py:4
 
 .PHONY: profile-tui-launch
 profile-tui-launch:
-	cargo flamegraph --root -p tui --release -- launch.json -n Launch -b test.py:4
+	cargo flamegraph --root -p dap-gui-tui --release -- launch.json -n Launch -b test.py:4
 
 .PHONY: repl-attach
 repl-attach:
