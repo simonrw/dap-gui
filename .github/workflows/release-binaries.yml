@@ -18,12 +18,16 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
+            use_cross: false
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
+            use_cross: true
           - target: x86_64-apple-darwin
             os: macos-latest
+            use_cross: false
           - target: aarch64-apple-darwin
             os: macos-latest
+            use_cross: false
 
     steps:
       - name: Checkout repository
@@ -34,20 +38,21 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross-compilation tools
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Install cross
+        if: matrix.use_cross
+        uses: taiki-e/install-action@cross
 
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
 
-      - name: Build binary
+      - name: Build binary (cross)
+        if: matrix.use_cross
+        run: cross build --release --target ${{ matrix.target }} -p tui
+
+      - name: Build binary (cargo)
+        if: ${{ !matrix.use_cross }}
         run: cargo build --release --target ${{ matrix.target }} -p tui
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
       - name: Package binary (unix)
         run: |
