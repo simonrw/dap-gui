@@ -27,7 +27,10 @@ jobs:
         with:
           command: release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A PAT is required here (not GITHUB_TOKEN) so that the tag push
+          # created by release-plz triggers the release-binaries workflow.
+          # GitHub blocks workflow triggers from events created with GITHUB_TOKEN.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
   release-plz-pr:
     name: Release-plz PR
