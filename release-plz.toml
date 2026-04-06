@@ -1,8 +1,13 @@
 [workspace]
 publish = false
 git_release_enable = false
-dependencies_update = false
+release = true
+git_only = true
 
 [[package]]
 name = "dap-tui"
 git_release_enable = true
+
+[[package]]
+name = "xtask"
+release = false
