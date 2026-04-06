@@ -11,6 +11,8 @@ pre-commit = "latest"
 "cargo:tokio-console" = "latest"
 rust-analyzer = "latest"
 release-plz = "latest"
+"go:github.com/charmbracelet/vhs" = "latest"
+"github:tsl0922/ttyd" = { version = "latest", bin = "ttyd" }
 
 [env]
 _.python.venv = { path = ".venv", create = true }
