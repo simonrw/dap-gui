@@ -184,6 +184,9 @@ pub struct App {
     pub file_browser_files: Vec<fuzzy::TrackedFile>,
     pub file_browser_loaded: bool,
 
+    // Keybindings
+    pub keybindings: ui_core::keybindings::KeybindingConfig,
+
     // Evaluate expression popup
     pub evaluate_popup_open: bool,
     pub evaluate_input: String,
@@ -203,6 +206,7 @@ impl App {
         state_manager: StateManager,
         wakeup_tx: crossbeam_channel::Sender<()>,
         initial_breakpoints: Vec<debugger::Breakpoint>,
+        keybindings: ui_core::keybindings::KeybindingConfig,
     ) -> Self {
         Self {
             mode: AppMode::NoSession,
@@ -246,6 +250,7 @@ impl App {
             file_browser_results: Vec::new(),
             file_browser_files: Vec::new(),
             file_browser_loaded: false,
+            keybindings,
             evaluate_popup_open: false,
             evaluate_input: String::new(),
             evaluate_result: None,
@@ -916,6 +921,7 @@ pub(crate) mod test_helpers {
             state_manager,
             wakeup_tx,
             vec![], // no initial breakpoints
+            Default::default(),
         );
 
         f(&mut app);
@@ -951,6 +957,7 @@ pub(crate) mod test_helpers {
             state_manager,
             wakeup_tx,
             vec![],
+            Default::default(),
         );
 
         f(&mut app);
@@ -1591,6 +1598,7 @@ mod tests {
             state_manager,
             wakeup_tx,
             vec![],
+            Default::default(),
         );
 
         // Add a breakpoint and persist
@@ -1613,6 +1621,7 @@ mod tests {
             state_manager2,
             wakeup_tx2,
             vec![],
+            Default::default(),
         );
 
         let restored = ui_core::breakpoints::collect_all_breakpoints(
@@ -1645,6 +1654,7 @@ mod tests {
             state_manager,
             wakeup_tx,
             vec![],
+            Default::default(),
         );
         app1.ui_breakpoints.insert(debugger::Breakpoint {
             name: None,
@@ -1665,6 +1675,7 @@ mod tests {
             state_manager2,
             wakeup_tx2,
             vec![],
+            Default::default(),
         );
         app2.ui_breakpoints.insert(debugger::Breakpoint {
             name: None,

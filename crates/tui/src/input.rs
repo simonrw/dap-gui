@@ -1,8 +1,27 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ui_core::keybindings::KeyName;
 
 use crate::app::{App, AppMode, BottomTab, Focus, InputMode};
 use crate::async_bridge::UiCommand;
 use crate::session::DebuggerState;
+
+fn crossterm_to_key_name(code: KeyCode) -> Option<KeyName> {
+    match code {
+        KeyCode::F(1) => Some(KeyName::F1),
+        KeyCode::F(2) => Some(KeyName::F2),
+        KeyCode::F(3) => Some(KeyName::F3),
+        KeyCode::F(4) => Some(KeyName::F4),
+        KeyCode::F(5) => Some(KeyName::F5),
+        KeyCode::F(6) => Some(KeyName::F6),
+        KeyCode::F(7) => Some(KeyName::F7),
+        KeyCode::F(8) => Some(KeyName::F8),
+        KeyCode::F(9) => Some(KeyName::F9),
+        KeyCode::F(10) => Some(KeyName::F10),
+        KeyCode::F(11) => Some(KeyName::F11),
+        KeyCode::F(12) => Some(KeyName::F12),
+        _ => None,
+    }
+}
 
 /// Central keybinding dispatcher. Routes key events based on input mode and focus.
 pub fn handle_key(app: &mut App, key: KeyEvent) {
@@ -268,77 +287,64 @@ fn handle_normal_key(app: &mut App, key: KeyEvent) {
         }
     }
 
-    // Debugger keybindings
-    match key.code {
-        // Ctrl+Shift+F5: restart session
-        KeyCode::F(5)
-            if key
-                .modifiers
-                .contains(KeyModifiers::CONTROL | KeyModifiers::SHIFT) =>
-        {
-            app.restart_session();
-            return;
-        }
-        KeyCode::F(5) if key.modifiers.contains(KeyModifiers::SHIFT) => {
-            // Shift+F5: terminate / shutdown
-            match app.mode {
-                AppMode::Running | AppMode::Paused | AppMode::Initialising => {
-                    app.stop_session();
-                }
-                AppMode::Terminated => {
-                    app.shutdown_session();
-                }
-                AppMode::NoSession => {}
-            }
-            return;
-        }
-        KeyCode::F(5) => {
-            // F5: start session or continue
-            match app.mode {
-                AppMode::NoSession | AppMode::Terminated => {
-                    // Clean up old session first
-                    if app.mode == AppMode::Terminated {
+    // Debugger keybindings (configurable)
+    if let Some(key_name) = crossterm_to_key_name(key.code) {
+        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        let alt = key.modifiers.contains(KeyModifiers::ALT);
+        if let Some(action) = app.keybindings.match_action(key_name, shift, ctrl, alt) {
+            use ui_core::keybindings::DebugAction;
+            match action {
+                DebugAction::ContinueOrStart => match app.mode {
+                    AppMode::NoSession | AppMode::Terminated => {
+                        if app.mode == AppMode::Terminated {
+                            app.shutdown_session();
+                        }
+                        app.start_session();
+                    }
+                    AppMode::Paused => {
+                        if let Some(session) = &app.session {
+                            session.bridge.send(UiCommand::Continue);
+                        }
+                    }
+                    _ => {}
+                },
+                DebugAction::Stop => match app.mode {
+                    AppMode::Running | AppMode::Paused | AppMode::Initialising => {
+                        app.stop_session();
+                    }
+                    AppMode::Terminated => {
                         app.shutdown_session();
                     }
-                    app.start_session();
+                    AppMode::NoSession => {}
+                },
+                DebugAction::Restart => {
+                    app.restart_session();
                 }
-                AppMode::Paused => {
-                    if let Some(session) = &app.session {
-                        session.bridge.send(UiCommand::Continue);
+                DebugAction::StepOver => {
+                    if app.mode == AppMode::Paused {
+                        if let Some(session) = &app.session {
+                            session.bridge.send(UiCommand::StepOver);
+                        }
                     }
                 }
-                _ => {}
-            }
-            return;
-        }
-        KeyCode::F(10) => {
-            // F10: step over
-            if app.mode == AppMode::Paused {
-                if let Some(session) = &app.session {
-                    session.bridge.send(UiCommand::StepOver);
+                DebugAction::StepInto => {
+                    if app.mode == AppMode::Paused {
+                        if let Some(session) = &app.session {
+                            session.bridge.send(UiCommand::StepIn);
+                        }
+                    }
+                }
+                DebugAction::StepOut => {
+                    if app.mode == AppMode::Paused {
+                        if let Some(session) = &app.session {
+                            session.bridge.send(UiCommand::StepOut);
+                        }
+                    }
                 }
             }
             return;
         }
-        KeyCode::F(11) if key.modifiers.contains(KeyModifiers::SHIFT) => {
-            // Shift+F11: step out
-            if app.mode == AppMode::Paused {
-                if let Some(session) = &app.session {
-                    session.bridge.send(UiCommand::StepOut);
-                }
-            }
-            return;
-        }
-        KeyCode::F(11) => {
-            // F11: step in
-            if app.mode == AppMode::Paused {
-                if let Some(session) = &app.session {
-                    session.bridge.send(UiCommand::StepIn);
-                }
-            }
-            return;
-        }
-        _ => {}
     }
 
     // Focus-specific keybindings
@@ -1266,10 +1272,11 @@ mod tests {
     // ── F5 in NoSession with no configs ───────────────────────────────
 
     #[test]
-    fn f5_in_no_session_tries_start_session() {
+    fn continue_start_in_no_session_tries_start_session() {
         with_test_app(|app| {
             assert_eq!(app.mode, AppMode::NoSession);
-            handle_key(app, key(KeyCode::F(5)));
+            // Default continue_start keybinding is F9
+            handle_key(app, key(KeyCode::F(9)));
             // No configs -> error, mode stays NoSession
             assert_eq!(app.mode, AppMode::NoSession);
             assert!(app.status_error.is_some());

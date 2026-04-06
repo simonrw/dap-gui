@@ -55,6 +55,7 @@ fn main() -> eyre::Result<()> {
         boot.state_manager,
         wakeup_tx,
         boot.initial_breakpoints,
+        boot.keybindings,
     );
 
     // Install a panic hook that restores the terminal before printing.
