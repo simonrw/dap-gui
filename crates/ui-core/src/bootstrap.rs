@@ -5,7 +5,7 @@ use eyre::Context;
 use launch_configuration::LaunchConfiguration;
 use state::StateManager;
 
-use crate::keybindings::{self, KeybindingConfig};
+use config::keybindings::KeybindingConfig;
 
 /// CLI arguments shared by both TUI and GUI frontends.
 #[derive(Parser, Clone)]
@@ -102,7 +102,7 @@ pub fn bootstrap(args: &Args) -> eyre::Result<BootstrapResult> {
     };
 
     // Load user configuration (keybindings, etc.)
-    let config = keybindings::load_config();
+    let config = config::load_config();
 
     // Parse CLI breakpoints
     let initial_breakpoints: Vec<debugger::Breakpoint> = args

@@ -185,7 +185,7 @@ pub struct App {
     pub file_browser_loaded: bool,
 
     // Keybindings
-    pub keybindings: ui_core::keybindings::KeybindingConfig,
+    pub keybindings: config::keybindings::KeybindingConfig,
 
     // Evaluate expression popup
     pub evaluate_popup_open: bool,
@@ -206,7 +206,7 @@ impl App {
         state_manager: StateManager,
         wakeup_tx: crossbeam_channel::Sender<()>,
         initial_breakpoints: Vec<debugger::Breakpoint>,
-        keybindings: ui_core::keybindings::KeybindingConfig,
+        keybindings: config::keybindings::KeybindingConfig,
     ) -> Self {
         Self {
             mode: AppMode::NoSession,

@@ -1,5 +1,5 @@
+use config::keybindings::KeyName;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ui_core::keybindings::KeyName;
 
 use crate::app::{App, AppMode, BottomTab, Focus, InputMode};
 use crate::async_bridge::UiCommand;
@@ -293,7 +293,7 @@ fn handle_normal_key(app: &mut App, key: KeyEvent) {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
         if let Some(action) = app.keybindings.match_action(key_name, shift, ctrl, alt) {
-            use ui_core::keybindings::DebugAction;
+            use config::keybindings::DebugAction;
             match action {
                 DebugAction::ContinueOrStart => match app.mode {
                     AppMode::NoSession | AppMode::Terminated => {

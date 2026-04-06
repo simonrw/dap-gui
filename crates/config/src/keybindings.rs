@@ -1,5 +1,4 @@
 use std::fmt;
-use std::path::PathBuf;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -237,45 +236,6 @@ impl KeybindingConfig {
     }
 }
 
-/// Top-level application configuration.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Config {
-    #[serde(default)]
-    pub keybindings: KeybindingConfig,
-}
-
-/// Load configuration from the user's config directory.
-///
-/// Reads `$XDG_CONFIG_HOME/dapgui/config.toml` (or platform equivalent).
-/// Returns defaults if the file is missing or unparseable.
-pub fn load_config() -> Config {
-    let path = config_path();
-    match std::fs::read_to_string(&path) {
-        Ok(contents) => match toml::from_str(&contents) {
-            Ok(config) => config,
-            Err(e) => {
-                tracing::warn!(
-                    error = %e,
-                    path = %path.display(),
-                    "invalid config file, using defaults"
-                );
-                Config::default()
-            }
-        },
-        Err(_) => {
-            tracing::debug!(path = %path.display(), "no config file found, using defaults");
-            Config::default()
-        }
-    }
-}
-
-fn config_path() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("dapgui")
-        .join("config.toml")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,9 +284,9 @@ mod tests {
 
     #[test]
     fn toml_roundtrip() {
-        let config = Config::default();
+        let config = crate::Config::default();
         let toml_str = toml::to_string_pretty(&config).unwrap();
-        let parsed: Config = toml::from_str(&toml_str).unwrap();
+        let parsed: crate::Config = toml::from_str(&toml_str).unwrap();
         assert_eq!(
             config.keybindings.continue_start,
             parsed.keybindings.continue_start
@@ -340,7 +300,7 @@ mod tests {
 [keybindings]
 step_over = "F10"
 "#;
-        let config: Config = toml::from_str(toml_str).unwrap();
+        let config: crate::Config = toml::from_str(toml_str).unwrap();
         // Overridden
         assert_eq!(
             config.keybindings.step_over,
@@ -389,7 +349,7 @@ step_over = "F10"
 
     #[test]
     fn empty_config_file_uses_defaults() {
-        let config: Config = toml::from_str("").unwrap();
+        let config: crate::Config = toml::from_str("").unwrap();
         assert_eq!(config.keybindings.continue_start, default_continue_start());
     }
 }

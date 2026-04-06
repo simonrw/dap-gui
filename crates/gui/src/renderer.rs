@@ -18,7 +18,7 @@ use crate::{
     },
 };
 
-use ui_core::keybindings::KeyName;
+use config::keybindings::KeyName;
 
 /// ID for the search input field so we can request focus
 const SEARCH_INPUT_ID: &str = "code_view_search_input";
@@ -130,7 +130,7 @@ impl<'s> Renderer<'s> {
             None
         });
         if let Some(action) = debug_action {
-            use ui_core::keybindings::DebugAction;
+            use config::keybindings::DebugAction;
             match action {
                 DebugAction::ContinueOrStart => self.handle_f5(),
                 DebugAction::Stop => {

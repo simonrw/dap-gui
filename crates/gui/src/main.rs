@@ -170,7 +170,7 @@ struct DebuggerAppState {
     search_state: crate::code_view::GuiSearchState,
 
     // Keybindings
-    keybindings: ui_core::keybindings::KeybindingConfig,
+    keybindings: config::keybindings::KeybindingConfig,
 
     // Persistence
     state_manager: StateManager,

@@ -1076,6 +1076,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dap-gui-config"
+version = "0.1.0"
+dependencies = [
+ "dirs 6.0.0",
+ "serde",
+ "tempfile",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "dap-gui-debugger"
 version = "0.1.0"
 dependencies = [
@@ -1107,6 +1118,7 @@ dependencies = [
  "color-eyre",
  "crossbeam-channel",
  "dap-gui-async-transport",
+ "dap-gui-config",
  "dap-gui-debugger",
  "dap-gui-fuzzy",
  "dap-gui-launch-configuration",
@@ -1205,6 +1217,7 @@ dependencies = [
  "clap",
  "crossbeam-channel",
  "dap-gui-async-transport",
+ "dap-gui-config",
  "dap-gui-debugger",
  "dap-gui-fuzzy",
  "dap-gui-launch-configuration",
@@ -1217,7 +1230,6 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
- "toml",
  "tracing",
 ]
 
@@ -1230,6 +1242,7 @@ dependencies = [
  "crossbeam-channel",
  "crossterm",
  "dap-gui-async-transport",
+ "dap-gui-config",
  "dap-gui-debugger",
  "dap-gui-fuzzy",
  "dap-gui-launch-configuration",

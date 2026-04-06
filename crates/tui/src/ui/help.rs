@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 /// Render the help overlay as a floating popup.
-pub fn render(frame: &mut Frame, keybindings: &ui_core::keybindings::KeybindingConfig) {
+pub fn render(frame: &mut Frame, keybindings: &config::keybindings::KeybindingConfig) {
     let area = frame.area();
 
     let popup_width = ((area.width as f32 * 0.7) as u16).min(70).max(40);
