@@ -23,7 +23,7 @@ pub fn load_config() -> Config {
 ///
 /// Returns defaults if the file is missing or unparseable.
 pub fn load_config_from(path: &std::path::Path) -> Config {
-    match std::fs::read_to_string(path) {
+    let config = match std::fs::read_to_string(path) {
         Ok(contents) => match toml::from_str(&contents) {
             Ok(config) => config,
             Err(e) => {
@@ -39,7 +39,13 @@ pub fn load_config_from(path: &std::path::Path) -> Config {
             tracing::debug!(path = %path.display(), "no config file found, using defaults");
             Config::default()
         }
+    };
+
+    for conflict in config.keybindings.validate() {
+        tracing::warn!("{conflict}");
     }
+
+    config
 }
 
 fn config_path() -> PathBuf {
@@ -246,5 +252,72 @@ step_over = "F10"
     fn all_three_modifiers() {
         let kb: KeyBinding = "ctrl+alt+shift+F1".parse().unwrap();
         assert_eq!(kb, KeyBinding::new(KeyName::F1, true, true, true));
+    }
+
+    #[test]
+    fn default_config_has_no_conflicts() {
+        let config = keybindings::KeybindingConfig::default();
+        assert!(config.validate().is_empty());
+    }
+
+    #[test]
+    fn conflicting_bindings_detected() {
+        let mut config = keybindings::KeybindingConfig::default();
+        // Set step_over to the same binding as continue_start (F9)
+        config.step_over = config.continue_start.clone();
+        let conflicts = config.validate();
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(
+            conflicts[0].action_a,
+            keybindings::DebugAction::ContinueOrStart
+        );
+        assert_eq!(conflicts[0].action_b, keybindings::DebugAction::StepOver);
+    }
+
+    #[test]
+    fn multiple_conflicts_detected() {
+        let mut config = keybindings::KeybindingConfig::default();
+        // Make everything F1
+        let f1 = KeyBinding::new(KeyName::F1, false, false, false);
+        config.continue_start = f1.clone();
+        config.stop = f1.clone();
+        config.restart = f1.clone();
+        config.step_over = f1.clone();
+        config.step_into = f1.clone();
+        config.step_out = f1;
+        let conflicts = config.validate();
+        // 6 actions all on the same key = C(6,2) = 15 pairwise conflicts
+        assert_eq!(conflicts.len(), 15);
+    }
+
+    #[test]
+    fn conflicting_config_file_still_loads() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r#"
+[keybindings]
+continue_start = "F9"
+stop = "F9"
+"#,
+        )
+        .unwrap();
+        // Should still load (conflicts are warnings, not errors)
+        let config = load_config_from(&path);
+        assert_eq!(config.keybindings.continue_start, config.keybindings.stop);
+    }
+
+    #[test]
+    fn conflict_display_message() {
+        let conflict = keybindings::KeyConflict {
+            binding: KeyBinding::new(KeyName::F9, false, false, false),
+            action_a: keybindings::DebugAction::ContinueOrStart,
+            action_b: keybindings::DebugAction::Stop,
+        };
+        let msg = conflict.to_string();
+        assert!(msg.contains("F9"));
+        assert!(msg.contains("continue_start"));
+        assert!(msg.contains("stop"));
     }
 }

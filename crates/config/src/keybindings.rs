@@ -314,6 +314,37 @@ pub enum DebugAction {
     StepOut,
 }
 
+impl fmt::Display for DebugAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DebugAction::ContinueOrStart => write!(f, "continue_start"),
+            DebugAction::Stop => write!(f, "stop"),
+            DebugAction::Restart => write!(f, "restart"),
+            DebugAction::StepOver => write!(f, "step_over"),
+            DebugAction::StepInto => write!(f, "step_into"),
+            DebugAction::StepOut => write!(f, "step_out"),
+        }
+    }
+}
+
+/// A conflict between two debug actions bound to the same key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyConflict {
+    pub binding: KeyBinding,
+    pub action_a: DebugAction,
+    pub action_b: DebugAction,
+}
+
+impl fmt::Display for KeyConflict {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "keybinding conflict: '{}' is bound to both '{}' and '{}'",
+            self.binding, self.action_a, self.action_b
+        )
+    }
+}
+
 /// Keybinding configuration for debug actions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeybindingConfig {
@@ -364,6 +395,34 @@ impl Default for KeybindingConfig {
 }
 
 impl KeybindingConfig {
+    /// Check for conflicting keybinding definitions.
+    ///
+    /// Returns a list of conflicts where two different actions share the same binding.
+    pub fn validate(&self) -> Vec<KeyConflict> {
+        let actions: [(DebugAction, &KeyBinding); 6] = [
+            (DebugAction::ContinueOrStart, &self.continue_start),
+            (DebugAction::Stop, &self.stop),
+            (DebugAction::Restart, &self.restart),
+            (DebugAction::StepOver, &self.step_over),
+            (DebugAction::StepInto, &self.step_into),
+            (DebugAction::StepOut, &self.step_out),
+        ];
+
+        let mut conflicts = Vec::new();
+        for i in 0..actions.len() {
+            for j in (i + 1)..actions.len() {
+                if actions[i].1 == actions[j].1 {
+                    conflicts.push(KeyConflict {
+                        binding: actions[i].1.clone(),
+                        action_a: actions[i].0,
+                        action_b: actions[j].0,
+                    });
+                }
+            }
+        }
+        conflicts
+    }
+
     /// Match a key event (expressed as agnostic key name + modifiers) to a debug action.
     pub fn match_action(
         &self,
