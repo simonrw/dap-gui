@@ -23,7 +23,7 @@ pub fn load_config() -> Config {
 ///
 /// Returns defaults if the file is missing or unparseable.
 pub fn load_config_from(path: &std::path::Path) -> Config {
-    let config = match std::fs::read_to_string(path) {
+    let mut config: Config = match std::fs::read_to_string(path) {
         Ok(contents) => match toml::from_str(&contents) {
             Ok(config) => config,
             Err(e) => {
@@ -40,6 +40,9 @@ pub fn load_config_from(path: &std::path::Path) -> Config {
             Config::default()
         }
     };
+
+    // Build lookup maps (skipped by serde, already populated for Default)
+    config.keybindings.build_lookup();
 
     for conflict in config.keybindings.validate() {
         tracing::warn!("{conflict}");

@@ -33,12 +33,15 @@ pub fn render(frame: &mut Frame, keybindings: &config::keybindings::KeybindingCo
         .fg(Color::Cyan)
         .add_modifier(Modifier::BOLD);
 
-    let kb_continue = keybindings.continue_start.to_string();
-    let kb_stop = keybindings.stop.to_string();
-    let kb_restart = keybindings.restart.to_string();
-    let kb_step_over = keybindings.step_over.to_string();
-    let kb_step_into = keybindings.step_into.to_string();
-    let kb_step_out = keybindings.step_out.to_string();
+    use config::keybindings::DebugAction;
+    let kb_continue = keybindings
+        .label(DebugAction::ContinueOrStart)
+        .unwrap_or("?");
+    let kb_stop = keybindings.label(DebugAction::Stop).unwrap_or("?");
+    let kb_restart = keybindings.label(DebugAction::Restart).unwrap_or("?");
+    let kb_step_over = keybindings.label(DebugAction::StepOver).unwrap_or("?");
+    let kb_step_into = keybindings.label(DebugAction::StepInto).unwrap_or("?");
+    let kb_step_out = keybindings.label(DebugAction::StepOut).unwrap_or("?");
 
     let lines = vec![
         Line::from(Span::styled("── Global ──", section_style)),

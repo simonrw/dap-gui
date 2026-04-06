@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 
@@ -304,7 +305,7 @@ impl<'de> Deserialize<'de> for KeyBinding {
 }
 
 /// Debug actions that can be bound to keys.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DebugAction {
     ContinueOrStart,
     Stop,
@@ -346,6 +347,9 @@ impl fmt::Display for KeyConflict {
 }
 
 /// Keybinding configuration for debug actions.
+///
+/// After deserialization, call [`KeybindingConfig::build_lookup`] to populate
+/// the reverse (binding → action) and forward (action → label) maps.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeybindingConfig {
     #[serde(default = "default_continue_start")]
@@ -360,6 +364,14 @@ pub struct KeybindingConfig {
     pub step_into: KeyBinding,
     #[serde(default = "default_step_out")]
     pub step_out: KeyBinding,
+
+    /// Reverse lookup: binding → action. Populated by [`build_lookup`].
+    #[serde(skip)]
+    lookup: HashMap<KeyBinding, DebugAction>,
+
+    /// Forward labels: action → display string for the bound key. Populated by [`build_lookup`].
+    #[serde(skip)]
+    labels: HashMap<DebugAction, String>,
 }
 
 fn default_continue_start() -> KeyBinding {
@@ -383,30 +395,62 @@ fn default_step_out() -> KeyBinding {
 
 impl Default for KeybindingConfig {
     fn default() -> Self {
-        Self {
+        let mut config = Self {
             continue_start: default_continue_start(),
             stop: default_stop(),
             restart: default_restart(),
             step_over: default_step_over(),
             step_into: default_step_into(),
             step_out: default_step_out(),
-        }
+            lookup: HashMap::new(),
+            labels: HashMap::new(),
+        };
+        config.build_lookup();
+        config
     }
 }
 
 impl KeybindingConfig {
-    /// Check for conflicting keybinding definitions.
+    /// Build the reverse-lookup and labels maps from the current field bindings.
     ///
-    /// Returns a list of conflicts where two different actions share the same binding.
-    pub fn validate(&self) -> Vec<KeyConflict> {
-        let actions: [(DebugAction, &KeyBinding); 6] = [
+    /// Must be called after deserialization or mutation. [`Default::default`]
+    /// calls this automatically.
+    pub fn build_lookup(&mut self) {
+        // Collect owned copies to avoid borrow conflicts with self.lookup/labels.
+        let entries: [(DebugAction, KeyBinding); 6] = [
+            (DebugAction::ContinueOrStart, self.continue_start.clone()),
+            (DebugAction::Stop, self.stop.clone()),
+            (DebugAction::Restart, self.restart.clone()),
+            (DebugAction::StepOver, self.step_over.clone()),
+            (DebugAction::StepInto, self.step_into.clone()),
+            (DebugAction::StepOut, self.step_out.clone()),
+        ];
+
+        self.lookup.clear();
+        self.labels.clear();
+        for (action, binding) in &entries {
+            self.lookup.insert(binding.clone(), *action);
+            self.labels.insert(*action, binding.to_string());
+        }
+    }
+
+    /// Return the (action, binding) pairs for all configured debug actions.
+    fn action_bindings(&self) -> [(DebugAction, &KeyBinding); 6] {
+        [
             (DebugAction::ContinueOrStart, &self.continue_start),
             (DebugAction::Stop, &self.stop),
             (DebugAction::Restart, &self.restart),
             (DebugAction::StepOver, &self.step_over),
             (DebugAction::StepInto, &self.step_into),
             (DebugAction::StepOut, &self.step_out),
-        ];
+        ]
+    }
+
+    /// Check for conflicting keybinding definitions.
+    ///
+    /// Returns a list of conflicts where two different actions share the same binding.
+    pub fn validate(&self) -> Vec<KeyConflict> {
+        let actions = self.action_bindings();
 
         let mut conflicts = Vec::new();
         for i in 0..actions.len() {
@@ -432,25 +476,14 @@ impl KeybindingConfig {
         alt: bool,
     ) -> Option<DebugAction> {
         let input = KeyBinding::new(key, shift, ctrl, alt);
-        if input == self.continue_start {
-            return Some(DebugAction::ContinueOrStart);
-        }
-        if input == self.stop {
-            return Some(DebugAction::Stop);
-        }
-        if input == self.restart {
-            return Some(DebugAction::Restart);
-        }
-        if input == self.step_over {
-            return Some(DebugAction::StepOver);
-        }
-        if input == self.step_into {
-            return Some(DebugAction::StepInto);
-        }
-        if input == self.step_out {
-            return Some(DebugAction::StepOut);
-        }
-        None
+        self.lookup.get(&input).copied()
+    }
+
+    /// Get the display label for a debug action (e.g. `"F9"`, `"shift+F7"`).
+    ///
+    /// Returns `None` if `build_lookup` has not been called.
+    pub fn label(&self, action: DebugAction) -> Option<&str> {
+        self.labels.get(&action).map(|s| s.as_str())
     }
 }
 

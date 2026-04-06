@@ -294,7 +294,10 @@ impl<'s> Renderer<'s> {
                         }
                         ui.label(format!(
                             "or press {}",
-                            self.state.keybindings.continue_start
+                            self.state
+                                .keybindings
+                                .label(config::keybindings::DebugAction::ContinueOrStart)
+                                .unwrap_or("?")
                         ));
                     });
                 });
