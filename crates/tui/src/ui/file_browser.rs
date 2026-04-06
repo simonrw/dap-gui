@@ -32,16 +32,12 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         .split(inner);
 
     // Search input
-    let cursor = "\u{258f}"; // ▏
-    let input_line = Line::from(vec![
-        Span::styled("> ", Style::default().fg(Color::Yellow)),
-        Span::styled(
-            format!("{}{}", app.file_browser_query, cursor),
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
-        ),
-    ]);
+    let base_style = Style::default()
+        .fg(Color::White)
+        .add_modifier(Modifier::BOLD);
+    let mut input_spans = vec![Span::styled("> ", Style::default().fg(Color::Yellow))];
+    input_spans.extend(app.file_browser_editor.render_spans(base_style));
+    let input_line = Line::from(input_spans);
     frame.render_widget(Paragraph::new(input_line), chunks[0]);
 
     // Separator
@@ -98,7 +94,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         .collect();
 
     if items.is_empty() {
-        let msg = if app.file_browser_query.is_empty() {
+        let msg = if app.file_browser_editor.text().is_empty() {
             "No files found"
         } else {
             "No matches"

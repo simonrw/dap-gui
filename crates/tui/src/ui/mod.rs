@@ -300,7 +300,7 @@ mod snapshot_tests {
             app.bottom_tab = crate::app::BottomTab::Repl;
             app.repl_history
                 .push(("x + 1".to_string(), "42".to_string(), false));
-            app.repl_input = "some_var".to_string();
+            app.repl_editor.set_text("some_var");
         });
         insta::assert_snapshot!("repl_tab", output);
     }

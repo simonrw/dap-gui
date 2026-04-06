@@ -58,15 +58,12 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     // Input line
     let is_paused = app.mode == AppMode::Paused;
     let input_line = if is_paused {
-        Line::from(vec![
-            Span::styled(">> ", Style::default().fg(Color::Cyan)),
-            Span::styled(
-                format!("{}\u{258f}", app.repl_input),
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ])
+        let base_style = Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD);
+        let mut spans = vec![Span::styled(">> ", Style::default().fg(Color::Cyan))];
+        spans.extend(app.repl_editor.render_spans(base_style));
+        Line::from(spans)
     } else {
         Line::from(Span::styled(
             "   (pause to evaluate)",

@@ -154,18 +154,21 @@ fn render_search_bar(app: &App, frame: &mut Frame, area: Rect) {
     };
 
     let is_active = app.input_mode == InputMode::Search;
-    let cursor_char = if is_active { "▏" } else { "" };
+    let base_style = Style::default()
+        .fg(Color::White)
+        .add_modifier(Modifier::BOLD);
 
-    let line = Line::from(vec![
-        Span::styled("/", Style::default().fg(Color::Yellow)),
-        Span::styled(
-            format!("{}{}", app.search.query, cursor_char),
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(match_info, Style::default().fg(Color::DarkGray)),
-    ]);
+    let mut spans = vec![Span::styled("/", Style::default().fg(Color::Yellow))];
+    if is_active {
+        spans.extend(app.search_editor.render_spans(base_style));
+    } else {
+        spans.push(Span::styled(app.search.query.as_str(), base_style));
+    }
+    spans.push(Span::styled(
+        match_info,
+        Style::default().fg(Color::DarkGray),
+    ));
+    let line = Line::from(spans);
 
     let paragraph = Paragraph::new(line);
     frame.render_widget(paragraph, area);

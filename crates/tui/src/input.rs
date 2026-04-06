@@ -3,6 +3,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::{App, AppMode, BottomTab, Focus, InputMode};
 use crate::async_bridge::UiCommand;
+use crate::line_editor::LineEditorAction;
 use crate::session::DebuggerState;
 
 fn crossterm_to_key_name(code: KeyCode) -> Option<KeyName> {
@@ -91,60 +92,83 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
 // ── File picker input mode ────────────────────────────────────────────────
 
 fn handle_file_picker_key(app: &mut App, key: KeyEvent) {
+    // Up/Down navigate the results list, not history
     match key.code {
         KeyCode::Esc => {
             app.file_picker.close();
+            app.file_picker_editor.clear();
             app.input_mode = InputMode::Normal;
+            return;
         }
         KeyCode::Enter => {
             if let Some(path) = app.file_picker.select() {
                 app.open_file(path);
             }
+            app.file_picker_editor.clear();
             app.input_mode = InputMode::Normal;
+            return;
         }
         KeyCode::Up => {
             app.file_picker.cursor_up();
+            return;
         }
         KeyCode::Down => {
             app.file_picker.cursor_down();
-        }
-        KeyCode::Backspace => {
-            app.file_picker.query.pop();
-            app.file_picker.refilter();
-        }
-        KeyCode::Char(c) => {
-            app.file_picker.query.push(c);
-            app.file_picker.refilter();
+            return;
         }
         _ => {}
+    }
+    // All other keys go to the line editor (Ctrl+P/N for history)
+    let action = app
+        .file_picker_editor
+        .handle_key(key, Some(&mut app.file_picker_history));
+    if matches!(action, LineEditorAction::Changed) {
+        app.file_picker.query = app.file_picker_editor.text().to_string();
+        app.file_picker.refilter();
     }
 }
 
 // ── Search input mode ─────────────────────────────────────────────────────
 
 fn handle_search_key(app: &mut App, key: KeyEvent) {
+    // Up/Down navigate between matches, not history
     match key.code {
         KeyCode::Esc => {
             app.search.active = false;
+            app.search_editor.clear();
             app.input_mode = InputMode::Normal;
+            return;
         }
         KeyCode::Enter => {
-            // Commit search and go to normal mode (matches stay visible)
             app.input_mode = InputMode::Normal;
-            // Jump to current match
             if let Some(line) = app.search.current_match_line() {
                 app.code_view.cursor_line = line;
             }
+            return;
         }
-        KeyCode::Backspace => {
-            app.search.query.pop();
-            recompute_search(app);
+        KeyCode::Up => {
+            app.search.prev_match();
+            if let Some(line) = app.search.current_match_line() {
+                app.code_view.cursor_line = line;
+            }
+            return;
         }
-        KeyCode::Char(c) => {
-            app.search.query.push(c);
-            recompute_search(app);
+        KeyCode::Down => {
+            app.search.next_match();
+            if let Some(line) = app.search.current_match_line() {
+                app.code_view.cursor_line = line;
+            }
+            return;
         }
         _ => {}
+    }
+    // All other keys go to the line editor (Ctrl+P/N for history)
+    let action = app
+        .search_editor
+        .handle_key(key, Some(&mut app.search_history));
+    if matches!(action, LineEditorAction::Changed) {
+        app.search.query = app.search_editor.text().to_string();
+        recompute_search(app);
     }
 }
 
@@ -167,29 +191,24 @@ fn recompute_search(app: &mut App) {
 fn handle_breakpoint_input_key(app: &mut App, key: KeyEvent) {
     match key.code {
         KeyCode::Esc => {
-            app.breakpoint_input = None;
+            app.breakpoint_editing = false;
+            app.breakpoint_editor.clear();
             app.input_mode = InputMode::Normal;
-        }
-        KeyCode::Enter => {
-            if let Some(input) = app.breakpoint_input.take() {
-                let input = input.trim().to_string();
-                if !input.is_empty() {
-                    app.add_breakpoint_from_str(&input);
-                }
-            }
-            app.input_mode = InputMode::Normal;
-        }
-        KeyCode::Backspace => {
-            if let Some(ref mut input) = app.breakpoint_input {
-                input.pop();
-            }
-        }
-        KeyCode::Char(c) => {
-            if let Some(ref mut input) = app.breakpoint_input {
-                input.push(c);
-            }
+            return;
         }
         _ => {}
+    }
+    let action = app
+        .breakpoint_editor
+        .handle_key(key, Some(&mut app.breakpoint_history));
+    if action == LineEditorAction::Submitted {
+        let input = app.breakpoint_editor.text().trim().to_string();
+        if !input.is_empty() {
+            app.add_breakpoint_from_str(&input);
+        }
+        app.breakpoint_editing = false;
+        app.breakpoint_editor.clear();
+        app.input_mode = InputMode::Normal;
     }
 }
 
@@ -199,26 +218,15 @@ fn handle_evaluate_popup_key(app: &mut App, key: KeyEvent) {
     match key.code {
         KeyCode::Esc => {
             app.close_evaluate_popup();
-        }
-        KeyCode::Enter => {
-            app.evaluate_popup_expression();
-        }
-        KeyCode::Up => {
-            // Navigate shared input history
-            app.repl_history_up();
-            app.evaluate_input = app.repl_input.clone();
-        }
-        KeyCode::Down => {
-            app.repl_history_down();
-            app.evaluate_input = app.repl_input.clone();
-        }
-        KeyCode::Backspace => {
-            app.evaluate_input.pop();
-        }
-        KeyCode::Char(c) => {
-            app.evaluate_input.push(c);
+            return;
         }
         _ => {}
+    }
+    let action = app
+        .evaluate_editor
+        .handle_key(key, Some(&mut app.repl_evaluate_history));
+    if action == LineEditorAction::Submitted {
+        app.evaluate_popup_expression();
     }
 }
 
@@ -504,7 +512,8 @@ fn handle_breakpoints_key(app: &mut App, key: KeyEvent) {
         }
         // Add breakpoint
         KeyCode::Char('a') => {
-            app.breakpoint_input = Some(String::new());
+            app.breakpoint_editing = true;
+            app.breakpoint_editor.clear();
             app.input_mode = InputMode::BreakpointInput;
         }
         // Delete breakpoint
@@ -686,29 +695,13 @@ fn handle_output_key(app: &mut App, key: KeyEvent) {
 fn handle_repl_focus_key(app: &mut App, key: KeyEvent) {
     let is_paused = app.mode == AppMode::Paused;
 
-    match key.code {
-        // Evaluate expression
-        KeyCode::Enter => {
+    let action = app
+        .repl_editor
+        .handle_key(key, Some(&mut app.repl_evaluate_history));
+    match action {
+        LineEditorAction::Submitted => {
             if is_paused {
                 app.evaluate_repl();
-            }
-        }
-        // History navigation
-        KeyCode::Up => {
-            app.repl_history_up();
-        }
-        KeyCode::Down => {
-            app.repl_history_down();
-        }
-        // Editing
-        KeyCode::Backspace => {
-            app.repl_input.pop();
-        }
-        // Type directly into the REPL input
-        KeyCode::Char(c) => {
-            // Don't capture global shortcuts that use modifiers
-            if key.modifiers.is_empty() || key.modifiers == KeyModifiers::SHIFT {
-                app.repl_input.push(c);
             }
         }
         _ => {}
@@ -716,31 +709,31 @@ fn handle_repl_focus_key(app: &mut App, key: KeyEvent) {
 }
 
 fn handle_file_browser_focus_key(app: &mut App, key: KeyEvent) {
+    // Up/Down navigate the file list
     match key.code {
-        // Navigation
         KeyCode::Down => {
             if !app.file_browser_results.is_empty() {
                 app.file_browser_cursor =
                     (app.file_browser_cursor + 1).min(app.file_browser_results.len() - 1);
             }
+            return;
         }
         KeyCode::Up => {
             app.file_browser_cursor = app.file_browser_cursor.saturating_sub(1);
+            return;
         }
-        // Select file
         KeyCode::Enter => {
             app.select_file_browser_item();
-        }
-        // Typing filters directly
-        KeyCode::Backspace => {
-            app.file_browser_query.pop();
-            app.refilter_file_browser();
-        }
-        KeyCode::Char(c) => {
-            app.file_browser_query.push(c);
-            app.refilter_file_browser();
+            return;
         }
         _ => {}
+    }
+    // All other keys go to the line editor (Ctrl+P/N for history)
+    let action = app
+        .file_browser_editor
+        .handle_key(key, Some(&mut app.file_browser_history));
+    if matches!(action, LineEditorAction::Changed) {
+        app.refilter_file_browser();
     }
 }
 
@@ -1131,15 +1124,15 @@ mod tests {
     fn breakpoint_input_typing_and_esc() {
         with_test_app(|app| {
             app.input_mode = InputMode::BreakpointInput;
-            app.breakpoint_input = Some(String::new());
+            app.breakpoint_editing = true;
 
             handle_key(app, key(KeyCode::Char('f')));
             handle_key(app, key(KeyCode::Char('o')));
-            assert_eq!(app.breakpoint_input.as_deref(), Some("fo"));
+            assert_eq!(app.breakpoint_editor.text(), "fo");
 
             // Esc cancels
             handle_key(app, key(KeyCode::Esc));
-            assert!(app.breakpoint_input.is_none());
+            assert!(!app.breakpoint_editing);
             assert_eq!(app.input_mode, InputMode::Normal);
         });
     }
@@ -1148,12 +1141,13 @@ mod tests {
     fn breakpoint_input_enter_submits() {
         with_test_app(|app| {
             app.input_mode = InputMode::BreakpointInput;
-            app.breakpoint_input = Some("/tmp/test.py:10".to_string());
+            app.breakpoint_editing = true;
+            app.breakpoint_editor.set_text("/tmp/test.py:10");
 
             handle_key(app, key(KeyCode::Enter));
 
             assert_eq!(app.input_mode, InputMode::Normal);
-            assert!(app.breakpoint_input.is_none());
+            assert!(!app.breakpoint_editing);
             assert_eq!(app.ui_breakpoints.len(), 1);
         });
     }
@@ -1200,7 +1194,8 @@ mod tests {
 
             handle_key(app, key(KeyCode::Char('a')));
             assert_eq!(app.input_mode, InputMode::BreakpointInput);
-            assert_eq!(app.breakpoint_input, Some(String::new()));
+            assert!(app.breakpoint_editing);
+            assert!(app.breakpoint_editor.text().is_empty());
         });
     }
 
@@ -1230,10 +1225,10 @@ mod tests {
 
             handle_key(app, key(KeyCode::Char('h')));
             handle_key(app, key(KeyCode::Char('i')));
-            assert_eq!(app.repl_input, "hi");
+            assert_eq!(app.repl_editor.text(), "hi");
 
             handle_key(app, key(KeyCode::Backspace));
-            assert_eq!(app.repl_input, "h");
+            assert_eq!(app.repl_editor.text(), "h");
         });
     }
 
@@ -1241,16 +1236,17 @@ mod tests {
     fn repl_focus_up_down_navigate_history() {
         with_test_app(|app| {
             app.focus = Focus::Repl;
-            app.repl_input_history = vec!["old1".to_string(), "old2".to_string()];
+            app.repl_evaluate_history.push("old1".to_string());
+            app.repl_evaluate_history.push("old2".to_string());
 
             handle_key(app, key(KeyCode::Up));
-            assert_eq!(app.repl_input, "old2");
+            assert_eq!(app.repl_editor.text(), "old2");
 
             handle_key(app, key(KeyCode::Up));
-            assert_eq!(app.repl_input, "old1");
+            assert_eq!(app.repl_editor.text(), "old1");
 
             handle_key(app, key(KeyCode::Down));
-            assert_eq!(app.repl_input, "old2");
+            assert_eq!(app.repl_editor.text(), "old2");
         });
     }
 
@@ -1297,10 +1293,10 @@ mod tests {
 
             handle_key(app, key(KeyCode::Char('x')));
             handle_key(app, key(KeyCode::Char('y')));
-            assert_eq!(app.evaluate_input, "xy");
+            assert_eq!(app.evaluate_editor.text(), "xy");
 
             handle_key(app, key(KeyCode::Backspace));
-            assert_eq!(app.evaluate_input, "x");
+            assert_eq!(app.evaluate_editor.text(), "x");
 
             // Esc closes
             handle_key(app, key(KeyCode::Esc));

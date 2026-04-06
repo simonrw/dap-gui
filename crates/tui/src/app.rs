@@ -1,8 +1,11 @@
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use crate::async_bridge::UiCommand;
 use crate::event::AppEvent;
+use crate::line_editor::{InputHistory, LineEditor};
 use crate::session::Session;
 use crossterm::event::KeyEvent;
 use launch_configuration::LaunchConfiguration;
@@ -155,13 +158,12 @@ pub struct App {
     pub zen_mode: bool,
 
     // REPL
-    pub repl_input: String,
+    pub repl_editor: LineEditor,
     pub repl_history: Vec<(String, String, bool)>, // (input, output, is_error)
-    pub repl_input_history: Vec<String>,           // history of past inputs for Up/Down
-    pub repl_history_cursor: Option<usize>,        // position in input history (None = new input)
 
     // Breakpoint panel input (for "a" add mode)
-    pub breakpoint_input: Option<String>,
+    pub breakpoint_editing: bool,
+    pub breakpoint_editor: LineEditor,
 
     // Breakpoint panel cursor
     pub breakpoints_cursor: usize,
@@ -178,7 +180,7 @@ pub struct App {
     pub status_error: Option<String>,
 
     // File browser sidebar (no-session mode)
-    pub file_browser_query: String,
+    pub file_browser_editor: LineEditor,
     pub file_browser_cursor: usize,
     pub file_browser_results: Vec<fuzzy::FuzzyMatch>,
     pub file_browser_files: Vec<fuzzy::TrackedFile>,
@@ -189,11 +191,22 @@ pub struct App {
 
     // Evaluate expression popup
     pub evaluate_popup_open: bool,
-    pub evaluate_input: String,
+    pub evaluate_editor: LineEditor,
     pub evaluate_result: Option<(String, bool)>, // (result_text, is_error)
 
     // Inline evaluation annotations: line (0-indexed) -> result string
     pub inline_evaluations: HashMap<usize, String>,
+
+    // Line editors for text input fields
+    pub search_editor: LineEditor,
+    pub file_picker_editor: LineEditor,
+
+    // Input histories
+    pub repl_evaluate_history: InputHistory, // shared by REPL + evaluate
+    pub file_picker_history: InputHistory,
+    pub search_history: InputHistory,
+    pub breakpoint_history: InputHistory,
+    pub file_browser_history: InputHistory,
 }
 
 impl App {
@@ -208,6 +221,7 @@ impl App {
         initial_breakpoints: Vec<debugger::Breakpoint>,
         keybindings: config::keybindings::KeybindingConfig,
     ) -> Self {
+        let kill_ring = Rc::new(RefCell::new(String::new()));
         Self {
             mode: AppMode::NoSession,
             focus: Focus::CallStack,
@@ -234,27 +248,33 @@ impl App {
             file_picker: FilePickerState::default(),
             show_help: false,
             zen_mode: false,
-            repl_input: String::new(),
+            repl_editor: LineEditor::new(kill_ring.clone()),
             repl_history: Vec::new(),
-            repl_input_history: Vec::new(),
-            repl_history_cursor: None,
-            breakpoint_input: None,
+            breakpoint_editing: false,
+            breakpoint_editor: LineEditor::new(kill_ring.clone()),
             breakpoints_cursor: 0,
             breakpoint_ids: HashMap::new(),
             output_auto_scroll: true,
             output_scroll_offset: 0,
             status_message: None,
             status_error: None,
-            file_browser_query: String::new(),
+            file_browser_editor: LineEditor::new(kill_ring.clone()),
             file_browser_cursor: 0,
             file_browser_results: Vec::new(),
             file_browser_files: Vec::new(),
             file_browser_loaded: false,
             keybindings,
             evaluate_popup_open: false,
-            evaluate_input: String::new(),
+            evaluate_editor: LineEditor::new(kill_ring.clone()),
             evaluate_result: None,
             inline_evaluations: HashMap::new(),
+            search_editor: LineEditor::new(kill_ring.clone()),
+            file_picker_editor: LineEditor::new(kill_ring),
+            repl_evaluate_history: InputHistory::new(),
+            file_picker_history: InputHistory::new(),
+            search_history: InputHistory::new(),
+            breakpoint_history: InputHistory::new(),
+            file_browser_history: InputHistory::new(),
         }
     }
 
@@ -575,28 +595,27 @@ impl App {
 
     /// Evaluate the current REPL input and display the result.
     pub fn evaluate_repl(&mut self) {
-        let input = self.repl_input.trim().to_string();
+        let input = self.repl_editor.text().trim().to_string();
         if input.is_empty() {
             return;
         }
 
         // Save to input history
-        self.repl_input_history.push(input.clone());
-        self.repl_history_cursor = None;
+        self.repl_evaluate_history.push(input.clone());
 
         let frame_id = self.session.as_ref().and_then(|s| s.current_frame_id);
 
         let Some(frame_id) = frame_id else {
             self.repl_history
                 .push((input, "Not paused".to_string(), true));
-            self.repl_input.clear();
+            self.repl_editor.clear();
             return;
         };
 
         let Some(session) = &self.session else {
             self.repl_history
                 .push((input, "No session".to_string(), true));
-            self.repl_input.clear();
+            self.repl_editor.clear();
             return;
         };
 
@@ -615,40 +634,7 @@ impl App {
             }
         }
 
-        self.repl_input.clear();
-    }
-
-    /// Navigate REPL input history upward.
-    pub fn repl_history_up(&mut self) {
-        if self.repl_input_history.is_empty() {
-            return;
-        }
-        match self.repl_history_cursor {
-            None => {
-                self.repl_history_cursor = Some(self.repl_input_history.len() - 1);
-                self.repl_input = self.repl_input_history.last().unwrap().clone();
-            }
-            Some(0) => {} // Already at oldest
-            Some(ref mut idx) => {
-                *idx -= 1;
-                self.repl_input = self.repl_input_history[*idx].clone();
-            }
-        }
-    }
-
-    /// Navigate REPL input history downward.
-    pub fn repl_history_down(&mut self) {
-        match self.repl_history_cursor {
-            None => {} // Not navigating
-            Some(idx) if idx >= self.repl_input_history.len() - 1 => {
-                self.repl_history_cursor = None;
-                self.repl_input.clear();
-            }
-            Some(ref mut idx) => {
-                *idx += 1;
-                self.repl_input = self.repl_input_history[*idx].clone();
-            }
-        }
+        self.repl_editor.clear();
     }
 
     // ── Evaluate expression operations ────────────────────────────────
@@ -669,38 +655,37 @@ impl App {
                         .take(end - start + 1)
                         .collect::<Vec<_>>()
                         .join("\n");
-                    self.evaluate_input = text;
+                    self.evaluate_editor.set_text(&text);
                     self.code_view.selection_anchor = None;
                     return;
                 }
             }
             // Fall back to trimmed cursor line
             if let Some(word) = self.word_under_cursor() {
-                self.evaluate_input = word;
+                self.evaluate_editor.set_text(&word);
                 return;
             }
         }
-        self.evaluate_input.clear();
+        self.evaluate_editor.clear();
     }
 
     /// Close the evaluate popup.
     pub fn close_evaluate_popup(&mut self) {
         self.evaluate_popup_open = false;
-        self.evaluate_input.clear();
+        self.evaluate_editor.clear();
         self.evaluate_result = None;
         self.input_mode = InputMode::Normal;
     }
 
     /// Evaluate the expression currently in the evaluate popup input.
     pub fn evaluate_popup_expression(&mut self) {
-        let input = self.evaluate_input.trim().to_string();
+        let input = self.evaluate_editor.text().trim().to_string();
         if input.is_empty() {
             return;
         }
 
         // Save to shared input history (reuse REPL history)
-        self.repl_input_history.push(input.clone());
-        self.repl_history_cursor = None;
+        self.repl_evaluate_history.push(input.clone());
 
         let frame_id = self.session.as_ref().and_then(|s| s.current_frame_id);
 
@@ -870,7 +855,7 @@ impl App {
     /// Recompute file browser results from current query.
     pub fn refilter_file_browser(&mut self) {
         self.file_browser_results =
-            fuzzy::fuzzy_filter(&self.file_browser_files, &self.file_browser_query);
+            fuzzy::fuzzy_filter(&self.file_browser_files, self.file_browser_editor.text());
         if self.file_browser_results.is_empty() {
             self.file_browser_cursor = 0;
         } else {
@@ -1206,69 +1191,8 @@ mod tests {
     }
 
     // ── REPL history ──────────────────────────────────────────────────
-
-    #[test]
-    fn repl_history_up_and_down() {
-        with_test_app(|app| {
-            app.repl_input_history = vec![
-                "expr1".to_string(),
-                "expr2".to_string(),
-                "expr3".to_string(),
-            ];
-
-            // Up from fresh (cursor = None)
-            app.repl_history_up();
-            assert_eq!(app.repl_input, "expr3");
-            assert_eq!(app.repl_history_cursor, Some(2));
-
-            app.repl_history_up();
-            assert_eq!(app.repl_input, "expr2");
-            assert_eq!(app.repl_history_cursor, Some(1));
-
-            app.repl_history_up();
-            assert_eq!(app.repl_input, "expr1");
-            assert_eq!(app.repl_history_cursor, Some(0));
-
-            // Already at oldest - stays
-            app.repl_history_up();
-            assert_eq!(app.repl_input, "expr1");
-            assert_eq!(app.repl_history_cursor, Some(0));
-
-            // Down
-            app.repl_history_down();
-            assert_eq!(app.repl_input, "expr2");
-            assert_eq!(app.repl_history_cursor, Some(1));
-
-            app.repl_history_down();
-            assert_eq!(app.repl_input, "expr3");
-            assert_eq!(app.repl_history_cursor, Some(2));
-
-            // Down past end clears
-            app.repl_history_down();
-            assert!(app.repl_input.is_empty());
-            assert_eq!(app.repl_history_cursor, None);
-        });
-    }
-
-    #[test]
-    fn repl_history_up_empty_is_noop() {
-        with_test_app(|app| {
-            app.repl_history_up();
-            assert!(app.repl_input.is_empty());
-            assert_eq!(app.repl_history_cursor, None);
-        });
-    }
-
-    #[test]
-    fn repl_history_down_from_fresh_is_noop() {
-        with_test_app(|app| {
-            app.repl_input_history = vec!["expr1".to_string()];
-            // Without first going up, down is a no-op
-            app.repl_history_down();
-            assert!(app.repl_input.is_empty());
-            assert_eq!(app.repl_history_cursor, None);
-        });
-    }
+    // Note: InputHistory is thoroughly tested in line_editor::tests.
+    // These tests verify the App-level integration.
 
     // ── Start session edge cases ──────────────────────────────────────
 
@@ -1302,13 +1226,13 @@ mod tests {
     fn close_evaluate_popup_resets_state() {
         with_test_app(|app| {
             app.open_evaluate_popup();
-            app.evaluate_input = "some_expr".to_string();
+            app.evaluate_editor.set_text("some_expr");
             app.evaluate_result = Some(("result".to_string(), false));
 
             app.close_evaluate_popup();
 
             assert!(!app.evaluate_popup_open);
-            assert!(app.evaluate_input.is_empty());
+            assert!(app.evaluate_editor.text().is_empty());
             assert!(app.evaluate_result.is_none());
             assert_eq!(app.input_mode, InputMode::Normal);
         });
@@ -1356,7 +1280,7 @@ mod tests {
             assert!(app.output_lines.is_empty());
             assert!(!app.show_help);
             assert!(!app.zen_mode);
-            assert!(app.repl_input.is_empty());
+            assert!(app.repl_editor.text().is_empty());
             assert!(app.output_auto_scroll);
         });
     }

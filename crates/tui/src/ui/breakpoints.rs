@@ -21,7 +21,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     frame.render_widget(block, area);
 
     // If we're in breakpoint input mode, show the input field at the bottom
-    if let Some(ref input) = app.breakpoint_input {
+    if app.breakpoint_editing {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Min(1), Constraint::Length(1)])
@@ -29,15 +29,12 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
 
         render_list(app, frame, chunks[0]);
 
-        let input_line = Line::from(vec![
-            Span::styled("> ", Style::default().fg(Color::Yellow)),
-            Span::styled(
-                format!("{}\u{258f}", input),
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]);
+        let base_style = Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD);
+        let mut spans = vec![Span::styled("> ", Style::default().fg(Color::Yellow))];
+        spans.extend(app.breakpoint_editor.render_spans(base_style));
+        let input_line = Line::from(spans);
         frame.render_widget(Paragraph::new(input_line), chunks[1]);
     } else {
         render_list(app, frame, inner);

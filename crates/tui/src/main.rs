@@ -14,6 +14,7 @@ mod app;
 mod async_bridge;
 mod event;
 mod input;
+mod line_editor;
 mod session;
 mod syntax;
 mod ui;

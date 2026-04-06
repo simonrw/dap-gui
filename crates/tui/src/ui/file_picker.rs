@@ -40,16 +40,12 @@ pub fn render(app: &App, frame: &mut Frame) {
         .split(inner);
 
     // Search input
-    let cursor = "▏";
-    let input_line = Line::from(vec![
-        Span::styled("> ", Style::default().fg(Color::Yellow)),
-        Span::styled(
-            format!("{}{}", app.file_picker.query, cursor),
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
-        ),
-    ]);
+    let base_style = Style::default()
+        .fg(Color::White)
+        .add_modifier(Modifier::BOLD);
+    let mut input_spans = vec![Span::styled("> ", Style::default().fg(Color::Yellow))];
+    input_spans.extend(app.file_picker_editor.render_spans(base_style));
+    let input_line = Line::from(input_spans);
     frame.render_widget(Paragraph::new(input_line), chunks[0]);
 
     // Separator

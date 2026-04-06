@@ -6,7 +6,7 @@ expression: output
 "│ F9  Start  Ctrl+P  Files  ?  Help  q  Quit                                   │"
 "└───────────┌ Help (? to close) ───────────────────────────────────┐───────────┘"
 "┌ Files ────│── Global ──                                          │───────────┐"
-"│> ▏        │  q / Ctrl+C      Quit                                │           │"
+"│>          │  q / Ctrl+C      Quit                                │           │"
 "│───────────│  ?               Toggle this help                    │           │"
 "│No files fo│  Ctrl+P          Open file picker                    │           │"
 "│           │  Ctrl+F, /       Search in file                      │           │"
