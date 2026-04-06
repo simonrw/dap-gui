@@ -3,7 +3,7 @@ source: crates/tui/src/ui/mod.rs
 expression: output
 ---
 "┌──────────────────────────────────────────────────────────────────────────────┐"
-"│ F5  Start  Ctrl+P  Files  ?  Help  q  Quit                                   │"
+"│ F9  Start  Ctrl+P  Files  ?  Help  q  Quit                                   │"
 "└───────────┌ Help (? to close) ───────────────────────────────────┐───────────┘"
 "┌ Files ────│── Global ──                                          │───────────┐"
 "│> ▏        │  q / Ctrl+C      Quit                                │           │"
@@ -20,9 +20,9 @@ expression: output
 "┌ Variables │  l / Right       Next config                         │───────────┐"
 "│  (no sessi│                                                      │           │"
 "│           │── Debugger ──                                        │           │"
-"│           │  F5              Start / Continue / Restart          │           │"
-"│           │  Shift+F5        Terminate / Shutdown                │           │"
-"│           │  Ctrl+Shift+F5   Restart session                     │           │"
+"│           │  F9              Start / Continue / Restart          │           │"
+"│           │  shift+F9        Terminate / Shutdown                │           │"
+"│           │  ctrl+shift+F9   Restart session                     │           │"
 "│           └──────────────────────────────────────────────────────┘           │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
 " NO SESSION                                                                     "

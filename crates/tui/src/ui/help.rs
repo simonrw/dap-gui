@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 /// Render the help overlay as a floating popup.
-pub fn render(frame: &mut Frame) {
+pub fn render(frame: &mut Frame, keybindings: &ui_core::keybindings::KeybindingConfig) {
     let area = frame.area();
 
     let popup_width = ((area.width as f32 * 0.7) as u16).min(70).max(40);
@@ -33,6 +33,13 @@ pub fn render(frame: &mut Frame) {
         .fg(Color::Cyan)
         .add_modifier(Modifier::BOLD);
 
+    let kb_continue = keybindings.continue_start.to_string();
+    let kb_stop = keybindings.stop.to_string();
+    let kb_restart = keybindings.restart.to_string();
+    let kb_step_over = keybindings.step_over.to_string();
+    let kb_step_into = keybindings.step_into.to_string();
+    let kb_step_out = keybindings.step_out.to_string();
+
     let lines = vec![
         Line::from(Span::styled("── Global ──", section_style)),
         binding_line("q / Ctrl+C", "Quit", key_style, desc_style),
@@ -54,12 +61,17 @@ pub fn render(frame: &mut Frame) {
         binding_line("l / Right", "Next config", key_style, desc_style),
         Line::from(""),
         Line::from(Span::styled("── Debugger ──", section_style)),
-        binding_line("F5", "Start / Continue / Restart", key_style, desc_style),
-        binding_line("Shift+F5", "Terminate / Shutdown", key_style, desc_style),
-        binding_line("Ctrl+Shift+F5", "Restart session", key_style, desc_style),
-        binding_line("F10", "Step Over", key_style, desc_style),
-        binding_line("F11", "Step In", key_style, desc_style),
-        binding_line("Shift+F11", "Step Out", key_style, desc_style),
+        binding_line(
+            &kb_continue,
+            "Start / Continue / Restart",
+            key_style,
+            desc_style,
+        ),
+        binding_line(&kb_stop, "Terminate / Shutdown", key_style, desc_style),
+        binding_line(&kb_restart, "Restart session", key_style, desc_style),
+        binding_line(&kb_step_over, "Step Over", key_style, desc_style),
+        binding_line(&kb_step_into, "Step In", key_style, desc_style),
+        binding_line(&kb_step_out, "Step Out", key_style, desc_style),
         Line::from(""),
         Line::from(Span::styled("── Code View ──", section_style)),
         binding_line("j/k, Up/Down", "Move cursor", key_style, desc_style),
@@ -133,10 +145,10 @@ pub fn render(frame: &mut Frame) {
     frame.render_widget(paragraph, inner);
 }
 
-fn binding_line<'a>(key: &'a str, desc: &'a str, key_style: Style, desc_style: Style) -> Line<'a> {
+fn binding_line(key: &str, desc: &str, key_style: Style, desc_style: Style) -> Line<'static> {
     Line::from(vec![
         Span::styled(format!("  {key:<16}"), key_style),
-        Span::styled(desc, desc_style),
+        Span::styled(desc.to_string(), desc_style),
     ])
 }
 

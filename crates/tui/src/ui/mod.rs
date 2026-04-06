@@ -105,7 +105,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         evaluate_popup::render(app, frame);
     }
     if app.show_help {
-        help::render(frame);
+        help::render(frame, &app.keybindings);
     }
 }
 
@@ -163,6 +163,7 @@ mod snapshot_tests {
             state_manager,
             wakeup_tx,
             vec![],
+            Default::default(),
         );
         // Prevent the file browser from loading real git files.
         app.file_browser_loaded = true;
@@ -209,6 +210,7 @@ mod snapshot_tests {
             state_manager,
             wakeup_tx,
             vec![],
+            Default::default(),
         );
         // Prevent the file browser from loading real git files.
         app.file_browser_loaded = true;

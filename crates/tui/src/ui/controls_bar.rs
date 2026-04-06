@@ -34,31 +34,32 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         spans.push(Span::raw("  "));
     }
 
+    let kb = &app.keybindings;
     let controls = match app.mode {
         AppMode::NoSession => vec![
-            control("F5", "Start"),
+            control(&kb.continue_start.to_string(), "Start"),
             control("Ctrl+P", "Files"),
             control("?", "Help"),
             control("q", "Quit"),
         ],
         AppMode::Initialising | AppMode::Running => vec![
-            control("Shift+F5", "Stop"),
+            control(&kb.stop.to_string(), "Stop"),
             control("Ctrl+P", "Files"),
             control("?", "Help"),
             control("q", "Quit"),
         ],
         AppMode::Paused => vec![
-            control("F5", "Continue"),
-            control("F10", "Step Over"),
-            control("F11", "Step In"),
-            control("Shift+F11", "Step Out"),
-            control("Shift+F5", "Stop"),
+            control(&kb.continue_start.to_string(), "Continue"),
+            control(&kb.step_over.to_string(), "Step Over"),
+            control(&kb.step_into.to_string(), "Step In"),
+            control(&kb.step_out.to_string(), "Step Out"),
+            control(&kb.stop.to_string(), "Stop"),
             control("?", "Help"),
         ],
         AppMode::Terminated => vec![
-            control("F5", "Restart"),
-            control("Ctrl+Shift+F5", "Restart"),
-            control("Shift+F5", "Close"),
+            control(&kb.continue_start.to_string(), "Restart"),
+            control(&kb.restart.to_string(), "Restart"),
+            control(&kb.stop.to_string(), "Close"),
             control("q", "Quit"),
         ],
     };

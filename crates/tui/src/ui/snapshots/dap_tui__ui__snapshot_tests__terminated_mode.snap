@@ -3,7 +3,7 @@ source: crates/tui/src/ui/mod.rs
 expression: output
 ---
 "┌──────────────────────────────────────────────────────────────────────────────┐"
-"│ ◀  Test  ▶     F5  Restart  Ctrl+Shift+F5  Restart  Shift+F5  Close  q  Quit │"
+"│ ◀  Test  ▶     F9  Restart  ctrl+shift+F9  Restart  shift+F9  Close  q  Quit │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
 "┌ Call Stack ──────────┐┌ Code ────────────────────────────────────────────────┐"
 "│  (no session)        ││                    (no file open)                    │"

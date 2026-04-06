@@ -3,7 +3,7 @@ source: crates/tui/src/ui/mod.rs
 expression: output
 ---
 "┌──────────────────────────────────────────────────────────────────────────────┐"
-"│ ◀  Debug Python  ▶     F5  Start  Ctrl+P  Files  ?  Help  q  Quit            │"
+"│ ◀  Debug Python  ▶     F9  Start  Ctrl+P  Files  ?  Help  q  Quit            │"
 "└──────────────────────────────────────────────────────────────────────────────┘"
 "┌ Files ───────────────┐┌ Code ────────────────────────────────────────────────┐"
 "│> ▏                   ││                    (no file open)                    │"
