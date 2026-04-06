@@ -1,0 +1,25 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0](https://github.com/simonrw/dap-gui/releases/tag/dap-gui-launch-configuration-v0.1.0) - 2026-04-05
+
+### Fixed
+
+- rename workspace crates with dap-gui- prefix for cargo package compatibility ([#391](https://github.com/simonrw/dap-gui/pull/391))
+
+### Other
+
+- Merge file browser into main app's no-session view
+- Add GUI launch controls: start, stop, and restart debug sessions
+- Remove transport crate, sync debugger, and repl crate
+- Fix cargo fmt formatting across 7 files
+- Robustness improvements for startup procedure
+- Add more tests
+- Add 30-second timeout for DAP request responses ([#355](https://github.com/simonrw/dap-gui/pull/355))
+- Create crates/ subdir
