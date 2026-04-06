@@ -18,8 +18,154 @@ use crate::{
     },
 };
 
+use config::keybindings::KeyName;
+
 /// ID for the search input field so we can request focus
 const SEARCH_INPUT_ID: &str = "code_view_search_input";
+
+/// All keys that can appear in a configurable debug action binding.
+///
+/// This list must cover every key that [`egui_to_key_name`] can translate,
+/// so that user-configured bindings to any supported key work in the GUI.
+const DEBUG_POLL_KEYS: [Key; 63] = [
+    // Function keys
+    Key::F1,
+    Key::F2,
+    Key::F3,
+    Key::F4,
+    Key::F5,
+    Key::F6,
+    Key::F7,
+    Key::F8,
+    Key::F9,
+    Key::F10,
+    Key::F11,
+    Key::F12,
+    // Letters
+    Key::A,
+    Key::B,
+    Key::C,
+    Key::D,
+    Key::E,
+    Key::F,
+    Key::G,
+    Key::H,
+    Key::I,
+    Key::J,
+    Key::K,
+    Key::L,
+    Key::M,
+    Key::N,
+    Key::O,
+    Key::P,
+    Key::Q,
+    Key::R,
+    Key::S,
+    Key::T,
+    Key::U,
+    Key::V,
+    Key::W,
+    Key::X,
+    Key::Y,
+    Key::Z,
+    // Digits
+    Key::Num0,
+    Key::Num1,
+    Key::Num2,
+    Key::Num3,
+    Key::Num4,
+    Key::Num5,
+    Key::Num6,
+    Key::Num7,
+    Key::Num8,
+    Key::Num9,
+    // Navigation
+    Key::ArrowUp,
+    Key::ArrowDown,
+    Key::ArrowLeft,
+    Key::ArrowRight,
+    Key::Home,
+    Key::End,
+    Key::PageUp,
+    Key::PageDown,
+    // Editing / special
+    Key::Enter,
+    Key::Escape,
+    Key::Backspace,
+    Key::Delete,
+    Key::Insert,
+    Key::Tab,
+    Key::Space,
+];
+
+fn egui_to_key_name(key: Key) -> Option<KeyName> {
+    match key {
+        Key::F1 => Some(KeyName::F1),
+        Key::F2 => Some(KeyName::F2),
+        Key::F3 => Some(KeyName::F3),
+        Key::F4 => Some(KeyName::F4),
+        Key::F5 => Some(KeyName::F5),
+        Key::F6 => Some(KeyName::F6),
+        Key::F7 => Some(KeyName::F7),
+        Key::F8 => Some(KeyName::F8),
+        Key::F9 => Some(KeyName::F9),
+        Key::F10 => Some(KeyName::F10),
+        Key::F11 => Some(KeyName::F11),
+        Key::F12 => Some(KeyName::F12),
+        Key::A => Some(KeyName::A),
+        Key::B => Some(KeyName::B),
+        Key::C => Some(KeyName::C),
+        Key::D => Some(KeyName::D),
+        Key::E => Some(KeyName::E),
+        Key::F => Some(KeyName::F),
+        Key::G => Some(KeyName::G),
+        Key::H => Some(KeyName::H),
+        Key::I => Some(KeyName::I),
+        Key::J => Some(KeyName::J),
+        Key::K => Some(KeyName::K),
+        Key::L => Some(KeyName::L),
+        Key::M => Some(KeyName::M),
+        Key::N => Some(KeyName::N),
+        Key::O => Some(KeyName::O),
+        Key::P => Some(KeyName::P),
+        Key::Q => Some(KeyName::Q),
+        Key::R => Some(KeyName::R),
+        Key::S => Some(KeyName::S),
+        Key::T => Some(KeyName::T),
+        Key::U => Some(KeyName::U),
+        Key::V => Some(KeyName::V),
+        Key::W => Some(KeyName::W),
+        Key::X => Some(KeyName::X),
+        Key::Y => Some(KeyName::Y),
+        Key::Z => Some(KeyName::Z),
+        Key::Num0 => Some(KeyName::Digit0),
+        Key::Num1 => Some(KeyName::Digit1),
+        Key::Num2 => Some(KeyName::Digit2),
+        Key::Num3 => Some(KeyName::Digit3),
+        Key::Num4 => Some(KeyName::Digit4),
+        Key::Num5 => Some(KeyName::Digit5),
+        Key::Num6 => Some(KeyName::Digit6),
+        Key::Num7 => Some(KeyName::Digit7),
+        Key::Num8 => Some(KeyName::Digit8),
+        Key::Num9 => Some(KeyName::Digit9),
+        Key::ArrowUp => Some(KeyName::Up),
+        Key::ArrowDown => Some(KeyName::Down),
+        Key::ArrowLeft => Some(KeyName::Left),
+        Key::ArrowRight => Some(KeyName::Right),
+        Key::Home => Some(KeyName::Home),
+        Key::End => Some(KeyName::End),
+        Key::PageUp => Some(KeyName::PageUp),
+        Key::PageDown => Some(KeyName::PageDown),
+        Key::Enter => Some(KeyName::Enter),
+        Key::Escape => Some(KeyName::Escape),
+        Key::Backspace => Some(KeyName::Backspace),
+        Key::Delete => Some(KeyName::Delete),
+        Key::Insert => Some(KeyName::Insert),
+        Key::Tab => Some(KeyName::Tab),
+        Key::Space => Some(KeyName::Space),
+        _ => None,
+    }
+}
 
 pub(crate) struct Renderer<'a> {
     state: &'a mut DebuggerAppState,
@@ -75,19 +221,62 @@ impl<'s> Renderer<'s> {
             }
         }
 
-        // Handle F5: start session or continue
-        if ctx.input(|i| i.key_pressed(Key::F5) && i.modifiers.is_none()) {
-            self.handle_f5();
-        }
-
-        // Handle Shift+F5: stop session
-        if ctx.input(|i| i.key_pressed(Key::F5) && i.modifiers.matches_exact(Modifiers::SHIFT)) {
-            if let Some(session) = self.state.session.take() {
-                session
-                    .bridge
-                    .send(crate::async_bridge::UiCommand::Terminate);
-                self.state.variables_cache.clear();
-                *self.state.repl_output.borrow_mut() = String::new();
+        // Configurable debug keybindings
+        let debug_action = ctx.input(|i| {
+            for key in DEBUG_POLL_KEYS {
+                if i.key_pressed(key) {
+                    if let Some(kn) = egui_to_key_name(key) {
+                        let m = i.modifiers;
+                        if let Some(action) = self.state.keybindings.match_action(
+                            kn,
+                            m.shift,
+                            m.ctrl || m.command,
+                            m.alt,
+                        ) {
+                            return Some(action);
+                        }
+                    }
+                }
+            }
+            None
+        });
+        if let Some(action) = debug_action {
+            use config::keybindings::DebugAction;
+            match action {
+                DebugAction::ContinueOrStart => self.handle_f5(),
+                DebugAction::Stop => {
+                    if let Some(session) = self.state.session.take() {
+                        session
+                            .bridge
+                            .send(crate::async_bridge::UiCommand::Terminate);
+                        self.state.variables_cache.clear();
+                        *self.state.repl_output.borrow_mut() = String::new();
+                    }
+                }
+                DebugAction::Restart => {
+                    // Stop then start
+                    if self.state.session.is_some() {
+                        self.state.session.take();
+                    }
+                    self.start_session();
+                }
+                DebugAction::StepOver => {
+                    if let Some(session) = &self.state.session {
+                        session
+                            .bridge
+                            .send(crate::async_bridge::UiCommand::StepOver);
+                    }
+                }
+                DebugAction::StepInto => {
+                    if let Some(session) = &self.state.session {
+                        session.bridge.send(crate::async_bridge::UiCommand::StepIn);
+                    }
+                }
+                DebugAction::StepOut => {
+                    if let Some(session) = &self.state.session {
+                        session.bridge.send(crate::async_bridge::UiCommand::StepOut);
+                    }
+                }
             }
         }
 
@@ -157,7 +346,13 @@ impl<'s> Renderer<'s> {
                         if ui.button("⟳ Restart").clicked() {
                             self.start_session();
                         }
-                        ui.label("or press F5");
+                        ui.label(format!(
+                            "or press {}",
+                            self.state
+                                .keybindings
+                                .label(config::keybindings::DebugAction::ContinueOrStart)
+                                .unwrap_or("?")
+                        ));
                     });
                 });
             }

@@ -20,6 +20,7 @@ launch_configuration = { path = "../launch_configuration", version = "0.1.0", pa
 fuzzy = { path = "../fuzzy", version = "0.1.0", package = "dap-gui-fuzzy" }
 async-transport = { path = "../async-transport", version = "0.1.0", package = "dap-gui-async-transport" }
 ui-core = { path = "../ui-core", version = "0.1.0", package = "dap-gui-ui-core" }
+config = { path = "../config", version = "0.1.0", package = "dap-gui-config" }
 clap.workspace = true
 eyre.workspace = true
 color-eyre.workspace = true

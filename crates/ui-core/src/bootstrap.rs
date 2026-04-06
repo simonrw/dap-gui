@@ -5,6 +5,8 @@ use eyre::Context;
 use launch_configuration::LaunchConfiguration;
 use state::StateManager;
 
+use config::keybindings::KeybindingConfig;
+
 /// CLI arguments shared by both TUI and GUI frontends.
 #[derive(Parser, Clone)]
 #[command(
@@ -54,6 +56,7 @@ pub struct BootstrapResult {
     pub debug_root_dir: PathBuf,
     pub state_manager: StateManager,
     pub initial_breakpoints: Vec<debugger::Breakpoint>,
+    pub keybindings: KeybindingConfig,
 }
 
 /// Perform shared application bootstrap: load configurations, set up
@@ -98,6 +101,9 @@ pub fn bootstrap(args: &Args) -> eyre::Result<BootstrapResult> {
         0
     };
 
+    // Load user configuration (keybindings, etc.)
+    let config = config::load_config();
+
     // Parse CLI breakpoints
     let initial_breakpoints: Vec<debugger::Breakpoint> = args
         .breakpoints
@@ -113,5 +119,6 @@ pub fn bootstrap(args: &Args) -> eyre::Result<BootstrapResult> {
         debug_root_dir,
         state_manager,
         initial_breakpoints,
+        keybindings: config.keybindings,
     })
 }

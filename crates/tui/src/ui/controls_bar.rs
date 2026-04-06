@@ -34,31 +34,34 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         spans.push(Span::raw("  "));
     }
 
+    use config::keybindings::DebugAction;
+    let kb = &app.keybindings;
+    let lbl = |a: DebugAction| kb.label(a).unwrap_or("?");
     let controls = match app.mode {
         AppMode::NoSession => vec![
-            control("F5", "Start"),
+            control(lbl(DebugAction::ContinueOrStart), "Start"),
             control("Ctrl+P", "Files"),
             control("?", "Help"),
             control("q", "Quit"),
         ],
         AppMode::Initialising | AppMode::Running => vec![
-            control("Shift+F5", "Stop"),
+            control(lbl(DebugAction::Stop), "Stop"),
             control("Ctrl+P", "Files"),
             control("?", "Help"),
             control("q", "Quit"),
         ],
         AppMode::Paused => vec![
-            control("F5", "Continue"),
-            control("F10", "Step Over"),
-            control("F11", "Step In"),
-            control("Shift+F11", "Step Out"),
-            control("Shift+F5", "Stop"),
+            control(lbl(DebugAction::ContinueOrStart), "Continue"),
+            control(lbl(DebugAction::StepOver), "Step Over"),
+            control(lbl(DebugAction::StepInto), "Step In"),
+            control(lbl(DebugAction::StepOut), "Step Out"),
+            control(lbl(DebugAction::Stop), "Stop"),
             control("?", "Help"),
         ],
         AppMode::Terminated => vec![
-            control("F5", "Restart"),
-            control("Ctrl+Shift+F5", "Restart"),
-            control("Shift+F5", "Close"),
+            control(lbl(DebugAction::ContinueOrStart), "Restart"),
+            control(lbl(DebugAction::Restart), "Restart"),
+            control(lbl(DebugAction::Stop), "Close"),
             control("q", "Quit"),
         ],
     };
