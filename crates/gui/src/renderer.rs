@@ -23,7 +23,13 @@ use config::keybindings::KeyName;
 /// ID for the search input field so we can request focus
 const SEARCH_INPUT_ID: &str = "code_view_search_input";
 
-const FUNCTION_KEYS: [Key; 12] = [
+/// Keys to poll for configurable debug action bindings.
+///
+/// We only need to check function keys here because the current debug action
+/// defaults only use F-keys. If users bind debug actions to letter/nav keys
+/// in their config, those would need to be added to this list or the polling
+/// approach changed. For now, function keys cover all practical debug bindings.
+const DEBUG_POLL_KEYS: [Key; 12] = [
     Key::F1,
     Key::F2,
     Key::F3,
@@ -52,6 +58,57 @@ fn egui_to_key_name(key: Key) -> Option<KeyName> {
         Key::F10 => Some(KeyName::F10),
         Key::F11 => Some(KeyName::F11),
         Key::F12 => Some(KeyName::F12),
+        Key::A => Some(KeyName::A),
+        Key::B => Some(KeyName::B),
+        Key::C => Some(KeyName::C),
+        Key::D => Some(KeyName::D),
+        Key::E => Some(KeyName::E),
+        Key::F => Some(KeyName::F),
+        Key::G => Some(KeyName::G),
+        Key::H => Some(KeyName::H),
+        Key::I => Some(KeyName::I),
+        Key::J => Some(KeyName::J),
+        Key::K => Some(KeyName::K),
+        Key::L => Some(KeyName::L),
+        Key::M => Some(KeyName::M),
+        Key::N => Some(KeyName::N),
+        Key::O => Some(KeyName::O),
+        Key::P => Some(KeyName::P),
+        Key::Q => Some(KeyName::Q),
+        Key::R => Some(KeyName::R),
+        Key::S => Some(KeyName::S),
+        Key::T => Some(KeyName::T),
+        Key::U => Some(KeyName::U),
+        Key::V => Some(KeyName::V),
+        Key::W => Some(KeyName::W),
+        Key::X => Some(KeyName::X),
+        Key::Y => Some(KeyName::Y),
+        Key::Z => Some(KeyName::Z),
+        Key::Num0 => Some(KeyName::Digit0),
+        Key::Num1 => Some(KeyName::Digit1),
+        Key::Num2 => Some(KeyName::Digit2),
+        Key::Num3 => Some(KeyName::Digit3),
+        Key::Num4 => Some(KeyName::Digit4),
+        Key::Num5 => Some(KeyName::Digit5),
+        Key::Num6 => Some(KeyName::Digit6),
+        Key::Num7 => Some(KeyName::Digit7),
+        Key::Num8 => Some(KeyName::Digit8),
+        Key::Num9 => Some(KeyName::Digit9),
+        Key::ArrowUp => Some(KeyName::Up),
+        Key::ArrowDown => Some(KeyName::Down),
+        Key::ArrowLeft => Some(KeyName::Left),
+        Key::ArrowRight => Some(KeyName::Right),
+        Key::Home => Some(KeyName::Home),
+        Key::End => Some(KeyName::End),
+        Key::PageUp => Some(KeyName::PageUp),
+        Key::PageDown => Some(KeyName::PageDown),
+        Key::Enter => Some(KeyName::Enter),
+        Key::Escape => Some(KeyName::Escape),
+        Key::Backspace => Some(KeyName::Backspace),
+        Key::Delete => Some(KeyName::Delete),
+        Key::Insert => Some(KeyName::Insert),
+        Key::Tab => Some(KeyName::Tab),
+        Key::Space => Some(KeyName::Space),
         _ => None,
     }
 }
@@ -112,7 +169,7 @@ impl<'s> Renderer<'s> {
 
         // Configurable debug keybindings
         let debug_action = ctx.input(|i| {
-            for key in FUNCTION_KEYS {
+            for key in DEBUG_POLL_KEYS {
                 if i.key_pressed(key) {
                     if let Some(kn) = egui_to_key_name(key) {
                         let m = i.modifiers;
