@@ -169,6 +169,9 @@ struct DebuggerAppState {
     // Search state for the code view
     search_state: crate::code_view::GuiSearchState,
 
+    // Keybindings
+    keybindings: ui_core::keybindings::KeybindingConfig,
+
     // Persistence
     state_manager: StateManager,
     debug_root_dir: PathBuf,
@@ -255,6 +258,7 @@ impl DebuggerApp {
             code_font_size: persisted_state.code_font_size.unwrap_or(14.0),
             status: Default::default(),
             search_state: Default::default(),
+            keybindings: boot.keybindings,
             state_manager: boot.state_manager,
             debug_root_dir: boot.debug_root_dir,
             configs: boot.configs,

@@ -18,8 +18,43 @@ use crate::{
     },
 };
 
+use ui_core::keybindings::KeyName;
+
 /// ID for the search input field so we can request focus
 const SEARCH_INPUT_ID: &str = "code_view_search_input";
+
+const FUNCTION_KEYS: [Key; 12] = [
+    Key::F1,
+    Key::F2,
+    Key::F3,
+    Key::F4,
+    Key::F5,
+    Key::F6,
+    Key::F7,
+    Key::F8,
+    Key::F9,
+    Key::F10,
+    Key::F11,
+    Key::F12,
+];
+
+fn egui_to_key_name(key: Key) -> Option<KeyName> {
+    match key {
+        Key::F1 => Some(KeyName::F1),
+        Key::F2 => Some(KeyName::F2),
+        Key::F3 => Some(KeyName::F3),
+        Key::F4 => Some(KeyName::F4),
+        Key::F5 => Some(KeyName::F5),
+        Key::F6 => Some(KeyName::F6),
+        Key::F7 => Some(KeyName::F7),
+        Key::F8 => Some(KeyName::F8),
+        Key::F9 => Some(KeyName::F9),
+        Key::F10 => Some(KeyName::F10),
+        Key::F11 => Some(KeyName::F11),
+        Key::F12 => Some(KeyName::F12),
+        _ => None,
+    }
+}
 
 pub(crate) struct Renderer<'a> {
     state: &'a mut DebuggerAppState,
@@ -75,19 +110,62 @@ impl<'s> Renderer<'s> {
             }
         }
 
-        // Handle F5: start session or continue
-        if ctx.input(|i| i.key_pressed(Key::F5) && i.modifiers.is_none()) {
-            self.handle_f5();
-        }
-
-        // Handle Shift+F5: stop session
-        if ctx.input(|i| i.key_pressed(Key::F5) && i.modifiers.matches_exact(Modifiers::SHIFT)) {
-            if let Some(session) = self.state.session.take() {
-                session
-                    .bridge
-                    .send(crate::async_bridge::UiCommand::Terminate);
-                self.state.variables_cache.clear();
-                *self.state.repl_output.borrow_mut() = String::new();
+        // Configurable debug keybindings
+        let debug_action = ctx.input(|i| {
+            for key in FUNCTION_KEYS {
+                if i.key_pressed(key) {
+                    if let Some(kn) = egui_to_key_name(key) {
+                        let m = i.modifiers;
+                        if let Some(action) = self.state.keybindings.match_action(
+                            kn,
+                            m.shift,
+                            m.ctrl || m.command,
+                            m.alt,
+                        ) {
+                            return Some(action);
+                        }
+                    }
+                }
+            }
+            None
+        });
+        if let Some(action) = debug_action {
+            use ui_core::keybindings::DebugAction;
+            match action {
+                DebugAction::ContinueOrStart => self.handle_f5(),
+                DebugAction::Stop => {
+                    if let Some(session) = self.state.session.take() {
+                        session
+                            .bridge
+                            .send(crate::async_bridge::UiCommand::Terminate);
+                        self.state.variables_cache.clear();
+                        *self.state.repl_output.borrow_mut() = String::new();
+                    }
+                }
+                DebugAction::Restart => {
+                    // Stop then start
+                    if self.state.session.is_some() {
+                        self.state.session.take();
+                    }
+                    self.start_session();
+                }
+                DebugAction::StepOver => {
+                    if let Some(session) = &self.state.session {
+                        session
+                            .bridge
+                            .send(crate::async_bridge::UiCommand::StepOver);
+                    }
+                }
+                DebugAction::StepInto => {
+                    if let Some(session) = &self.state.session {
+                        session.bridge.send(crate::async_bridge::UiCommand::StepIn);
+                    }
+                }
+                DebugAction::StepOut => {
+                    if let Some(session) = &self.state.session {
+                        session.bridge.send(crate::async_bridge::UiCommand::StepOut);
+                    }
+                }
             }
         }
 
@@ -157,7 +235,10 @@ impl<'s> Renderer<'s> {
                         if ui.button("⟳ Restart").clicked() {
                             self.start_session();
                         }
-                        ui.label("or press F5");
+                        ui.label(format!(
+                            "or press {}",
+                            self.state.keybindings.continue_start
+                        ));
                     });
                 });
             }
