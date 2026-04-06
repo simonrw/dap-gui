@@ -23,13 +23,12 @@ use config::keybindings::KeyName;
 /// ID for the search input field so we can request focus
 const SEARCH_INPUT_ID: &str = "code_view_search_input";
 
-/// Keys to poll for configurable debug action bindings.
+/// All keys that can appear in a configurable debug action binding.
 ///
-/// We only need to check function keys here because the current debug action
-/// defaults only use F-keys. If users bind debug actions to letter/nav keys
-/// in their config, those would need to be added to this list or the polling
-/// approach changed. For now, function keys cover all practical debug bindings.
-const DEBUG_POLL_KEYS: [Key; 12] = [
+/// This list must cover every key that [`egui_to_key_name`] can translate,
+/// so that user-configured bindings to any supported key work in the GUI.
+const DEBUG_POLL_KEYS: [Key; 63] = [
+    // Function keys
     Key::F1,
     Key::F2,
     Key::F3,
@@ -42,6 +41,61 @@ const DEBUG_POLL_KEYS: [Key; 12] = [
     Key::F10,
     Key::F11,
     Key::F12,
+    // Letters
+    Key::A,
+    Key::B,
+    Key::C,
+    Key::D,
+    Key::E,
+    Key::F,
+    Key::G,
+    Key::H,
+    Key::I,
+    Key::J,
+    Key::K,
+    Key::L,
+    Key::M,
+    Key::N,
+    Key::O,
+    Key::P,
+    Key::Q,
+    Key::R,
+    Key::S,
+    Key::T,
+    Key::U,
+    Key::V,
+    Key::W,
+    Key::X,
+    Key::Y,
+    Key::Z,
+    // Digits
+    Key::Num0,
+    Key::Num1,
+    Key::Num2,
+    Key::Num3,
+    Key::Num4,
+    Key::Num5,
+    Key::Num6,
+    Key::Num7,
+    Key::Num8,
+    Key::Num9,
+    // Navigation
+    Key::ArrowUp,
+    Key::ArrowDown,
+    Key::ArrowLeft,
+    Key::ArrowRight,
+    Key::Home,
+    Key::End,
+    Key::PageUp,
+    Key::PageDown,
+    // Editing / special
+    Key::Enter,
+    Key::Escape,
+    Key::Backspace,
+    Key::Delete,
+    Key::Insert,
+    Key::Tab,
+    Key::Space,
 ];
 
 fn egui_to_key_name(key: Key) -> Option<KeyName> {
