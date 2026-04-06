@@ -75,8 +75,6 @@ pub enum InputMode {
     Search,
     /// Typing into breakpoint add input.
     BreakpointInput,
-    /// Typing into file browser search in sidebar.
-    FileBrowser,
     /// Typing into evaluate expression popup.
     EvaluatePopup,
 }
@@ -208,7 +206,7 @@ impl App {
     ) -> Self {
         Self {
             mode: AppMode::NoSession,
-            focus: Focus::CodeView,
+            focus: Focus::CallStack,
             bottom_tab: BottomTab::Variables,
             input_mode: InputMode::Normal,
             should_quit: false,
@@ -1342,7 +1340,7 @@ mod tests {
     fn app_initial_state() {
         with_test_app(|app| {
             assert_eq!(app.mode, AppMode::NoSession);
-            assert_eq!(app.focus, Focus::CodeView);
+            assert_eq!(app.focus, Focus::CallStack);
             assert_eq!(app.bottom_tab, BottomTab::Variables);
             assert_eq!(app.input_mode, InputMode::Normal);
             assert!(!app.should_quit);

@@ -10,7 +10,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         InputMode::FilePicker => handle_file_picker_key(app, key),
         InputMode::Search => handle_search_key(app, key),
         InputMode::BreakpointInput => handle_breakpoint_input_key(app, key),
-        InputMode::FileBrowser => handle_file_browser_input_key(app, key),
         InputMode::EvaluatePopup => handle_evaluate_popup_key(app, key),
         InputMode::Normal => handle_normal_key(app, key),
     }
@@ -116,40 +115,6 @@ fn handle_breakpoint_input_key(app: &mut App, key: KeyEvent) {
             if let Some(ref mut input) = app.breakpoint_input {
                 input.push(c);
             }
-        }
-        _ => {}
-    }
-}
-
-// ── File browser input mode (typing in sidebar search) ────────────────────
-
-fn handle_file_browser_input_key(app: &mut App, key: KeyEvent) {
-    match key.code {
-        KeyCode::Esc => {
-            app.file_browser_query.clear();
-            app.refilter_file_browser();
-            app.input_mode = InputMode::Normal;
-        }
-        KeyCode::Enter => {
-            app.select_file_browser_item();
-            app.input_mode = InputMode::Normal;
-        }
-        KeyCode::Up => {
-            app.file_browser_cursor = app.file_browser_cursor.saturating_sub(1);
-        }
-        KeyCode::Down => {
-            if !app.file_browser_results.is_empty() {
-                app.file_browser_cursor =
-                    (app.file_browser_cursor + 1).min(app.file_browser_results.len() - 1);
-            }
-        }
-        KeyCode::Backspace => {
-            app.file_browser_query.pop();
-            app.refilter_file_browser();
-        }
-        KeyCode::Char(c) => {
-            app.file_browser_query.push(c);
-            app.refilter_file_browser();
         }
         _ => {}
     }
@@ -692,23 +657,28 @@ fn handle_repl_focus_key(app: &mut App, key: KeyEvent) {
 
 fn handle_file_browser_focus_key(app: &mut App, key: KeyEvent) {
     match key.code {
-        // Start typing to filter
-        KeyCode::Char('/') | KeyCode::Char('i') => {
-            app.input_mode = InputMode::FileBrowser;
-        }
         // Navigation
-        KeyCode::Char('j') | KeyCode::Down => {
+        KeyCode::Down => {
             if !app.file_browser_results.is_empty() {
                 app.file_browser_cursor =
                     (app.file_browser_cursor + 1).min(app.file_browser_results.len() - 1);
             }
         }
-        KeyCode::Char('k') | KeyCode::Up => {
+        KeyCode::Up => {
             app.file_browser_cursor = app.file_browser_cursor.saturating_sub(1);
         }
         // Select file
         KeyCode::Enter => {
             app.select_file_browser_item();
+        }
+        // Typing filters directly
+        KeyCode::Backspace => {
+            app.file_browser_query.pop();
+            app.refilter_file_browser();
+        }
+        KeyCode::Char(c) => {
+            app.file_browser_query.push(c);
+            app.refilter_file_browser();
         }
         _ => {}
     }
@@ -782,7 +752,7 @@ mod tests {
     #[test]
     fn tab_cycles_focus_forward() {
         with_test_app(|app| {
-            assert_eq!(app.focus, Focus::CodeView);
+            app.focus = Focus::CodeView;
             handle_key(app, key(KeyCode::Tab));
             assert_eq!(app.focus, Focus::CallStack);
             handle_key(app, key(KeyCode::Tab));
@@ -793,7 +763,7 @@ mod tests {
     #[test]
     fn backtab_cycles_focus_backward() {
         with_test_app(|app| {
-            assert_eq!(app.focus, Focus::CodeView);
+            app.focus = Focus::CodeView;
             handle_key(app, key(KeyCode::BackTab));
             assert_eq!(app.focus, Focus::Repl);
         });
@@ -802,7 +772,7 @@ mod tests {
     #[test]
     fn shift_tab_cycles_focus_backward() {
         with_test_app(|app| {
-            assert_eq!(app.focus, Focus::CodeView);
+            app.focus = Focus::CodeView;
             handle_key(app, key_mod(KeyCode::Tab, KeyModifiers::SHIFT));
             assert_eq!(app.focus, Focus::Repl);
         });
@@ -900,6 +870,7 @@ mod tests {
         let (_dir, file_path) = write_temp_file("l1\nl2\nl3\nl4\nl5\n");
 
         with_test_app(|app| {
+            app.focus = Focus::CodeView;
             app.open_file(file_path);
             assert_eq!(app.code_view.cursor_line, 0);
 
@@ -919,6 +890,7 @@ mod tests {
         let (_dir, file_path) = write_temp_file("l1\nl2\nl3\nl4\nl5\n");
 
         with_test_app(|app| {
+            app.focus = Focus::CodeView;
             app.open_file(file_path);
             app.code_view.cursor_line = 2;
 
@@ -939,6 +911,7 @@ mod tests {
         let (_dir, file_path) = write_temp_file(&content);
 
         with_test_app(|app| {
+            app.focus = Focus::CodeView;
             app.open_file(file_path);
 
             handle_key(app, key_mod(KeyCode::Char('d'), KeyModifiers::CONTROL));
@@ -956,6 +929,7 @@ mod tests {
         let (_dir, file_path) = write_temp_file("line1\nline2\nline3\n");
 
         with_test_app(|app| {
+            app.focus = Focus::CodeView;
             app.open_file(file_path);
             app.code_view.cursor_line = 1;
 
@@ -974,6 +948,7 @@ mod tests {
         let (_dir, file_path) = write_temp_file("line1\nline2\nline3\n");
 
         with_test_app(|app| {
+            app.focus = Focus::CodeView;
             app.open_file(file_path);
             app.code_view.cursor_line = 1;
 
