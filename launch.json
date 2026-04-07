@@ -39,7 +39,7 @@
       "cwd": "~/work/localstack/localstack",
       "pathMappings": [
         {
-          "localRoot": "/Users/simon/work/localstack/localstack/localstack",
+          "localRoot": "/Users/simon/work/localstack/localstack/localstack-core",
           "remoteRoot": "/opt/code/localstack/localstack"
         }
       ]
