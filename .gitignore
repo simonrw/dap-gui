@@ -43,6 +43,7 @@ result
 .env*
 .idea/
 .vscode/
+!crates/launch_configuration/testdata/vscode/sample-project/.vscode/
 *.log
 *.prof*
 *.rlib
