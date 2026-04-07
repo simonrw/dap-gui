@@ -73,7 +73,7 @@ pub fn bootstrap(args: &Args) -> eyre::Result<BootstrapResult> {
     }
     let config_names: Vec<String> = configs.iter().map(|c| c.name().to_string()).collect();
 
-    let debug_root_dir = std::env::current_dir()
+    let mut debug_root_dir = std::env::current_dir()
         .and_then(|p| std::fs::canonicalize(&p))
         .wrap_err("resolving current directory")?;
 
@@ -100,6 +100,16 @@ pub fn bootstrap(args: &Args) -> eyre::Result<BootstrapResult> {
     } else {
         0
     };
+
+    // Change working directory if the selected config specifies one
+    if let Some(cwd) = configs[selected_config_index].cwd() {
+        let normalised = debugger::utils::normalise_path(cwd);
+        let resolved =
+            std::fs::canonicalize(normalised.as_ref()).unwrap_or_else(|_| normalised.into_owned());
+        std::env::set_current_dir(&resolved)
+            .wrap_err_with(|| format!("changing to config cwd: {}", resolved.display()))?;
+        debug_root_dir = resolved;
+    }
 
     // Load user configuration (keybindings, etc.)
     let config = config::load_config();
