@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/simonrw/dap-gui/compare/dap-gui-config-v0.1.0...dap-gui-config-v0.2.0) - 2026-04-07
+
+### Added
+
+- add automatic dark/light theme switching based on system preference ([#397](https://github.com/simonrw/dap-gui/pull/397))
+
+### Other
+
+- release v0.1.0 ([#394](https://github.com/simonrw/dap-gui/pull/394))
+
 ## [0.1.0](https://github.com/simonrw/dap-gui/releases/tag/dap-gui-config-v0.1.0) - 2026-04-06
 
 ### Added
