@@ -23,6 +23,7 @@ jobs:
           persist-credentials: false
       - name: Install Rust toolchain
         run: rustup update stable
+      - uses: Swatinem/rust-cache@v2
       - name: Run release-plz
         uses: release-plz/action@1528104d2ca23787631a1c1f022abb64b34c1e11 # v0.5.128
         with:
@@ -51,6 +52,7 @@ jobs:
           persist-credentials: false
       - name: Install Rust toolchain
         run: rustup update stable
+      - uses: Swatinem/rust-cache@v2
       - name: Run release-plz
         uses: release-plz/action@1528104d2ca23787631a1c1f022abb64b34c1e11 # v0.5.128
         with:
