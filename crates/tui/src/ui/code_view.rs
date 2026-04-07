@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
@@ -16,7 +16,7 @@ use super::border_style;
 // checkpoints across frames.
 thread_local! {
     static HIGHLIGHTER: std::cell::RefCell<SyntaxHighlighter> = std::cell::RefCell::new(SyntaxHighlighter::new());
-    static LAST_FILE: std::cell::RefCell<Option<std::path::PathBuf>> = std::cell::RefCell::new(None);
+    static LAST_FILE: std::cell::RefCell<Option<(std::path::PathBuf, &'static str)>> = std::cell::RefCell::new(None);
 }
 
 pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
@@ -70,17 +70,19 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
             let gutter_width = format!("{}", app.code_view.total_lines).len();
 
             // Syntax highlight the visible lines
+            let syntect_theme = app.theme.syntect_theme;
             LAST_FILE.with(|last| {
                 let mut last = last.borrow_mut();
-                if last.as_ref() != Some(path) {
+                let key = (path.clone(), syntect_theme);
+                if last.as_ref() != Some(&key) {
                     HIGHLIGHTER.with(|h| h.borrow_mut().set_file(path));
-                    *last = Some(path.clone());
+                    *last = Some(key);
                 }
             });
 
             let highlighted = HIGHLIGHTER.with(|h| {
                 h.borrow_mut()
-                    .highlight_lines(&content_owned, start_line, end_line)
+                    .highlight_lines(&content_owned, start_line, end_line, syntect_theme)
             });
 
             // Determine execution line (0-indexed) if paused at current file
@@ -118,6 +120,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
                 &breakpoint_lines,
                 selection_range,
                 &app.inline_evaluations,
+                &app.theme,
             );
 
             let paragraph = Paragraph::new(lines);
@@ -155,10 +158,10 @@ fn render_search_bar(app: &App, frame: &mut Frame, area: Rect) {
 
     let is_active = app.input_mode == InputMode::Search;
     let base_style = Style::default()
-        .fg(Color::White)
+        .fg(app.theme.text)
         .add_modifier(Modifier::BOLD);
 
-    let mut spans = vec![Span::styled("/", Style::default().fg(Color::Yellow))];
+    let mut spans = vec![Span::styled("/", Style::default().fg(app.theme.accent))];
     if is_active {
         spans.extend(app.search_editor.render_spans(base_style));
     } else {
@@ -166,7 +169,7 @@ fn render_search_bar(app: &App, frame: &mut Frame, area: Rect) {
     }
     spans.push(Span::styled(
         match_info,
-        Style::default().fg(Color::DarkGray),
+        Style::default().fg(app.theme.text_muted),
     ));
     let line = Line::from(spans);
 

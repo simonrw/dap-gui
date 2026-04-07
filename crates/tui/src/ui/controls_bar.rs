@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
@@ -11,6 +11,7 @@ use crate::app::{App, AppMode};
 /// Render the controls bar showing available keybindings for the current state.
 /// In NoSession/Terminated modes, also shows the config selector with h/l cycling.
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
+    let theme = &app.theme;
     let mut spans = Vec::new();
 
     // Config selector: shown when no active session
@@ -18,18 +19,18 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     {
         spans.push(Span::styled(
             " \u{25c0} ",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.text_muted),
         )); // ◀
         spans.push(Span::styled(
             format!(" {} ", app.config_names[app.selected_config_index]),
             Style::default()
-                .fg(Color::White)
-                .bg(Color::Rgb(50, 50, 80))
+                .fg(theme.text)
+                .bg(theme.selection_bg)
                 .add_modifier(Modifier::BOLD),
         ));
         spans.push(Span::styled(
             " \u{25b6} ",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.text_muted),
         )); // ▶
         spans.push(Span::raw("  "));
     }
@@ -72,11 +73,13 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         }
         spans.push(Span::styled(
             format!(" {key} "),
-            Style::default().fg(Color::Black).bg(Color::Cyan),
+            Style::default()
+                .fg(theme.key_badge_fg)
+                .bg(theme.key_badge_bg),
         ));
         spans.push(Span::styled(
             format!(" {action}"),
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.text_secondary),
         ));
     }
 
@@ -84,7 +87,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let paragraph = Paragraph::new(line).block(
         Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray)),
+            .border_style(Style::default().fg(theme.border_unfocused)),
     );
     frame.render_widget(paragraph, area);
 }

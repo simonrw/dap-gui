@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
 };
@@ -10,20 +10,21 @@ use crate::app::{App, AppMode};
 
 /// Render the status bar at the bottom showing session state and file info.
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
+    let theme = &app.theme;
     let mut spans = Vec::new();
 
     // Mode indicator
     let (mode_text, mode_color) = match app.mode {
-        AppMode::NoSession => (" NO SESSION ", Color::DarkGray),
-        AppMode::Initialising => (" STARTING ", Color::Yellow),
-        AppMode::Running => (" RUNNING ", Color::Green),
-        AppMode::Paused => (" PAUSED ", Color::Cyan),
-        AppMode::Terminated => (" TERMINATED ", Color::Red),
+        AppMode::NoSession => (" NO SESSION ", theme.text_muted),
+        AppMode::Initialising => (" STARTING ", theme.warning),
+        AppMode::Running => (" RUNNING ", theme.success),
+        AppMode::Paused => (" PAUSED ", theme.accent_alt),
+        AppMode::Terminated => (" TERMINATED ", theme.error),
     };
     spans.push(Span::styled(
         mode_text,
         Style::default()
-            .fg(Color::Black)
+            .fg(theme.status_badge_fg)
             .bg(mode_color)
             .add_modifier(Modifier::BOLD),
     ));
@@ -35,7 +36,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         spans.push(Span::styled(
             "[Zen: z] ",
             Style::default()
-                .fg(Color::Yellow)
+                .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ));
     }
@@ -44,7 +45,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     if !app.config_names.is_empty() {
         spans.push(Span::styled(
             format!("[{}]", app.config_names[app.selected_config_index]),
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.text_secondary),
         ));
         spans.push(Span::raw(" "));
     }
@@ -55,7 +56,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         let line = app.code_view.cursor_line + 1;
         spans.push(Span::styled(
             format!("{filename}:{line}"),
-            Style::default().fg(Color::White),
+            Style::default().fg(theme.text),
         ));
         spans.push(Span::raw(" "));
     }
@@ -64,10 +65,13 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     if let Some(err) = &app.status_error {
         spans.push(Span::styled(
             format!("ERROR: {err}"),
-            Style::default().fg(Color::Red),
+            Style::default().fg(theme.error),
         ));
     } else if let Some(msg) = &app.status_message {
-        spans.push(Span::styled(msg.as_str(), Style::default().fg(Color::Gray)));
+        spans.push(Span::styled(
+            msg.as_str(),
+            Style::default().fg(theme.text_secondary),
+        ));
     }
 
     let line = Line::from(spans);

@@ -1250,6 +1250,7 @@ dependencies = [
  "dap-gui-state",
  "dap-gui-types",
  "dap-gui-ui-core",
+ "dark-light",
  "data-encoding",
  "dirs 6.0.0",
  "eyre",

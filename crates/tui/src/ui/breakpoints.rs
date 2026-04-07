@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
@@ -30,9 +30,9 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         render_list(app, frame, chunks[0]);
 
         let base_style = Style::default()
-            .fg(Color::White)
+            .fg(app.theme.text)
             .add_modifier(Modifier::BOLD);
-        let mut spans = vec![Span::styled("> ", Style::default().fg(Color::Yellow))];
+        let mut spans = vec![Span::styled("> ", Style::default().fg(app.theme.accent))];
         spans.extend(app.breakpoint_editor.render_spans(base_style));
         let input_line = Line::from(spans);
         frame.render_widget(Paragraph::new(input_line), chunks[1]);
@@ -42,10 +42,12 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_list(app: &App, frame: &mut Frame, area: Rect) {
+    let theme = &app.theme;
+
     if app.ui_breakpoints.is_empty() {
         let empty = Paragraph::new(Span::styled(
             "  (none)",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.text_muted),
         ));
         frame.render_widget(empty, area);
         return;
@@ -68,10 +70,10 @@ fn render_list(app: &App, frame: &mut Frame, area: Rect) {
 
             let style = if is_selected {
                 Style::default()
-                    .fg(Color::Red)
+                    .fg(theme.error)
                     .add_modifier(Modifier::BOLD | Modifier::REVERSED)
             } else {
-                Style::default().fg(Color::Red)
+                Style::default().fg(theme.error)
             };
 
             ListItem::new(Line::from(Span::styled(text, style)))

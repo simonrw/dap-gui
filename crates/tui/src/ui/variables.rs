@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem},
 };
@@ -15,6 +15,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let border = super::border_style(app, super::Focus::Variables);
     let title = " Variables [Alt+1] [y:yank] ";
     let is_focused = app.focus == super::Focus::Variables;
+    let theme = &app.theme;
 
     let items: Vec<ListItem> = if let Some(session) = &app.session {
         if let DebuggerState::Paused { paused_frame, .. } = &session.state {
@@ -27,6 +28,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
                     0,
                     is_focused && flat_idx == app.variables_cursor,
                     &app.variables_cache,
+                    theme,
                 ));
                 flat_idx += 1;
 
@@ -40,6 +42,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
                                     1,
                                     is_focused && flat_idx == app.variables_cursor,
                                     &app.variables_cache,
+                                    theme,
                                 ));
                                 flat_idx += 1;
                             }
@@ -51,13 +54,13 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         } else {
             vec![ListItem::new(Span::styled(
                 "  (not paused)",
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(theme.text_muted),
             ))]
         }
     } else {
         vec![ListItem::new(Span::styled(
             "  (no session)",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.text_muted),
         ))]
     };
 
@@ -75,6 +78,7 @@ fn make_variable_item<'a>(
     indent: usize,
     is_selected: bool,
     cache: &std::collections::HashMap<i64, Vec<dap_types::Variable>>,
+    theme: &crate::theme::Theme,
 ) -> ListItem<'a> {
     let indent_str = "  ".repeat(indent + 1);
 
@@ -94,21 +98,21 @@ fn make_variable_item<'a>(
         "  "
     };
 
-    let name_span = Span::styled(var.name.clone(), Style::default().fg(Color::Cyan));
+    let name_span = Span::styled(var.name.clone(), Style::default().fg(theme.accent_alt));
     let type_span = if let Some(ref ty) = var.r#type {
-        Span::styled(format!(": {ty}"), Style::default().fg(Color::DarkGray))
+        Span::styled(format!(": {ty}"), Style::default().fg(theme.text_muted))
     } else {
         Span::raw("")
     };
     let value_span = if let Some(ref val) = var.value {
-        Span::styled(format!(" = {val}"), Style::default().fg(Color::White))
+        Span::styled(format!(" = {val}"), Style::default().fg(theme.text))
     } else {
         Span::raw("")
     };
 
     let mut line = Line::from(vec![
         Span::raw(indent_str),
-        Span::styled(tree_marker, Style::default().fg(Color::Yellow)),
+        Span::styled(tree_marker, Style::default().fg(theme.accent)),
         name_span,
         type_span,
         value_span,

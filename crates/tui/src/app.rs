@@ -7,6 +7,7 @@ use crate::async_bridge::UiCommand;
 use crate::event::AppEvent;
 use crate::line_editor::{InputHistory, LineEditor};
 use crate::session::Session;
+use crate::theme::{self, Theme, ThemeMode};
 use crossterm::event::KeyEvent;
 use launch_configuration::LaunchConfiguration;
 use state::StateManager;
@@ -207,6 +208,11 @@ pub struct App {
     pub search_history: InputHistory,
     pub breakpoint_history: InputHistory,
     pub file_browser_history: InputHistory,
+
+    // Theme
+    pub theme: Theme,
+    theme_preference: config::ThemePreference,
+    theme_check_counter: u32,
 }
 
 impl App {
@@ -220,8 +226,14 @@ impl App {
         wakeup_tx: crossbeam_channel::Sender<()>,
         initial_breakpoints: Vec<debugger::Breakpoint>,
         keybindings: config::keybindings::KeybindingConfig,
+        theme_preference: config::ThemePreference,
     ) -> Self {
         let kill_ring = Rc::new(RefCell::new(String::new()));
+        let theme_mode = match theme_preference {
+            config::ThemePreference::Auto => theme::detect_theme_mode(),
+            config::ThemePreference::Dark => ThemeMode::Dark,
+            config::ThemePreference::Light => ThemeMode::Light,
+        };
         Self {
             mode: AppMode::NoSession,
             focus: Focus::CallStack,
@@ -275,6 +287,9 @@ impl App {
             search_history: InputHistory::new(),
             breakpoint_history: InputHistory::new(),
             file_browser_history: InputHistory::new(),
+            theme: Theme::for_mode(theme_mode),
+            theme_preference,
+            theme_check_counter: 0,
         }
     }
 
@@ -283,7 +298,10 @@ impl App {
         match event {
             AppEvent::Key(key) => self.handle_key(key),
             AppEvent::Resize(_, _) => {} // ratatui handles resize automatically
-            AppEvent::Tick => self.drain_debugger_events(),
+            AppEvent::Tick => {
+                self.drain_debugger_events();
+                self.check_theme_change();
+            }
             AppEvent::Mouse(_) => {}
             AppEvent::Debugger(_) => {} // events arrive via session channel, drained on tick
         }
@@ -294,6 +312,23 @@ impl App {
     }
 
     /// Drain all pending debugger events from the session's channel.
+    /// Periodically re-detect the system theme and swap palette if it changed.
+    /// Called every tick (~250ms); actual detection runs every 20 ticks (~5s).
+    fn check_theme_change(&mut self) {
+        if self.theme_preference != config::ThemePreference::Auto {
+            return;
+        }
+        self.theme_check_counter += 1;
+        if self.theme_check_counter < 20 {
+            return;
+        }
+        self.theme_check_counter = 0;
+        let detected = theme::detect_theme_mode();
+        if detected != self.theme.mode {
+            self.theme = Theme::for_mode(detected);
+        }
+    }
+
     pub fn drain_debugger_events(&mut self) {
         // Collect events and errors while briefly borrowing the session
         let (events, errors) = {
@@ -928,6 +963,7 @@ pub(crate) mod test_helpers {
             wakeup_tx,
             vec![], // no initial breakpoints
             Default::default(),
+            Default::default(),
         );
 
         f(&mut app);
@@ -963,6 +999,7 @@ pub(crate) mod test_helpers {
             state_manager,
             wakeup_tx,
             vec![],
+            Default::default(),
             Default::default(),
         );
 
@@ -1589,6 +1626,7 @@ mod tests {
             wakeup_tx,
             vec![],
             Default::default(),
+            Default::default(),
         );
 
         // Add a breakpoint and persist
@@ -1611,6 +1649,7 @@ mod tests {
             state_manager2,
             wakeup_tx2,
             vec![],
+            Default::default(),
             Default::default(),
         );
 
@@ -1645,6 +1684,7 @@ mod tests {
             wakeup_tx,
             vec![],
             Default::default(),
+            Default::default(),
         );
         app1.ui_breakpoints.insert(debugger::Breakpoint {
             name: None,
@@ -1665,6 +1705,7 @@ mod tests {
             state_manager2,
             wakeup_tx2,
             vec![],
+            Default::default(),
             Default::default(),
         );
         app2.ui_breakpoints.insert(debugger::Breakpoint {

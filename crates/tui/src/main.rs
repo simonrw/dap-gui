@@ -17,6 +17,7 @@ mod input;
 mod line_editor;
 mod session;
 mod syntax;
+pub mod theme;
 mod ui;
 
 use app::App;
@@ -62,6 +63,7 @@ fn main() -> eyre::Result<()> {
         wakeup_tx,
         boot.initial_breakpoints,
         boot.keybindings,
+        boot.theme,
     );
 
     // Install a panic hook that restores the terminal before printing.

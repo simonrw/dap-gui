@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
@@ -11,6 +11,7 @@ use crate::app::App;
 /// Render the evaluate expression popup as a floating overlay.
 pub fn render(app: &App, frame: &mut Frame) {
     let area = frame.area();
+    let theme = &app.theme;
 
     let popup_width = ((area.width as f32 * 0.5) as u16).min(60).max(30);
     let popup_height = 8_u16.min(area.height);
@@ -21,7 +22,7 @@ pub fn render(app: &App, frame: &mut Frame) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan))
+        .border_style(Style::default().fg(theme.accent_alt))
         .title(" Evaluate Expression (Ctrl+E) ");
 
     let inner = block.inner(popup_area);
@@ -38,10 +39,8 @@ pub fn render(app: &App, frame: &mut Frame) {
         .split(inner);
 
     // Input line
-    let base_style = Style::default()
-        .fg(Color::White)
-        .add_modifier(Modifier::BOLD);
-    let mut input_spans = vec![Span::styled("> ", Style::default().fg(Color::Yellow))];
+    let base_style = Style::default().fg(theme.text).add_modifier(Modifier::BOLD);
+    let mut input_spans = vec![Span::styled("> ", Style::default().fg(theme.accent))];
     input_spans.extend(app.evaluate_editor.render_spans(base_style));
     let input_line = Line::from(input_spans);
     frame.render_widget(Paragraph::new(input_line), chunks[0]);
@@ -49,7 +48,7 @@ pub fn render(app: &App, frame: &mut Frame) {
     // Separator
     let sep = Line::from(Span::styled(
         "\u{2500}".repeat(chunks[1].width as usize),
-        Style::default().fg(Color::DarkGray),
+        Style::default().fg(theme.text_muted),
     ));
     frame.render_widget(Paragraph::new(sep), chunks[1]);
 
@@ -58,22 +57,22 @@ pub fn render(app: &App, frame: &mut Frame) {
         Some((text, true)) => {
             // Error
             let line = Line::from(vec![
-                Span::styled("!! ", Style::default().fg(Color::Red)),
-                Span::styled(text.clone(), Style::default().fg(Color::Red)),
+                Span::styled("!! ", Style::default().fg(theme.error)),
+                Span::styled(text.clone(), Style::default().fg(theme.error)),
             ]);
             Paragraph::new(line).wrap(Wrap { trim: false })
         }
         Some((text, false)) => {
             // Success
             let line = Line::from(vec![
-                Span::styled("=> ", Style::default().fg(Color::Green)),
-                Span::styled(text.clone(), Style::default().fg(Color::Green)),
+                Span::styled("=> ", Style::default().fg(theme.success)),
+                Span::styled(text.clone(), Style::default().fg(theme.success)),
             ]);
             Paragraph::new(line).wrap(Wrap { trim: false })
         }
         None => Paragraph::new(Line::from(Span::styled(
             "(press Enter to evaluate)",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.text_muted),
         ))),
     };
     frame.render_widget(result_paragraph, chunks[2]);
