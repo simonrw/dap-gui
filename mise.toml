@@ -13,6 +13,7 @@ rust-analyzer = "latest"
 release-plz = "latest"
 "go:github.com/charmbracelet/vhs" = "latest"
 "github:tsl0922/ttyd" = { version = "latest", bin = "ttyd" }
+"go:github.com/rhysd/actionlint/cmd/actionlint" = "latest"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
