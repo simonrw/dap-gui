@@ -63,13 +63,17 @@ fn main() {
         Box::new(|cc| {
             let style = egui::Style {
                 visuals: match dark_light::detect() {
-                    dark_light::Mode::Dark | dark_light::Mode::Default => {
+                    Ok(dark_light::Mode::Dark) | Ok(dark_light::Mode::Unspecified) => {
                         tracing::debug!("choosing dark mode");
                         Visuals::dark()
                     }
-                    dark_light::Mode::Light => {
+                    Ok(dark_light::Mode::Light) => {
                         tracing::debug!("choosing light mode");
                         Visuals::light()
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "error detecting current theme, defaulting to dark");
+                        Visuals::dark()
                     }
                 },
                 ..Default::default()

@@ -15,29 +15,19 @@ pub mod variables;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
 };
 
 use crate::app::{App, AppMode, BottomTab, Focus};
 
-/// Border style for the currently focused pane.
-fn focused_border() -> Style {
-    Style::default()
-        .fg(Color::Cyan)
-        .add_modifier(Modifier::BOLD)
-}
-
-/// Border style for unfocused panes.
-fn unfocused_border() -> Style {
-    Style::default().fg(Color::DarkGray)
-}
-
 /// Return the appropriate border style for a pane.
 pub fn border_style(app: &App, pane: Focus) -> Style {
     if app.focus == pane {
-        focused_border()
+        Style::default()
+            .fg(app.theme.border_focused)
+            .add_modifier(Modifier::BOLD)
     } else {
-        unfocused_border()
+        Style::default().fg(app.theme.border_unfocused)
     }
 }
 
@@ -115,7 +105,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         evaluate_popup::render(app, frame);
     }
     if app.show_help {
-        help::render(frame, &app.keybindings);
+        help::render(frame, &app.keybindings, &app.theme);
     }
 }
 
@@ -167,13 +157,14 @@ fn render_file_browser_overflow(app: &App, frame: &mut Frame, sidebar: Rect) {
     }
 
     // Use the same styles as the selected item in the file browser
+    let theme = &app.theme;
     let base_style = Style::default()
-        .fg(Color::White)
-        .bg(Color::Rgb(50, 50, 80))
+        .fg(theme.text)
+        .bg(theme.selection_bg)
         .add_modifier(Modifier::BOLD);
     let match_style = Style::default()
-        .fg(Color::Yellow)
-        .bg(Color::Rgb(50, 50, 80))
+        .fg(theme.accent)
+        .bg(theme.selection_bg)
         .add_modifier(Modifier::BOLD);
 
     // Build spans for only the overflowing characters
@@ -234,6 +225,7 @@ mod snapshot_tests {
             wakeup_tx,
             vec![],
             Default::default(),
+            Default::default(),
         );
         // Prevent the file browser from loading real git files.
         app.file_browser_loaded = true;
@@ -280,6 +272,7 @@ mod snapshot_tests {
             state_manager,
             wakeup_tx,
             vec![],
+            Default::default(),
             Default::default(),
         );
         // Prevent the file browser from loading real git files.

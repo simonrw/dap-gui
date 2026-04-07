@@ -336,8 +336,10 @@ fn main() -> eyre::Result<()> {
         Box::new(move |cc| {
             let style = egui::Style {
                 visuals: match dark_light::detect() {
-                    dark_light::Mode::Dark | dark_light::Mode::Default => Visuals::dark(),
-                    dark_light::Mode::Light => Visuals::light(),
+                    Ok(dark_light::Mode::Dark) | Ok(dark_light::Mode::Unspecified) | Err(_) => {
+                        Visuals::dark()
+                    }
+                    Ok(dark_light::Mode::Light) => Visuals::light(),
                 },
                 ..Default::default()
             };

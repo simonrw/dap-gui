@@ -1,13 +1,19 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 
+use crate::theme::Theme;
+
 /// Render the help overlay as a floating popup.
-pub fn render(frame: &mut Frame, keybindings: &config::keybindings::KeybindingConfig) {
+pub fn render(
+    frame: &mut Frame,
+    keybindings: &config::keybindings::KeybindingConfig,
+    theme: &Theme,
+) {
     let area = frame.area();
 
     let popup_width = ((area.width as f32 * 0.7) as u16).min(70).max(40);
@@ -19,18 +25,18 @@ pub fn render(frame: &mut Frame, keybindings: &config::keybindings::KeybindingCo
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Yellow))
+        .border_style(Style::default().fg(theme.accent))
         .title(" Help (? to close) ");
 
     let inner = block.inner(popup_area);
     frame.render_widget(block, popup_area);
 
     let key_style = Style::default()
-        .fg(Color::Yellow)
+        .fg(theme.accent)
         .add_modifier(Modifier::BOLD);
-    let desc_style = Style::default().fg(Color::White);
+    let desc_style = Style::default().fg(theme.text);
     let section_style = Style::default()
-        .fg(Color::Cyan)
+        .fg(theme.accent_alt)
         .add_modifier(Modifier::BOLD);
 
     use config::keybindings::DebugAction;

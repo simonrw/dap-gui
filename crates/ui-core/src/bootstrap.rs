@@ -71,6 +71,7 @@ pub struct BootstrapResult {
     pub state_manager: StateManager,
     pub initial_breakpoints: Vec<debugger::Breakpoint>,
     pub keybindings: KeybindingConfig,
+    pub theme: config::ThemePreference,
 }
 
 /// Perform shared application bootstrap: load configurations, set up
@@ -144,5 +145,6 @@ pub fn bootstrap(args: &Args) -> eyre::Result<BootstrapResult> {
         state_manager,
         initial_breakpoints,
         keybindings: config.keybindings,
+        theme: config.theme,
     })
 }

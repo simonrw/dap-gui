@@ -7,6 +7,7 @@ use crate::async_bridge::UiCommand;
 use crate::event::AppEvent;
 use crate::line_editor::{InputHistory, LineEditor};
 use crate::session::Session;
+use crate::theme::{Theme, ThemeMode};
 use crossterm::event::KeyEvent;
 use launch_configuration::LaunchConfiguration;
 use state::StateManager;
@@ -207,6 +208,9 @@ pub struct App {
     pub search_history: InputHistory,
     pub breakpoint_history: InputHistory,
     pub file_browser_history: InputHistory,
+
+    // Theme
+    pub theme: Theme,
 }
 
 impl App {
@@ -220,6 +224,7 @@ impl App {
         wakeup_tx: crossbeam_channel::Sender<()>,
         initial_breakpoints: Vec<debugger::Breakpoint>,
         keybindings: config::keybindings::KeybindingConfig,
+        initial_theme: ThemeMode,
     ) -> Self {
         let kill_ring = Rc::new(RefCell::new(String::new()));
         Self {
@@ -275,6 +280,7 @@ impl App {
             search_history: InputHistory::new(),
             breakpoint_history: InputHistory::new(),
             file_browser_history: InputHistory::new(),
+            theme: Theme::for_mode(initial_theme),
         }
     }
 
@@ -286,6 +292,9 @@ impl App {
             AppEvent::Tick => self.drain_debugger_events(),
             AppEvent::Mouse(_) => {}
             AppEvent::Debugger(_) => {} // events arrive via session channel, drained on tick
+            AppEvent::ThemeChanged(mode) => {
+                self.theme = Theme::for_mode(mode);
+            }
         }
     }
 
@@ -293,7 +302,6 @@ impl App {
         crate::input::handle_key(self, key);
     }
 
-    /// Drain all pending debugger events from the session's channel.
     pub fn drain_debugger_events(&mut self) {
         // Collect events and errors while briefly borrowing the session
         let (events, errors) = {
@@ -928,6 +936,7 @@ pub(crate) mod test_helpers {
             wakeup_tx,
             vec![], // no initial breakpoints
             Default::default(),
+            Default::default(),
         );
 
         f(&mut app);
@@ -963,6 +972,7 @@ pub(crate) mod test_helpers {
             state_manager,
             wakeup_tx,
             vec![],
+            Default::default(),
             Default::default(),
         );
 
@@ -1028,6 +1038,7 @@ pub(crate) mod test_helpers {
             state_manager,
             wakeup_tx,
             vec![],
+            Default::default(),
             Default::default(),
         );
 
@@ -1589,6 +1600,7 @@ mod tests {
             wakeup_tx,
             vec![],
             Default::default(),
+            Default::default(),
         );
 
         // Add a breakpoint and persist
@@ -1611,6 +1623,7 @@ mod tests {
             state_manager2,
             wakeup_tx2,
             vec![],
+            Default::default(),
             Default::default(),
         );
 
@@ -1645,6 +1658,7 @@ mod tests {
             wakeup_tx,
             vec![],
             Default::default(),
+            Default::default(),
         );
         app1.ui_breakpoints.insert(debugger::Breakpoint {
             name: None,
@@ -1665,6 +1679,7 @@ mod tests {
             state_manager2,
             wakeup_tx2,
             vec![],
+            Default::default(),
             Default::default(),
         );
         app2.ui_breakpoints.insert(debugger::Breakpoint {

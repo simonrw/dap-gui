@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
 };
@@ -11,6 +11,7 @@ use crate::app::App;
 /// Render the file picker as a floating overlay centred on screen.
 pub fn render(app: &App, frame: &mut Frame) {
     let area = frame.area();
+    let theme = &app.theme;
 
     // Compute popup dimensions: 60% width, capped at 80 cols; 60% height, capped at 20 rows.
     let popup_width = ((area.width as f32 * 0.6) as u16).min(80).max(30);
@@ -23,7 +24,7 @@ pub fn render(app: &App, frame: &mut Frame) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan))
+        .border_style(Style::default().fg(theme.accent_alt))
         .title(" Find File (Ctrl+P) ");
 
     let inner = block.inner(popup_area);
@@ -40,10 +41,8 @@ pub fn render(app: &App, frame: &mut Frame) {
         .split(inner);
 
     // Search input
-    let base_style = Style::default()
-        .fg(Color::White)
-        .add_modifier(Modifier::BOLD);
-    let mut input_spans = vec![Span::styled("> ", Style::default().fg(Color::Yellow))];
+    let base_style = Style::default().fg(theme.text).add_modifier(Modifier::BOLD);
+    let mut input_spans = vec![Span::styled("> ", Style::default().fg(theme.accent))];
     input_spans.extend(app.file_picker_editor.render_spans(base_style));
     let input_line = Line::from(input_spans);
     frame.render_widget(Paragraph::new(input_line), chunks[0]);
@@ -51,7 +50,7 @@ pub fn render(app: &App, frame: &mut Frame) {
     // Separator
     let sep = Line::from(Span::styled(
         "─".repeat(chunks[1].width as usize),
-        Style::default().fg(Color::DarkGray),
+        Style::default().fg(theme.text_muted),
     ));
     frame.render_widget(Paragraph::new(sep), chunks[1]);
 
@@ -71,20 +70,20 @@ pub fn render(app: &App, frame: &mut Frame) {
             let mut spans: Vec<Span> = Vec::new();
             let base_style = if is_selected {
                 Style::default()
-                    .fg(Color::White)
-                    .bg(Color::Rgb(50, 50, 80))
+                    .fg(theme.text)
+                    .bg(theme.selection_bg)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::Gray)
+                Style::default().fg(theme.text_secondary)
             };
             let match_style = if is_selected {
                 Style::default()
-                    .fg(Color::Yellow)
-                    .bg(Color::Rgb(50, 50, 80))
+                    .fg(theme.accent)
+                    .bg(theme.selection_bg)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD)
             };
 
@@ -112,7 +111,7 @@ pub fn render(app: &App, frame: &mut Frame) {
             "No matches"
         };
         frame.render_widget(
-            Paragraph::new(msg).style(Style::default().fg(Color::DarkGray)),
+            Paragraph::new(msg).style(Style::default().fg(theme.text_muted)),
             chunks[2],
         );
     } else {

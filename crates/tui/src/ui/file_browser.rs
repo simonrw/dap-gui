@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
@@ -12,6 +12,7 @@ use crate::app::App;
 /// Shows fuzzy-filtered project files with matched character highlighting.
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let border = super::border_style(app, super::Focus::CallStack);
+    let theme = &app.theme;
 
     let block = Block::default()
         .borders(Borders::ALL)
@@ -32,10 +33,8 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         .split(inner);
 
     // Search input
-    let base_style = Style::default()
-        .fg(Color::White)
-        .add_modifier(Modifier::BOLD);
-    let mut input_spans = vec![Span::styled("> ", Style::default().fg(Color::Yellow))];
+    let base_style = Style::default().fg(theme.text).add_modifier(Modifier::BOLD);
+    let mut input_spans = vec![Span::styled("> ", Style::default().fg(theme.accent))];
     input_spans.extend(app.file_browser_editor.render_spans(base_style));
     let input_line = Line::from(input_spans);
     frame.render_widget(Paragraph::new(input_line), chunks[0]);
@@ -43,7 +42,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     // Separator
     let sep = Line::from(Span::styled(
         "\u{2500}".repeat(chunks[1].width as usize),
-        Style::default().fg(Color::DarkGray),
+        Style::default().fg(theme.text_muted),
     ));
     frame.render_widget(Paragraph::new(sep), chunks[1]);
 
@@ -60,20 +59,20 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
 
             let base_style = if is_selected {
                 Style::default()
-                    .fg(Color::White)
-                    .bg(Color::Rgb(50, 50, 80))
+                    .fg(theme.text)
+                    .bg(theme.selection_bg)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::Gray)
+                Style::default().fg(theme.text_secondary)
             };
             let match_style = if is_selected {
                 Style::default()
-                    .fg(Color::Yellow)
-                    .bg(Color::Rgb(50, 50, 80))
+                    .fg(theme.accent)
+                    .bg(theme.selection_bg)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD)
             };
 
@@ -100,7 +99,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
             "No matches"
         };
         frame.render_widget(
-            Paragraph::new(msg).style(Style::default().fg(Color::DarkGray)),
+            Paragraph::new(msg).style(Style::default().fg(theme.text_muted)),
             chunks[2],
         );
     } else {

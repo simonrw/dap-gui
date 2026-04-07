@@ -17,6 +17,7 @@ mod input;
 mod line_editor;
 mod session;
 mod syntax;
+pub mod theme;
 mod ui;
 
 use app::App;
@@ -52,6 +53,13 @@ fn main() -> eyre::Result<()> {
     // the event handler when debugger events arrive.
     let (wakeup_tx, wakeup_rx) = crossbeam_channel::unbounded();
 
+    let initial_theme = match boot.theme {
+        config::ThemePreference::Auto => theme::detect_theme_mode(),
+        config::ThemePreference::Dark => theme::ThemeMode::Dark,
+        config::ThemePreference::Light => theme::ThemeMode::Light,
+    };
+
+    tracing::warn!(?initial_theme, "got initial theme");
     let mut app = App::new(
         boot.configs,
         boot.config_names,
@@ -62,6 +70,7 @@ fn main() -> eyre::Result<()> {
         wakeup_tx,
         boot.initial_breakpoints,
         boot.keybindings,
+        initial_theme,
     );
 
     // Install a panic hook that restores the terminal before printing.
@@ -88,7 +97,12 @@ fn main() -> eyre::Result<()> {
     let mut terminal = Terminal::new(backend).wrap_err("creating terminal")?;
 
     // Event loop
-    let (events, _event_tx) = EventHandler::new(Duration::from_millis(250), wakeup_rx);
+    let (events, _event_tx) = EventHandler::new(
+        Duration::from_millis(250),
+        wakeup_rx,
+        boot.theme,
+        initial_theme,
+    );
 
     let result = run_loop(&mut terminal, &mut app, &events);
 
