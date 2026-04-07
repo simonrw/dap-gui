@@ -3,6 +3,7 @@ publish = false
 git_release_enable = false
 release = true
 git_only = true
+semver_check = false
 
 [[package]]
 name = "dap-tui"
