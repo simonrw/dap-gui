@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem},
 };
@@ -13,6 +13,7 @@ use crate::session::DebuggerState;
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let border = super::border_style(app, super::Focus::CallStack);
     let is_focused = app.focus == super::Focus::CallStack;
+    let theme = &app.theme;
 
     let items: Vec<ListItem> = if let Some(session) = &app.session {
         if let DebuggerState::Paused {
@@ -38,14 +39,14 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
 
                     let style = if is_selected {
                         Style::default()
-                            .fg(Color::Yellow)
+                            .fg(theme.accent)
                             .add_modifier(Modifier::BOLD | Modifier::REVERSED)
                     } else if is_current {
                         Style::default()
-                            .fg(Color::Yellow)
+                            .fg(theme.accent)
                             .add_modifier(Modifier::BOLD)
                     } else {
-                        Style::default().fg(Color::Gray)
+                        Style::default().fg(theme.text_secondary)
                     };
                     ListItem::new(Line::from(Span::styled(text, style)))
                 })
@@ -53,13 +54,13 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         } else {
             vec![ListItem::new(Span::styled(
                 "  (not paused)",
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(theme.text_muted),
             ))]
         }
     } else {
         vec![ListItem::new(Span::styled(
             "  (no session)",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.text_muted),
         ))]
     };
 

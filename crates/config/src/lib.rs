@@ -4,11 +4,26 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+/// User preference for the color theme.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThemePreference {
+    /// Detect automatically from the system setting and follow changes.
+    #[default]
+    Auto,
+    /// Always use the dark palette.
+    Dark,
+    /// Always use the light palette.
+    Light,
+}
+
 /// Top-level application configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub keybindings: keybindings::KeybindingConfig,
+    #[serde(default)]
+    pub theme: ThemePreference,
 }
 
 /// Load configuration from the user's config directory.

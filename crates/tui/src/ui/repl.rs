@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
@@ -11,6 +11,7 @@ use crate::app::{App, AppMode};
 /// Render the REPL panel with history and input line.
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let border = super::border_style(app, super::Focus::Repl);
+    let theme = &app.theme;
 
     let block = Block::default()
         .borders(Borders::ALL)
@@ -32,12 +33,16 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
 
     for (input, output, is_error) in &app.repl_history {
         lines.push(Line::from(vec![
-            Span::styled(">> ", Style::default().fg(Color::Cyan)),
-            Span::styled(input.as_str(), Style::default().fg(Color::White)),
+            Span::styled(">> ", Style::default().fg(theme.accent_alt)),
+            Span::styled(input.as_str(), Style::default().fg(theme.text)),
         ]));
 
         let prefix = if *is_error { "!! " } else { "=> " };
-        let color = if *is_error { Color::Red } else { Color::Green };
+        let color = if *is_error {
+            theme.error
+        } else {
+            theme.success
+        };
 
         lines.push(Line::from(vec![
             Span::styled(prefix, Style::default().fg(color)),
@@ -58,16 +63,14 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     // Input line
     let is_paused = app.mode == AppMode::Paused;
     let input_line = if is_paused {
-        let base_style = Style::default()
-            .fg(Color::White)
-            .add_modifier(Modifier::BOLD);
-        let mut spans = vec![Span::styled(">> ", Style::default().fg(Color::Cyan))];
+        let base_style = Style::default().fg(theme.text).add_modifier(Modifier::BOLD);
+        let mut spans = vec![Span::styled(">> ", Style::default().fg(theme.accent_alt))];
         spans.extend(app.repl_editor.render_spans(base_style));
         Line::from(spans)
     } else {
         Line::from(Span::styled(
             "   (pause to evaluate)",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.text_muted),
         ))
     };
 

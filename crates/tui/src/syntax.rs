@@ -6,6 +6,8 @@ use ratatui::text::{Line, Span};
 use syntect::highlighting::{self, HighlightState, Highlighter, ThemeSet};
 use syntect::parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet};
 
+use crate::theme::Theme;
+
 static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
 static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
 
@@ -65,6 +67,7 @@ impl SyntaxHighlighter {
         content: &str,
         start_line: usize,
         end_line: usize,
+        syntect_theme: &str,
     ) -> Vec<Vec<StyledSegment>> {
         let syntax = match self.syntax {
             Some(s) => s,
@@ -79,7 +82,7 @@ impl SyntaxHighlighter {
             }
         };
 
-        let theme = &THEME_SET.themes["base16-ocean.dark"];
+        let theme = &THEME_SET.themes[syntect_theme];
         let highlighter = Highlighter::new(theme);
 
         // Find the best checkpoint at or before start_line
@@ -181,12 +184,13 @@ impl SyntaxHighlighter {
         breakpoint_lines: &std::collections::HashSet<usize>,
         selection_range: Option<(usize, usize)>,
         inline_evals: &std::collections::HashMap<usize, String>,
+        theme: &Theme,
     ) -> Vec<Line<'static>> {
-        let match_bg = Color::Rgb(100, 100, 0);
-        let current_match_bg = Color::Rgb(180, 120, 0);
-        let cursor_bg = Color::Rgb(40, 44, 52);
-        let exec_bg = Color::Rgb(50, 60, 30); // greenish background for execution line
-        let selection_bg = Color::Rgb(40, 50, 70); // bluish background for visual selection
+        let match_bg = theme.search_match_bg;
+        let current_match_bg = theme.search_current_bg;
+        let cursor_bg = theme.cursor_line_bg;
+        let exec_bg = theme.exec_line_bg;
+        let selection_bg = theme.code_selection_bg;
 
         highlighted
             .iter()
@@ -222,17 +226,17 @@ impl SyntaxHighlighter {
                     " "
                 };
                 let gutter_style = if is_exec {
-                    Style::default().fg(Color::Yellow).bg(exec_bg)
+                    Style::default().fg(theme.accent).bg(exec_bg)
                 } else if has_bp {
-                    Style::default().fg(Color::Red).bg(if is_cursor {
+                    Style::default().fg(theme.error).bg(if is_cursor {
                         cursor_bg
                     } else {
                         Color::Reset
                     })
                 } else if is_cursor {
-                    Style::default().fg(Color::White).bg(cursor_bg)
+                    Style::default().fg(theme.text).bg(cursor_bg)
                 } else {
-                    Style::default().fg(Color::DarkGray)
+                    Style::default().fg(theme.text_muted)
                 };
                 let num_str = format!("{gutter_marker}{:>width$} ", line_num, width = gutter_width);
 
@@ -311,10 +315,10 @@ impl SyntaxHighlighter {
                 // Append inline evaluation annotation if present
                 if let Some(eval_text) = inline_evals.get(&line_idx) {
                     let eval_style = if eval_text.starts_with("!!") {
-                        Style::default().fg(Color::Red).add_modifier(Modifier::DIM)
+                        Style::default().fg(theme.error).add_modifier(Modifier::DIM)
                     } else {
                         Style::default()
-                            .fg(Color::Green)
+                            .fg(theme.success)
                             .add_modifier(Modifier::DIM)
                     };
                     line_spans.push(Span::styled(format!("  {eval_text}"), eval_style));
@@ -373,6 +377,10 @@ mod tests {
     use super::*;
     use std::collections::{HashMap, HashSet};
 
+    fn test_theme() -> Theme {
+        Theme::dark()
+    }
+
     // ── SyntaxHighlighter::highlight_lines ────────────────────────────
 
     #[test]
@@ -381,7 +389,7 @@ mod tests {
         h.set_file(Path::new("/tmp/file.unknownext"));
 
         let content = "line one\nline two\nline three\n";
-        let result = h.highlight_lines(content, 0, 3);
+        let result = h.highlight_lines(content, 0, 3, "base16-ocean.dark");
 
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].len(), 1);
@@ -395,7 +403,7 @@ mod tests {
         h.set_file(Path::new("/tmp/test.py"));
 
         let content = "def hello():\n    pass\n";
-        let result = h.highlight_lines(content, 0, 2);
+        let result = h.highlight_lines(content, 0, 2, "base16-ocean.dark");
 
         assert_eq!(result.len(), 2);
         // Python keywords should produce multiple styled spans
@@ -413,7 +421,7 @@ mod tests {
         h.set_file(Path::new("/tmp/test.py"));
 
         let content = "line0\nline1\nline2\nline3\nline4\n";
-        let result = h.highlight_lines(content, 2, 4);
+        let result = h.highlight_lines(content, 2, 4, "base16-ocean.dark");
 
         assert_eq!(result.len(), 2); // lines 2 and 3
     }
@@ -423,7 +431,7 @@ mod tests {
         let mut h = SyntaxHighlighter::new();
         h.set_file(Path::new("/tmp/test.py"));
 
-        let result = h.highlight_lines("", 0, 0);
+        let result = h.highlight_lines("", 0, 0, "base16-ocean.dark");
         assert!(result.is_empty());
     }
 
@@ -433,7 +441,7 @@ mod tests {
         h.set_file(Path::new("/tmp/test.py"));
 
         let content = "line0\nline1\n";
-        let result = h.highlight_lines(content, 0, 100);
+        let result = h.highlight_lines(content, 0, 100, "base16-ocean.dark");
 
         assert_eq!(result.len(), 2); // only 2 lines exist
     }
@@ -447,7 +455,7 @@ mod tests {
 
         // Generate enough lines to trigger checkpoints
         let content: String = (0..150).map(|i| format!("x = {i}\n")).collect();
-        h.highlight_lines(&content, 0, 150);
+        h.highlight_lines(&content, 0, 150, "base16-ocean.dark");
         assert!(!h.checkpoints.is_empty());
 
         // Switch file: checkpoints cleared
@@ -462,11 +470,11 @@ mod tests {
 
         let content: String = (0..200).map(|i| format!("x = {i}\n")).collect();
 
-        let r1 = h.highlight_lines(&content, 100, 110);
+        let r1 = h.highlight_lines(&content, 100, 110, "base16-ocean.dark");
         let checkpoint_count = h.checkpoints.len();
 
         // Highlighting again should reuse existing checkpoints
-        let r2 = h.highlight_lines(&content, 100, 110);
+        let r2 = h.highlight_lines(&content, 100, 110, "base16-ocean.dark");
         assert_eq!(h.checkpoints.len(), checkpoint_count);
         assert_eq!(r1.len(), r2.len());
     }
@@ -494,6 +502,7 @@ mod tests {
             &HashSet::new(),
             None, // selection_range
             &HashMap::new(),
+            &test_theme(),
         );
 
         assert_eq!(lines.len(), 2);
@@ -527,6 +536,7 @@ mod tests {
             &HashSet::new(),
             None,
             &HashMap::new(),
+            &test_theme(),
         );
 
         // The code spans on cursor line (index 1) should have a background
@@ -561,6 +571,7 @@ mod tests {
             &bp_lines,
             None,
             &HashMap::new(),
+            &test_theme(),
         );
 
         // The gutter of line 1 (0-indexed) should have the breakpoint marker ●
@@ -586,6 +597,7 @@ mod tests {
             &HashSet::new(),
             None,
             &HashMap::new(),
+            &test_theme(),
         );
 
         // Gutter should contain the execution marker ▶
@@ -618,6 +630,7 @@ mod tests {
             &HashSet::new(),
             Some((1, 2)), // select lines 1-2
             &HashMap::new(),
+            &test_theme(),
         );
 
         // Lines 1 and 2 should have selection background
@@ -658,6 +671,7 @@ mod tests {
             &HashSet::new(),
             None,
             &evals,
+            &test_theme(),
         );
 
         // Last span of line 0 should contain the eval annotation
@@ -687,6 +701,7 @@ mod tests {
             &HashSet::new(),
             None,
             &evals,
+            &test_theme(),
         );
 
         let last_span = lines[0].spans.last().unwrap();
@@ -715,6 +730,7 @@ mod tests {
             &HashSet::new(),
             None,
             &HashMap::new(),
+            &test_theme(),
         );
 
         // Should have at least 3 spans: gutter, matched "hello", remaining " world"
@@ -746,6 +762,7 @@ mod tests {
             &HashSet::new(),
             None,
             &HashMap::new(),
+            &test_theme(),
         );
 
         assert_eq!(lines.len(), 2);
