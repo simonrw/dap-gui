@@ -134,6 +134,11 @@ impl ResolutionContext {
     }
 }
 
+/// Trait for types that can resolve VS Code variable placeholders in their fields.
+trait Resolve {
+    fn resolve(&mut self, ctx: &ResolutionContext);
+}
+
 /// Handle choosing a specific launch configuration, or if the user has not specified one, then
 /// present a list of launch configurations they can choose from
 pub enum ChosenLaunchConfiguration {
@@ -192,7 +197,9 @@ impl LaunchConfiguration {
             LaunchConfiguration::LLDB(l) => l.cwd.as_deref().map(Path::new),
         }
     }
+}
 
+impl Resolve for LaunchConfiguration {
     fn resolve(&mut self, ctx: &ResolutionContext) {
         match self {
             LaunchConfiguration::Debugpy(debugpy) | LaunchConfiguration::Python(debugpy) => {
@@ -346,7 +353,7 @@ pub struct Debugpy {
     pub cwd: Option<PathBuf>,
 }
 
-impl Debugpy {
+impl Resolve for Debugpy {
     fn resolve(&mut self, ctx: &ResolutionContext) {
         if let Some(mappings) = &mut self.path_mappings {
             for m in mappings {
@@ -386,7 +393,7 @@ pub struct LLDB {
     pub cwd: Option<String>,
 }
 
-impl LLDB {
+impl Resolve for LLDB {
     fn resolve(&mut self, ctx: &ResolutionContext) {
         if let Some(ref mut cwd) = self.cwd {
             *cwd = ctx.resolve_string(cwd);
