@@ -30,7 +30,7 @@ fn main() -> eyre::Result<()> {
     // Tracing must go to a file -- stdout is the terminal.
     let log_dir = dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("dapgui");
+        .join("daptui");
     std::fs::create_dir_all(&log_dir).ok();
     let log_file = std::fs::File::create(log_dir.join("tui.log")).wrap_err("creating log file")?;
     tracing_subscriber::fmt()
