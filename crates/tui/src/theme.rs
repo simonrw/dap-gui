@@ -1,8 +1,9 @@
 use ratatui::style::Color;
 
 /// Resolved theme mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ThemeMode {
+    #[default]
     Dark,
     Light,
 }

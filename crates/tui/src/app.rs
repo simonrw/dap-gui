@@ -7,7 +7,7 @@ use crate::async_bridge::UiCommand;
 use crate::event::AppEvent;
 use crate::line_editor::{InputHistory, LineEditor};
 use crate::session::Session;
-use crate::theme::{self, Theme, ThemeMode};
+use crate::theme::{Theme, ThemeMode};
 use crossterm::event::KeyEvent;
 use launch_configuration::LaunchConfiguration;
 use state::StateManager;
@@ -211,8 +211,6 @@ pub struct App {
 
     // Theme
     pub theme: Theme,
-    theme_preference: config::ThemePreference,
-    theme_check_counter: u32,
 }
 
 impl App {
@@ -226,14 +224,9 @@ impl App {
         wakeup_tx: crossbeam_channel::Sender<()>,
         initial_breakpoints: Vec<debugger::Breakpoint>,
         keybindings: config::keybindings::KeybindingConfig,
-        theme_preference: config::ThemePreference,
+        initial_theme: ThemeMode,
     ) -> Self {
         let kill_ring = Rc::new(RefCell::new(String::new()));
-        let theme_mode = match theme_preference {
-            config::ThemePreference::Auto => theme::detect_theme_mode(),
-            config::ThemePreference::Dark => ThemeMode::Dark,
-            config::ThemePreference::Light => ThemeMode::Light,
-        };
         Self {
             mode: AppMode::NoSession,
             focus: Focus::CallStack,
@@ -287,9 +280,7 @@ impl App {
             search_history: InputHistory::new(),
             breakpoint_history: InputHistory::new(),
             file_browser_history: InputHistory::new(),
-            theme: Theme::for_mode(theme_mode),
-            theme_preference,
-            theme_check_counter: 0,
+            theme: Theme::for_mode(initial_theme),
         }
     }
 
@@ -298,35 +289,17 @@ impl App {
         match event {
             AppEvent::Key(key) => self.handle_key(key),
             AppEvent::Resize(_, _) => {} // ratatui handles resize automatically
-            AppEvent::Tick => {
-                self.drain_debugger_events();
-                self.check_theme_change();
-            }
+            AppEvent::Tick => self.drain_debugger_events(),
             AppEvent::Mouse(_) => {}
             AppEvent::Debugger(_) => {} // events arrive via session channel, drained on tick
+            AppEvent::ThemeChanged(mode) => {
+                self.theme = Theme::for_mode(mode);
+            }
         }
     }
 
     fn handle_key(&mut self, key: KeyEvent) {
         crate::input::handle_key(self, key);
-    }
-
-    /// Drain all pending debugger events from the session's channel.
-    /// Periodically re-detect the system theme and swap palette if it changed.
-    /// Called every tick (~250ms); actual detection runs every 20 ticks (~5s).
-    fn check_theme_change(&mut self) {
-        if self.theme_preference != config::ThemePreference::Auto {
-            return;
-        }
-        self.theme_check_counter += 1;
-        if self.theme_check_counter < 20 {
-            return;
-        }
-        self.theme_check_counter = 0;
-        let detected = theme::detect_theme_mode();
-        if detected != self.theme.mode {
-            self.theme = Theme::for_mode(detected);
-        }
     }
 
     pub fn drain_debugger_events(&mut self) {

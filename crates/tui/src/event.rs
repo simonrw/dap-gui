@@ -3,6 +3,8 @@ use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 use crossterm::event::{self, Event, KeyEvent, MouseEvent};
 
+use crate::theme::ThemeMode;
+
 /// All events the application loop can receive.
 #[derive(Debug)]
 #[allow(dead_code)] // Variants/fields used as phases are implemented
@@ -17,14 +19,17 @@ pub enum AppEvent {
     Debugger(debugger::Event),
     /// Periodic tick for UI refresh (cursor blink, status expiry, etc.).
     Tick,
+    /// The system color scheme changed.
+    ThemeChanged(ThemeMode),
 }
 
 /// Background event handler that multiplexes terminal input, debugger events,
 /// and periodic ticks into a single channel.
 pub struct EventHandler {
     rx: Receiver<AppEvent>,
-    // Keep the handle so the thread is joined on drop.
+    // Keep handles so threads are joined on drop.
     _thread: std::thread::JoinHandle<()>,
+    _theme_thread: Option<std::thread::JoinHandle<()>>,
 }
 
 impl EventHandler {
@@ -33,7 +38,16 @@ impl EventHandler {
     /// `wakeup_rx` receives notifications from the async bridge when debugger
     /// events are available. This unblocks the poll wait so the TUI redraws
     /// promptly.
-    pub fn new(tick_rate: Duration, wakeup_rx: Receiver<()>) -> (Self, Sender<AppEvent>) {
+    ///
+    /// When `theme_preference` is `Auto`, a background thread periodically
+    /// polls `dark_light::detect()` and sends `ThemeChanged` events when the
+    /// system color scheme changes.
+    pub fn new(
+        tick_rate: Duration,
+        wakeup_rx: Receiver<()>,
+        theme_preference: config::ThemePreference,
+        initial_mode: ThemeMode,
+    ) -> (Self, Sender<AppEvent>) {
         let (tx, rx) = crossbeam_channel::unbounded();
         let event_tx = tx.clone();
 
@@ -87,9 +101,36 @@ impl EventHandler {
             })
             .expect("failed to spawn event handler thread");
 
+        // Spawn a separate thread for theme detection so the blocking D-Bus
+        // call does not interfere with terminal event polling.
+        let theme_thread = if theme_preference == config::ThemePreference::Auto {
+            let theme_tx = tx.clone();
+            Some(
+                std::thread::Builder::new()
+                    .name("tui-theme-watcher".into())
+                    .spawn(move || {
+                        let mut current = initial_mode;
+                        loop {
+                            std::thread::sleep(Duration::from_secs(2));
+                            let detected = crate::theme::detect_theme_mode();
+                            if detected != current {
+                                current = detected;
+                                if theme_tx.send(AppEvent::ThemeChanged(detected)).is_err() {
+                                    break;
+                                }
+                            }
+                        }
+                    })
+                    .expect("failed to spawn theme watcher thread"),
+            )
+        } else {
+            None
+        };
+
         let handler = Self {
             rx,
             _thread: thread,
+            _theme_thread: theme_thread,
         };
         (handler, tx)
     }
