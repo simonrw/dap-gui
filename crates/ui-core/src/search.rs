@@ -193,9 +193,10 @@ mod tests {
     use std::path::Path;
 
     fn make_state(query: &str) -> SearchState {
-        let mut s = SearchState::default();
-        s.query = query.to_string();
-        s
+        SearchState {
+            query: query.to_string(),
+            ..Default::default()
+        }
     }
 
     #[test]

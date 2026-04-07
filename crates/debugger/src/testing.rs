@@ -96,10 +96,10 @@ impl MessageCapture {
             }
             count += 1;
 
-            if let Message::Response(ref resp) = captured.message {
-                if resp.request_seq == request_seq {
-                    return Some((resp.clone(), captured.timestamp));
-                }
+            if let Message::Response(ref resp) = captured.message
+                && resp.request_seq == request_seq
+            {
+                return Some((resp.clone(), captured.timestamp));
             }
         }
 
@@ -128,10 +128,10 @@ impl MessageCapture {
             }
             count += 1;
 
-            if let Message::Event(ref evt) = captured.message {
-                if evt.event == event_name {
-                    return Some((evt.clone(), captured.timestamp));
-                }
+            if let Message::Event(ref evt) = captured.message
+                && evt.event == event_name
+            {
+                return Some((evt.clone(), captured.timestamp));
             }
         }
 

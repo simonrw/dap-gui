@@ -8,6 +8,7 @@ use crate::theme::ThemeMode;
 /// All events the application loop can receive.
 #[derive(Debug)]
 #[allow(dead_code)] // Variants/fields used as phases are implemented
+#[allow(clippy::large_enum_variant)]
 pub enum AppEvent {
     /// A key press from the terminal.
     Key(KeyEvent),

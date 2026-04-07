@@ -141,6 +141,7 @@ trait Resolve {
 
 /// Handle choosing a specific launch configuration, or if the user has not specified one, then
 /// present a list of launch configurations they can choose from
+#[allow(clippy::large_enum_variant)]
 pub enum ChosenLaunchConfiguration {
     /// A specific launch configuration is available
     Specific(LaunchConfiguration),

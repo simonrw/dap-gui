@@ -16,8 +16,8 @@ pub fn render(
 ) {
     let area = frame.area();
 
-    let popup_width = ((area.width as f32 * 0.7) as u16).min(70).max(40);
-    let popup_height = ((area.height as f32 * 0.85) as u16).min(45).max(12);
+    let popup_width = ((area.width as f32 * 0.7) as u16).clamp(40, 70);
+    let popup_height = ((area.height as f32 * 0.85) as u16).clamp(12, 45);
 
     let popup_area = centered_rect(popup_width, popup_height, area);
 
@@ -71,16 +71,16 @@ pub fn render(
         Line::from(""),
         Line::from(Span::styled("── Debugger ──", section_style)),
         binding_line(
-            &kb_continue,
+            kb_continue,
             "Start / Continue / Restart",
             key_style,
             desc_style,
         ),
-        binding_line(&kb_stop, "Terminate / Shutdown", key_style, desc_style),
-        binding_line(&kb_restart, "Restart session", key_style, desc_style),
-        binding_line(&kb_step_over, "Step Over", key_style, desc_style),
-        binding_line(&kb_step_into, "Step In", key_style, desc_style),
-        binding_line(&kb_step_out, "Step Out", key_style, desc_style),
+        binding_line(kb_stop, "Terminate / Shutdown", key_style, desc_style),
+        binding_line(kb_restart, "Restart session", key_style, desc_style),
+        binding_line(kb_step_over, "Step Over", key_style, desc_style),
+        binding_line(kb_step_into, "Step In", key_style, desc_style),
+        binding_line(kb_step_out, "Step Out", key_style, desc_style),
         Line::from(""),
         Line::from(Span::styled("── Code View ──", section_style)),
         binding_line("j/k, Up/Down", "Move cursor", key_style, desc_style),

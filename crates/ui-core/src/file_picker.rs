@@ -5,6 +5,7 @@ use std::path::PathBuf;
 /// This is the shared, frontend-agnostic file picker state. Both the TUI
 /// and GUI use this for query management, cursor navigation, and lazy loading
 /// of git-tracked files.
+#[derive(Default)]
 pub struct FilePickerState {
     /// Whether the file picker is open.
     pub open: bool,
@@ -18,19 +19,6 @@ pub struct FilePickerState {
     pub git_files_loaded: bool,
     /// Current filtered results.
     pub results: Vec<fuzzy::FuzzyMatch>,
-}
-
-impl Default for FilePickerState {
-    fn default() -> Self {
-        Self {
-            open: false,
-            query: String::new(),
-            cursor: 0,
-            git_files: Vec::new(),
-            git_files_loaded: false,
-            results: Vec::new(),
-        }
-    }
 }
 
 impl FilePickerState {
@@ -47,10 +35,10 @@ impl FilePickerState {
             Ok(files) => self.git_files = files,
             Err(e) => {
                 tracing::warn!(error = %e, "failed to list git files");
-                if let Some(root) = fuzzy::find_repo_root() {
-                    if let Ok(files) = fuzzy::list_git_files(&root) {
-                        self.git_files = files;
-                    }
+                if let Some(root) = fuzzy::find_repo_root()
+                    && let Ok(files) = fuzzy::list_git_files(&root)
+                {
+                    self.git_files = files;
                 }
             }
         }

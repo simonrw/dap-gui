@@ -15,22 +15,13 @@ pub(crate) struct Notification {
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum NotificationLevel {
-    Info,
     Error,
 }
 
+#[derive(Default)]
 pub(crate) struct StatusState {
     pub notifications: VecDeque<Notification>,
     pub last_error: Option<String>,
-}
-
-impl Default for StatusState {
-    fn default() -> Self {
-        Self {
-            notifications: VecDeque::new(),
-            last_error: None,
-        }
-    }
 }
 
 impl StatusState {
@@ -38,10 +29,6 @@ impl StatusState {
         let msg = message.into();
         self.last_error = Some(msg.clone());
         self.push_notification(msg, NotificationLevel::Error);
-    }
-
-    pub fn push_info(&mut self, message: impl Into<String>) {
-        self.push_notification(message.into(), NotificationLevel::Info);
     }
 
     fn push_notification(&mut self, message: String, level: NotificationLevel) {
@@ -88,7 +75,6 @@ impl Widget for StatusBar<'_> {
             // Show most recent notification (if any)
             if let Some(notification) = self.status.notifications.back() {
                 let color = match notification.level {
-                    NotificationLevel::Info => ui.visuals().text_color(),
                     NotificationLevel::Error => Color32::from_rgb(255, 80, 80),
                 };
                 ui.label(RichText::new(&notification.message).color(color));

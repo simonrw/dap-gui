@@ -90,13 +90,12 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     }
 
     // Overlays (rendered last so they draw on top)
-    if let Some(sb) = sidebar_area {
-        if app.mode == AppMode::NoSession
-            && app.focus == Focus::CallStack
-            && !app.file_browser_results.is_empty()
-        {
-            render_file_browser_overflow(app, frame, sb);
-        }
+    if let Some(sb) = sidebar_area
+        && app.mode == AppMode::NoSession
+        && app.focus == Focus::CallStack
+        && !app.file_browser_results.is_empty()
+    {
+        render_file_browser_overflow(app, frame, sb);
     }
     if app.file_picker.open {
         file_picker::render(app, frame);
@@ -169,8 +168,7 @@ fn render_file_browser_overflow(app: &App, frame: &mut Frame, sidebar: Rect) {
 
     // Build spans for only the overflowing characters
     let mut spans = Vec::new();
-    let mut char_pos = 0;
-    for (ci, ch) in path_str.char_indices() {
+    for (char_pos, (ci, ch)) in path_str.char_indices().enumerate() {
         if char_pos >= visible_width {
             let style = if result.matched_indices.contains(&ci) {
                 match_style
@@ -179,7 +177,6 @@ fn render_file_browser_overflow(app: &App, frame: &mut Frame, sidebar: Rect) {
             };
             spans.push(Span::styled(ch.to_string(), style));
         }
-        char_pos += 1;
     }
     spans.push(Span::styled(" ", base_style));
 

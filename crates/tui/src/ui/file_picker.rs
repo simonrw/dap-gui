@@ -14,8 +14,8 @@ pub fn render(app: &App, frame: &mut Frame) {
     let theme = &app.theme;
 
     // Compute popup dimensions: 60% width, capped at 80 cols; 60% height, capped at 20 rows.
-    let popup_width = ((area.width as f32 * 0.6) as u16).min(80).max(30);
-    let popup_height = ((area.height as f32 * 0.6) as u16).min(20).max(8);
+    let popup_width = ((area.width as f32 * 0.6) as u16).clamp(30, 80);
+    let popup_height = ((area.height as f32 * 0.6) as u16).clamp(8, 20);
 
     let popup_area = centered_rect(popup_width, popup_height, area);
 

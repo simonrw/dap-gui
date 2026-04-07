@@ -16,22 +16,13 @@ pub use ui_core::search::SearchMatch;
 ///
 /// Adds `request_focus` and `scroll_to_match` rendering hints that are
 /// specific to the egui frontend.
+#[derive(Default)]
 pub struct GuiSearchState {
     pub inner: ui_core::search::SearchState,
     /// Whether we should request focus on the search input this frame.
     pub request_focus: bool,
     /// Whether we need to scroll to the current match.
     pub scroll_to_match: bool,
-}
-
-impl Default for GuiSearchState {
-    fn default() -> Self {
-        Self {
-            inner: Default::default(),
-            request_focus: false,
-            scroll_to_match: false,
-        }
-    }
 }
 
 impl std::ops::Deref for GuiSearchState {
@@ -119,6 +110,7 @@ impl<'a> CodeView<'a> {
     ///
     /// If `jump` is supplied, then jump to that position in the code viewer. If this occurs, then
     /// `jump` will be reset to `false`.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         content: &'a str,
         current_line: usize,
@@ -461,27 +453,27 @@ impl egui::Widget for CodeView<'_> {
         // Handle breakpoint click
         {
             let text_response = &response.inner.response;
-            if text_response.clicked_by(egui::PointerButton::Primary) {
-                if let Some(screen_pos) = text_response.interact_pointer_pos() {
-                    let gutter_right = response.inner_rect.left() + 16.0;
-                    if screen_pos.x <= gutter_right {
-                        if let Some(line) = line_at_screen_y(screen_pos.y) {
-                            let existing = self
-                                .breakpoints
-                                .iter()
-                                .find(|b| b.path == self.file_path && b.line == line)
-                                .cloned();
+            if text_response.clicked_by(egui::PointerButton::Primary)
+                && let Some(screen_pos) = text_response.interact_pointer_pos()
+            {
+                let gutter_right = response.inner_rect.left() + 16.0;
+                if screen_pos.x <= gutter_right
+                    && let Some(line) = line_at_screen_y(screen_pos.y)
+                {
+                    let existing = self
+                        .breakpoints
+                        .iter()
+                        .find(|b| b.path == self.file_path && b.line == line)
+                        .cloned();
 
-                            if let Some(bp) = existing {
-                                self.breakpoints.remove(&bp);
-                            } else {
-                                self.breakpoints.insert(debugger::Breakpoint {
-                                    path: self.file_path.clone(),
-                                    line,
-                                    name: None,
-                                });
-                            }
-                        }
+                    if let Some(bp) = existing {
+                        self.breakpoints.remove(&bp);
+                    } else {
+                        self.breakpoints.insert(debugger::Breakpoint {
+                            path: self.file_path.clone(),
+                            line,
+                            name: None,
+                        });
                     }
                 }
             }

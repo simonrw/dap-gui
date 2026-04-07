@@ -214,6 +214,7 @@ pub struct App {
 }
 
 impl App {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         configs: Vec<LaunchConfiguration>,
         config_names: Vec<String>,
@@ -381,16 +382,16 @@ impl App {
     /// Jump code view to the current execution line.
     fn jump_to_execution_line(&mut self, state: &debugger::ProgramState) {
         let frame = &state.paused_frame.frame;
-        if let Some(source) = &frame.source {
-            if let Some(path) = &source.path {
-                // Open the file if it's different from the current one
-                if self.code_view.file_path.as_ref() != Some(path) {
-                    self.open_file(path.clone());
-                }
-                // Jump cursor to execution line (DAP lines are 1-indexed)
-                let line = (frame.line as usize).saturating_sub(1);
-                self.code_view.cursor_line = line;
+        if let Some(source) = &frame.source
+            && let Some(path) = &source.path
+        {
+            // Open the file if it's different from the current one
+            if self.code_view.file_path.as_ref() != Some(path) {
+                self.open_file(path.clone());
             }
+            // Jump cursor to execution line (DAP lines are 1-indexed)
+            let line = frame.line.saturating_sub(1);
+            self.code_view.cursor_line = line;
         }
     }
 
@@ -557,15 +558,15 @@ impl App {
     pub fn remove_breakpoint(&mut self, bp: &debugger::Breakpoint) {
         self.ui_breakpoints.remove(bp);
 
-        if let Some(id) = self.breakpoint_ids.remove(bp) {
-            if let Some(session) = &self.session {
-                let result = session
-                    .bridge
-                    .send_sync(|reply| UiCommand::RemoveBreakpoint { id, reply });
-                if let Err(e) = result {
-                    tracing::warn!(error = %e, "failed to remove breakpoint from debugger");
-                    self.status_error = Some(format!("Remove breakpoint: {e}"));
-                }
+        if let Some(id) = self.breakpoint_ids.remove(bp)
+            && let Some(session) = &self.session
+        {
+            let result = session
+                .bridge
+                .send_sync(|reply| UiCommand::RemoveBreakpoint { id, reply });
+            if let Err(e) = result {
+                tracing::warn!(error = %e, "failed to remove breakpoint from debugger");
+                self.status_error = Some(format!("Remove breakpoint: {e}"));
             }
         }
 
@@ -655,18 +656,18 @@ impl App {
 
         // Pre-fill with visual selection if active
         if self.focus == Focus::CodeView {
-            if let Some((start, end)) = self.code_view.selection_range() {
-                if let Some(content) = self.current_file_content() {
-                    let text: String = content
-                        .lines()
-                        .skip(start)
-                        .take(end - start + 1)
-                        .collect::<Vec<_>>()
-                        .join("\n");
-                    self.evaluate_editor.set_text(&text);
-                    self.code_view.selection_anchor = None;
-                    return;
-                }
+            if let Some((start, end)) = self.code_view.selection_range()
+                && let Some(content) = self.current_file_content()
+            {
+                let text: String = content
+                    .lines()
+                    .skip(start)
+                    .take(end - start + 1)
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                self.evaluate_editor.set_text(&text);
+                self.code_view.selection_anchor = None;
+                return;
             }
             // Fall back to trimmed cursor line
             if let Some(word) = self.word_under_cursor() {

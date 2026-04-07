@@ -228,7 +228,7 @@ fn extract_request_info(def: &Value) -> (String, Option<String>, Option<String>)
         .and_then(|p| p.get("arguments"))
         .and_then(|a| a.get("$ref"))
         .and_then(|r| r.as_str())
-        .map(|r| ref_to_type_name(r));
+        .map(ref_to_type_name);
 
     let description = def
         .get("description")
@@ -352,10 +352,9 @@ fn generate_string_enum(output: &mut String, name: &str, def: &Value) {
         writeln!(output, "pub enum {name} {{").unwrap();
         for (i, val) in values.iter().enumerate() {
             let s = val.as_str().unwrap();
-            if let Some(descs) = descriptions {
-                if let Some(desc) = descs.get(i).and_then(|d| d.as_str()) {
-                    write_doc_comment(output, desc, "    ");
-                }
+            if let Some(desc) = descriptions.and_then(|descs| descs.get(i).and_then(|d| d.as_str()))
+            {
+                write_doc_comment(output, desc, "    ");
             }
             writeln!(output, "    {},", enum_variant_name(s)).unwrap();
         }
@@ -422,10 +421,9 @@ fn generate_string_enum(output: &mut String, name: &str, def: &Value) {
         writeln!(output, "pub enum {name} {{").unwrap();
         for (i, val) in values.iter().enumerate() {
             let s = val.as_str().unwrap();
-            if let Some(descs) = descriptions {
-                if let Some(desc) = descs.get(i).and_then(|d| d.as_str()) {
-                    write_doc_comment(output, desc, "    ");
-                }
+            if let Some(desc) = descriptions.and_then(|descs| descs.get(i).and_then(|d| d.as_str()))
+            {
+                write_doc_comment(output, desc, "    ");
             }
             let variant = enum_variant_name(s);
             if variant != s {
@@ -631,7 +629,7 @@ fn generate_composed_struct(
             continue;
         }
 
-        let rust_type = json_type_to_rust(&field_def, is_required);
+        let rust_type = json_type_to_rust(field_def, is_required);
         let rust_field = to_rust_field_name(field_name);
         let serde_attr = serde_rename_attr(field_name, &rust_field);
         if !serde_attr.is_empty() {
@@ -918,11 +916,12 @@ fn json_type_to_rust_inner(field_def: &Value) -> String {
             "boolean" => "bool".to_string(),
             "object" => {
                 // Check for additionalProperties
-                if let Some(ap) = field_def.get("additionalProperties") {
-                    if ap.is_object() {
-                        let value_type = json_type_to_rust_inner(ap);
-                        return format!("std::collections::HashMap<String, {value_type}>");
-                    }
+                if let Some(ap) = field_def
+                    .get("additionalProperties")
+                    .filter(|ap| ap.is_object())
+                {
+                    let value_type = json_type_to_rust_inner(ap);
+                    return format!("std::collections::HashMap<String, {value_type}>");
                 }
                 "serde_json::Value".to_string()
             }
@@ -947,8 +946,6 @@ fn json_type_to_rust_inner(field_def: &Value) -> String {
                 // Already handled above, but just in case
                 let r = field_def["$ref"].as_str().unwrap();
                 ref_to_type_name(r)
-            } else if field_def.get("oneOf").is_some() || field_def.get("anyOf").is_some() {
-                "serde_json::Value".to_string()
             } else {
                 "serde_json::Value".to_string()
             }
@@ -1018,7 +1015,7 @@ fn camel_to_snake(s: &str) -> String {
             let next_is_lower = s[i + c.len_utf8()..]
                 .chars()
                 .next()
-                .map_or(false, |nc| nc.is_lowercase());
+                .is_some_and(|nc| nc.is_lowercase());
 
             if !prev_was_separator && (!prev_was_upper || next_is_lower) {
                 result.push('_');

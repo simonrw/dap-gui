@@ -224,17 +224,16 @@ impl<'s> Renderer<'s> {
         // Configurable debug keybindings
         let debug_action = ctx.input(|i| {
             for key in DEBUG_POLL_KEYS {
-                if i.key_pressed(key) {
-                    if let Some(kn) = egui_to_key_name(key) {
-                        let m = i.modifiers;
-                        if let Some(action) = self.state.keybindings.match_action(
-                            kn,
-                            m.shift,
-                            m.ctrl || m.command,
-                            m.alt,
-                        ) {
-                            return Some(action);
-                        }
+                if i.key_pressed(key)
+                    && let Some(kn) = egui_to_key_name(key)
+                {
+                    let m = i.modifiers;
+                    if let Some(action) =
+                        self.state
+                            .keybindings
+                            .match_action(kn, m.shift, m.ctrl || m.command, m.alt)
+                    {
+                        return Some(action);
                     }
                 }
             }
@@ -298,10 +297,10 @@ impl<'s> Renderer<'s> {
         }
 
         // Render file picker overlay if open
-        if self.state.file_picker.open {
-            if let FilePickerResult::Selected(path) = file_picker::show(ctx, self.state) {
-                self.state.file_override = Some(std::fs::canonicalize(&path).unwrap_or(path));
-            }
+        if self.state.file_picker.open
+            && let FilePickerResult::Selected(path) = file_picker::show(ctx, self.state)
+        {
+            self.state.file_override = Some(std::fs::canonicalize(&path).unwrap_or(path));
         }
 
         let has_session = self.state.session.is_some();
@@ -441,10 +440,10 @@ impl<'s> Renderer<'s> {
             if i.key_pressed(Key::ArrowUp) {
                 self.state.file_picker.cursor_up();
             }
-            if i.key_pressed(Key::Enter) {
-                if let Some(path) = self.state.file_picker.select() {
-                    self.state.file_override = Some(path);
-                }
+            if i.key_pressed(Key::Enter)
+                && let Some(path) = self.state.file_picker.select()
+            {
+                self.state.file_override = Some(path);
             }
         });
 
@@ -690,43 +689,39 @@ impl<'s> Renderer<'s> {
                     self.render_config_selector(ui);
                 });
 
-                if !has_session || is_terminated {
-                    if ui.button("▶ Start").clicked() {
-                        self.start_session();
-                    }
+                if (!has_session || is_terminated) && ui.button("▶ Start").clicked() {
+                    self.start_session();
                 }
 
-                if has_session && !is_terminated {
-                    if ui.button("⏹ Stop").clicked() {
-                        if let Some(session) = self.state.session.take() {
-                            session
-                                .bridge
-                                .send(crate::async_bridge::UiCommand::Terminate);
-                        }
-                        self.state.variables_cache.clear();
-                        *self.state.repl_output.borrow_mut() = String::new();
+                if has_session && !is_terminated && ui.button("⏹ Stop").clicked() {
+                    if let Some(session) = self.state.session.take() {
+                        session
+                            .bridge
+                            .send(crate::async_bridge::UiCommand::Terminate);
                     }
+                    self.state.variables_cache.clear();
+                    *self.state.repl_output.borrow_mut() = String::new();
                 }
 
                 // Stepping controls only when session is active and not terminated
-                if let Some(session) = &self.state.session {
-                    if !matches!(session.state, State::Terminated) {
-                        if ui.button("▶ Continue").clicked() {
-                            session
-                                .bridge
-                                .send(crate::async_bridge::UiCommand::Continue);
-                        }
-                        if ui.button("⏭ Step Over").clicked() {
-                            session
-                                .bridge
-                                .send(crate::async_bridge::UiCommand::StepOver);
-                        }
-                        if ui.button("⏬ Step Into").clicked() {
-                            session.bridge.send(crate::async_bridge::UiCommand::StepIn);
-                        }
-                        if ui.button("⏫ Step Out").clicked() {
-                            session.bridge.send(crate::async_bridge::UiCommand::StepOut);
-                        }
+                if let Some(session) = &self.state.session
+                    && !matches!(session.state, State::Terminated)
+                {
+                    if ui.button("▶ Continue").clicked() {
+                        session
+                            .bridge
+                            .send(crate::async_bridge::UiCommand::Continue);
+                    }
+                    if ui.button("⏭ Step Over").clicked() {
+                        session
+                            .bridge
+                            .send(crate::async_bridge::UiCommand::StepOver);
+                    }
+                    if ui.button("⏬ Step Into").clicked() {
+                        session.bridge.send(crate::async_bridge::UiCommand::StepIn);
+                    }
+                    if ui.button("⏫ Step Out").clicked() {
+                        session.bridge.send(crate::async_bridge::UiCommand::StepOut);
                     }
                 }
             });
@@ -964,23 +959,23 @@ impl<'s> Renderer<'s> {
                 .id_salt(id)
                 .show(ui, |ui| {
                     // Fetch children on first expand
-                    if !self.state.variables_cache.contains_key(&var_ref) {
-                        if let Some(session) = &self.state.session {
-                            match session.bridge.send_sync(|reply| {
-                                crate::async_bridge::UiCommand::FetchVariables {
-                                    reference: var_ref,
-                                    reply,
-                                }
-                            }) {
-                                Ok(children) => {
-                                    self.state.variables_cache.insert(var_ref, children);
-                                }
-                                Err(e) => {
-                                    self.state
-                                        .status
-                                        .push_error(format!("Failed to fetch variables: {e}"));
-                                    return;
-                                }
+                    if !self.state.variables_cache.contains_key(&var_ref)
+                        && let Some(session) = &self.state.session
+                    {
+                        match session.bridge.send_sync(|reply| {
+                            crate::async_bridge::UiCommand::FetchVariables {
+                                reference: var_ref,
+                                reply,
+                            }
+                        }) {
+                            Ok(children) => {
+                                self.state.variables_cache.insert(var_ref, children);
+                            }
+                            Err(e) => {
+                                self.state
+                                    .status
+                                    .push_error(format!("Failed to fetch variables: {e}"));
+                                return;
                             }
                         }
                     }

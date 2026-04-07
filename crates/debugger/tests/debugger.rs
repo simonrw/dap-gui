@@ -176,7 +176,7 @@ async fn test_remote_attach() -> eyre::Result<()> {
                             ..
                         },
                         ..
-                    } if *path == file_path && line as usize == breakpoint_line
+                    } if *path == file_path && line == breakpoint_line
                 ));
                 break;
             }
@@ -292,7 +292,7 @@ async fn test_debugger() -> eyre::Result<()> {
                             ..
                         },
                         ..
-                    } if *path == file_path && line as usize == breakpoint_line
+                    } if *path == file_path && line == breakpoint_line
                 ));
                 break;
             }

@@ -51,7 +51,7 @@ pub(crate) fn show(ctx: &Context, state: &mut DebuggerAppState) -> FilePickerRes
     }
 
     let screen_rect = ctx.input(|i| i.viewport_rect());
-    let picker_width = (screen_rect.width() * 0.5).max(300.0).min(600.0);
+    let picker_width = (screen_rect.width() * 0.5).clamp(300.0, 600.0);
 
     egui::Window::new("file_picker")
         .title_bar(false)

@@ -116,8 +116,10 @@ impl SyntaxHighlighter {
         }
 
         // Now highlight the visible lines
-        for line_idx in start_line..end_line.min(lines.len()) {
-            let line = lines[line_idx];
+        for (i, line) in lines[start_line..end_line.min(lines.len())]
+            .iter()
+            .enumerate()
+        {
             let line_with_nl = format!("{line}\n");
 
             let ops = parse_state
@@ -163,7 +165,7 @@ impl SyntaxHighlighter {
 
             result.push(styled_spans);
 
-            current_line = line_idx + 1;
+            current_line = start_line + i + 1;
             if current_line % self.checkpoint_interval == 0 {
                 self.save_checkpoint(current_line, &parse_state, &highlight_state);
             }
@@ -173,6 +175,7 @@ impl SyntaxHighlighter {
     }
 
     /// Convert highlighted spans into ratatui `Line`s with line numbers and optional decorations.
+    #[allow(clippy::too_many_arguments)]
     pub fn build_lines(
         highlighted: &[Vec<StyledSegment>],
         start_line: usize,
@@ -201,7 +204,7 @@ impl SyntaxHighlighter {
                 let is_cursor = line_idx == cursor_line;
                 let is_exec = exec_line == Some(line_idx);
                 let is_selected = selection_range
-                    .map_or(false, |(start, end)| line_idx >= start && line_idx <= end);
+                    .is_some_and(|(start, end)| line_idx >= start && line_idx <= end);
 
                 // Pick the background color: exec > selection > cursor > none
                 let bg = if is_exec {
@@ -216,9 +219,7 @@ impl SyntaxHighlighter {
 
                 // Line number gutter with execution/breakpoint markers
                 let has_bp = breakpoint_lines.contains(&line_num);
-                let gutter_marker = if is_exec && has_bp {
-                    "\u{25b6}" // ▶ (exec takes precedence, but on a bp line)
-                } else if is_exec {
+                let gutter_marker = if is_exec {
                     "\u{25b6}" // ▶
                 } else if has_bp {
                     "\u{25cf}" // ●

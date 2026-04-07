@@ -13,7 +13,7 @@ pub fn render(app: &App, frame: &mut Frame) {
     let area = frame.area();
     let theme = &app.theme;
 
-    let popup_width = ((area.width as f32 * 0.5) as u16).min(60).max(30);
+    let popup_width = ((area.width as f32 * 0.5) as u16).clamp(30, 60);
     let popup_height = 8_u16.min(area.height);
 
     let popup_area = centered_rect(popup_width, popup_height, area);

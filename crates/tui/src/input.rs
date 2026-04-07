@@ -189,14 +189,11 @@ fn recompute_search(app: &mut App) {
 // ── Breakpoint input mode ─────────────────────────────────────────────────
 
 fn handle_breakpoint_input_key(app: &mut App, key: KeyEvent) {
-    match key.code {
-        KeyCode::Esc => {
-            app.breakpoint_editing = false;
-            app.breakpoint_editor.clear();
-            app.input_mode = InputMode::Normal;
-            return;
-        }
-        _ => {}
+    if key.code == KeyCode::Esc {
+        app.breakpoint_editing = false;
+        app.breakpoint_editor.clear();
+        app.input_mode = InputMode::Normal;
+        return;
     }
     let action = app
         .breakpoint_editor
@@ -215,12 +212,9 @@ fn handle_breakpoint_input_key(app: &mut App, key: KeyEvent) {
 // ── Evaluate popup input mode ─────────────────────────────────────────────
 
 fn handle_evaluate_popup_key(app: &mut App, key: KeyEvent) {
-    match key.code {
-        KeyCode::Esc => {
-            app.close_evaluate_popup();
-            return;
-        }
-        _ => {}
+    if key.code == KeyCode::Esc {
+        app.close_evaluate_popup();
+        return;
     }
     let action = app
         .evaluate_editor
@@ -386,24 +380,24 @@ fn handle_normal_key(app: &mut App, key: KeyEvent) {
                     app.restart_session();
                 }
                 DebugAction::StepOver => {
-                    if app.mode == AppMode::Paused {
-                        if let Some(session) = &app.session {
-                            session.bridge.send(UiCommand::StepOver);
-                        }
+                    if app.mode == AppMode::Paused
+                        && let Some(session) = &app.session
+                    {
+                        session.bridge.send(UiCommand::StepOver);
                     }
                 }
                 DebugAction::StepInto => {
-                    if app.mode == AppMode::Paused {
-                        if let Some(session) = &app.session {
-                            session.bridge.send(UiCommand::StepIn);
-                        }
+                    if app.mode == AppMode::Paused
+                        && let Some(session) = &app.session
+                    {
+                        session.bridge.send(UiCommand::StepIn);
                     }
                 }
                 DebugAction::StepOut => {
-                    if app.mode == AppMode::Paused {
-                        if let Some(session) = &app.session {
-                            session.bridge.send(UiCommand::StepOut);
-                        }
+                    if app.mode == AppMode::Paused
+                        && let Some(session) = &app.session
+                    {
+                        session.bridge.send(UiCommand::StepOut);
                     }
                 }
             }
@@ -467,10 +461,8 @@ fn handle_code_view_key(app: &mut App, key: KeyEvent) {
                 app.code_view.selection_anchor = Some(app.code_view.cursor_line);
             }
         }
-        KeyCode::Esc => {
-            if app.code_view.selection_anchor.is_some() {
-                app.code_view.selection_anchor = None;
-            }
+        KeyCode::Esc if app.code_view.selection_anchor.is_some() => {
+            app.code_view.selection_anchor = None;
         }
         // Search navigation
         KeyCode::Char('n') => {
@@ -519,16 +511,14 @@ fn handle_breakpoints_key(app: &mut App, key: KeyEvent) {
             app.input_mode = InputMode::BreakpointInput;
         }
         // Delete breakpoint
-        KeyCode::Char('d') | KeyCode::Delete => {
-            if !app.ui_breakpoints.is_empty() {
-                app.remove_breakpoint_by_index(app.breakpoints_cursor);
-                // Clamp cursor
-                let count = app.ui_breakpoints.len();
-                if count > 0 {
-                    app.breakpoints_cursor = app.breakpoints_cursor.min(count - 1);
-                } else {
-                    app.breakpoints_cursor = 0;
-                }
+        KeyCode::Char('d') | KeyCode::Delete if !app.ui_breakpoints.is_empty() => {
+            app.remove_breakpoint_by_index(app.breakpoints_cursor);
+            // Clamp cursor
+            let count = app.ui_breakpoints.len();
+            if count > 0 {
+                app.breakpoints_cursor = app.breakpoints_cursor.min(count - 1);
+            } else {
+                app.breakpoints_cursor = 0;
             }
         }
         // Jump to breakpoint location in code view
@@ -564,36 +554,34 @@ fn handle_variables_key(app: &mut App, key: KeyEvent) {
         }
         // Expand/collapse
         KeyCode::Enter | KeyCode::Char('l') => {
-            if let Some(var) = vars.get(app.variables_cursor) {
-                if let Some(ref_id) = var.variables_reference {
-                    if ref_id > 0 {
-                        if app.variables_cache.contains_key(&ref_id) {
-                            // Toggle collapse by removing from cache
-                            app.variables_cache.remove(&ref_id);
-                        } else {
-                            app.fetch_variables(ref_id);
-                        }
-                    }
+            if let Some(var) = vars.get(app.variables_cursor)
+                && let Some(ref_id) = var.variables_reference
+                && ref_id > 0
+            {
+                if app.variables_cache.contains_key(&ref_id) {
+                    // Toggle collapse by removing from cache
+                    app.variables_cache.remove(&ref_id);
+                } else {
+                    app.fetch_variables(ref_id);
                 }
             }
         }
         KeyCode::Char('h') => {
             // Collapse: remove from cache if expanded
-            if let Some(var) = vars.get(app.variables_cursor) {
-                if let Some(ref_id) = var.variables_reference {
-                    if ref_id > 0 {
-                        app.variables_cache.remove(&ref_id);
-                    }
-                }
+            if let Some(var) = vars.get(app.variables_cursor)
+                && let Some(ref_id) = var.variables_reference
+                && ref_id > 0
+            {
+                app.variables_cache.remove(&ref_id);
             }
         }
         // Yank value
         KeyCode::Char('y') => {
-            if let Some(var) = vars.get(app.variables_cursor) {
-                if let Some(ref value) = var.value {
-                    app.yank_variable_value(value);
-                    app.status_message = Some("Yanked value (OSC 52)".to_string());
-                }
+            if let Some(var) = vars.get(app.variables_cursor)
+                && let Some(ref value) = var.value
+            {
+                app.yank_variable_value(value);
+                app.status_message = Some("Yanked value (OSC 52)".to_string());
             }
         }
         _ => {}
@@ -613,13 +601,12 @@ fn get_flat_variables(app: &App) -> Vec<dap_types::Variable> {
     for var in &paused_frame.variables {
         flat.push(var.clone());
         // If expanded, add children
-        if let Some(ref_id) = var.variables_reference {
-            if ref_id > 0 {
-                if let Some(children) = app.variables_cache.get(&ref_id) {
-                    for child in children {
-                        flat.push(child.clone());
-                    }
-                }
+        if let Some(ref_id) = var.variables_reference
+            && ref_id > 0
+            && let Some(children) = app.variables_cache.get(&ref_id)
+        {
+            for child in children {
+                flat.push(child.clone());
             }
         }
     }
@@ -652,16 +639,15 @@ fn handle_call_stack_key(app: &mut App, key: KeyEvent) {
         }
         // Change scope to selected frame
         KeyCode::Enter => {
-            if let Some(session) = &app.session {
-                if let DebuggerState::Paused { ref stack, .. } = session.state {
-                    if let Some(frame) = stack.get(app.call_stack_cursor) {
-                        let frame_id = frame.id;
-                        session.bridge.send(UiCommand::ChangeScope {
-                            frame_id,
-                            reply: tokio::sync::oneshot::channel().0,
-                        });
-                    }
-                }
+            if let Some(session) = &app.session
+                && let DebuggerState::Paused { ref stack, .. } = session.state
+                && let Some(frame) = stack.get(app.call_stack_cursor)
+            {
+                let frame_id = frame.id;
+                session.bridge.send(UiCommand::ChangeScope {
+                    frame_id,
+                    reply: tokio::sync::oneshot::channel().0,
+                });
             }
         }
         _ => {}
@@ -671,15 +657,11 @@ fn handle_call_stack_key(app: &mut App, key: KeyEvent) {
 fn handle_output_key(app: &mut App, key: KeyEvent) {
     match key.code {
         // Scroll
-        KeyCode::Char('j') | KeyCode::Down => {
-            if !app.output_auto_scroll {
-                app.output_scroll_offset = app.output_scroll_offset.saturating_add(1);
-            }
+        KeyCode::Char('j') | KeyCode::Down if !app.output_auto_scroll => {
+            app.output_scroll_offset = app.output_scroll_offset.saturating_add(1);
         }
-        KeyCode::Char('k') | KeyCode::Up => {
-            if !app.output_auto_scroll {
-                app.output_scroll_offset = app.output_scroll_offset.saturating_sub(1);
-            }
+        KeyCode::Char('k') | KeyCode::Up if !app.output_auto_scroll => {
+            app.output_scroll_offset = app.output_scroll_offset.saturating_sub(1);
         }
         // Toggle auto-scroll
         KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -700,13 +682,8 @@ fn handle_repl_focus_key(app: &mut App, key: KeyEvent) {
     let action = app
         .repl_editor
         .handle_key(key, Some(&mut app.repl_evaluate_history));
-    match action {
-        LineEditorAction::Submitted => {
-            if is_paused {
-                app.evaluate_repl();
-            }
-        }
-        _ => {}
+    if action == LineEditorAction::Submitted && is_paused {
+        app.evaluate_repl();
     }
 }
 

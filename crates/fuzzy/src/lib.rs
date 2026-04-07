@@ -53,10 +53,9 @@ pub fn list_git_files(repo_root: &Path) -> Result<Vec<TrackedFile>, std::io::Err
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("git ls-files failed: {stderr}"),
-        ));
+        return Err(std::io::Error::other(format!(
+            "git ls-files failed: {stderr}"
+        )));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -108,20 +107,20 @@ pub fn fuzzy_filter(files: &[TrackedFile], query: &str) -> Vec<FuzzyMatch> {
         needle_buf.clear();
         let needle = nucleo_matcher::Utf32Str::new(query, &mut needle_buf);
 
-        if let Some(score) = matcher.fuzzy_match(haystack, needle) {
-            if score > 0 {
-                let mut indices = Vec::new();
-                matcher.fuzzy_indices(haystack, needle, &mut indices);
+        if let Some(score) = matcher.fuzzy_match(haystack, needle)
+            && score > 0
+        {
+            let mut indices = Vec::new();
+            matcher.fuzzy_indices(haystack, needle, &mut indices);
 
-                // Convert u32 indices to usize for matched_indices
-                let matched_indices = indices.iter().map(|&i| i as usize).collect();
+            // Convert u32 indices to usize for matched_indices
+            let matched_indices = indices.iter().map(|&i| i as usize).collect();
 
-                matches.push(FuzzyMatch {
-                    file: file.clone(),
-                    score: score as i64,
-                    matched_indices,
-                });
-            }
+            matches.push(FuzzyMatch {
+                file: file.clone(),
+                score: score as i64,
+                matched_indices,
+            });
         }
     }
 

@@ -16,7 +16,7 @@ use super::border_style;
 // checkpoints across frames.
 thread_local! {
     static HIGHLIGHTER: std::cell::RefCell<SyntaxHighlighter> = std::cell::RefCell::new(SyntaxHighlighter::new());
-    static LAST_FILE: std::cell::RefCell<Option<(std::path::PathBuf, &'static str)>> = std::cell::RefCell::new(None);
+    static LAST_FILE: std::cell::RefCell<Option<(std::path::PathBuf, &'static str)>> = const { std::cell::RefCell::new(None) };
 }
 
 pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
@@ -89,10 +89,10 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
             let exec_line: Option<usize> = app.session.as_ref().and_then(|session| {
                 if let DebuggerState::Paused { paused_frame, .. } = &session.state {
                     let frame = &paused_frame.frame;
-                    if let Some(source) = &frame.source {
-                        if source.path.as_ref() == Some(path) {
-                            return Some((frame.line as usize).saturating_sub(1));
-                        }
+                    if let Some(source) = &frame.source
+                        && source.path.as_ref() == Some(path)
+                    {
+                        return Some(frame.line.saturating_sub(1));
                     }
                 }
                 None

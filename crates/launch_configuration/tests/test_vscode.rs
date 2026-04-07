@@ -532,14 +532,14 @@ fn test_load_all_from_workspace() {
 
     // All configs should have resolved paths (no raw ${workspaceFolder:...})
     for config in &configs {
-        if let LaunchConfiguration::Debugpy(d) = config {
-            if let Some(ref cwd) = d.cwd {
-                assert!(
-                    !cwd.display().to_string().contains("${workspaceFolder"),
-                    "cwd should be resolved: {}",
-                    cwd.display()
-                );
-            }
+        if let LaunchConfiguration::Debugpy(d) = config
+            && let Some(ref cwd) = d.cwd
+        {
+            assert!(
+                !cwd.display().to_string().contains("${workspaceFolder"),
+                "cwd should be resolved: {}",
+                cwd.display()
+            );
         }
     }
 }
@@ -551,14 +551,14 @@ fn test_load_all_from_launch_json() {
     assert_eq!(configs.len(), 2);
 
     for config in &configs {
-        if let LaunchConfiguration::Debugpy(d) = config {
-            if let Some(ref cwd) = d.cwd {
-                assert!(
-                    !cwd.display().to_string().contains("${workspaceFolder}"),
-                    "cwd should be resolved: {}",
-                    cwd.display()
-                );
-            }
+        if let LaunchConfiguration::Debugpy(d) = config
+            && let Some(ref cwd) = d.cwd
+        {
+            assert!(
+                !cwd.display().to_string().contains("${workspaceFolder}"),
+                "cwd should be resolved: {}",
+                cwd.display()
+            );
         }
     }
 }

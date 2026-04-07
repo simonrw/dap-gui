@@ -29,10 +29,10 @@ impl Widget for CallStack<'_> {
 
         if self.show_details {
             for frame in self.stack {
-                if ui.link(frame.name.to_string()).clicked() {
-                    if let Err(e) = self.state.change_scope(frame.id) {
-                        tracing::warn!(error = ?e, "error changing scope");
-                    }
+                if ui.link(frame.name.to_string()).clicked()
+                    && let Err(e) = self.state.change_scope(frame.id)
+                {
+                    tracing::warn!(error = ?e, "error changing scope");
                 }
             }
         }

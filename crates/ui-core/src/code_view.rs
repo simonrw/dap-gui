@@ -5,6 +5,7 @@ use std::path::PathBuf;
 /// Tracks the currently displayed file, cursor position, scroll offset,
 /// and visual selection. This is primarily used by the TUI (keyboard-driven
 /// navigation) but is kept in ui-core for reuse.
+#[derive(Default)]
 pub struct CodeViewState {
     /// Currently displayed file path.
     pub file_path: Option<PathBuf>,
@@ -17,18 +18,6 @@ pub struct CodeViewState {
     /// Visual selection anchor line (0-indexed). When set, selection spans
     /// from anchor to cursor_line (inclusive, in either direction).
     pub selection_anchor: Option<usize>,
-}
-
-impl Default for CodeViewState {
-    fn default() -> Self {
-        Self {
-            file_path: None,
-            cursor_line: 0,
-            scroll_offset: 0,
-            total_lines: 0,
-            selection_anchor: None,
-        }
-    }
 }
 
 impl CodeViewState {

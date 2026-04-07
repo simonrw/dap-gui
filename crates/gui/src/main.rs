@@ -97,16 +97,11 @@ impl Session {
 
         // Spawn event forwarding thread for this session
         std::thread::spawn(move || {
-            loop {
-                match event_rx.recv() {
-                    Ok(event) => {
-                        let mut state = app_state.lock().unwrap();
-                        state.handle_session_event(&event);
-                        drop(state);
-                        egui_ctx.request_repaint();
-                    }
-                    Err(_) => break,
-                }
+            while let Ok(event) = event_rx.recv() {
+                let mut state = app_state.lock().unwrap();
+                state.handle_session_event(&event);
+                drop(state);
+                egui_ctx.request_repaint();
             }
             tracing::debug!("event forwarding thread ended");
         });

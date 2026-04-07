@@ -33,20 +33,19 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
                 flat_idx += 1;
 
                 // If expanded, add children
-                if let Some(ref_id) = var.variables_reference {
-                    if ref_id > 0 {
-                        if let Some(children) = app.variables_cache.get(&ref_id) {
-                            for child in children {
-                                flat_items.push(make_variable_item(
-                                    child,
-                                    1,
-                                    is_focused && flat_idx == app.variables_cursor,
-                                    &app.variables_cache,
-                                    theme,
-                                ));
-                                flat_idx += 1;
-                            }
-                        }
+                if let Some(ref_id) = var.variables_reference
+                    && ref_id > 0
+                    && let Some(children) = app.variables_cache.get(&ref_id)
+                {
+                    for child in children {
+                        flat_items.push(make_variable_item(
+                            child,
+                            1,
+                            is_focused && flat_idx == app.variables_cursor,
+                            &app.variables_cache,
+                            theme,
+                        ));
+                        flat_idx += 1;
                     }
                 }
             }
