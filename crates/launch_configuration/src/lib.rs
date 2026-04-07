@@ -181,6 +181,7 @@ pub enum LaunchConfiguration {
     Debugpy(Debugpy),
     Python(Debugpy),
     LLDB(LLDB),
+    Go(Delve),
 }
 
 impl LaunchConfiguration {
@@ -188,6 +189,7 @@ impl LaunchConfiguration {
         match self {
             LaunchConfiguration::Debugpy(d) | LaunchConfiguration::Python(d) => &d.name,
             LaunchConfiguration::LLDB(l) => &l.name,
+            LaunchConfiguration::Go(d) => &d.name,
         }
     }
 
@@ -195,6 +197,7 @@ impl LaunchConfiguration {
         match self {
             LaunchConfiguration::Debugpy(d) | LaunchConfiguration::Python(d) => d.cwd.as_deref(),
             LaunchConfiguration::LLDB(l) => l.cwd.as_deref().map(Path::new),
+            LaunchConfiguration::Go(d) => d.cwd.as_deref(),
         }
     }
 }
@@ -206,6 +209,7 @@ impl Resolve for LaunchConfiguration {
                 debugpy.resolve(ctx);
             }
             LaunchConfiguration::LLDB(lldb) => lldb.resolve(ctx),
+            LaunchConfiguration::Go(delve) => delve.resolve(ctx),
         }
     }
 }
@@ -400,6 +404,59 @@ impl Resolve for LLDB {
         }
         for arg in &mut self.cargo.args {
             *arg = ctx.resolve_string(arg);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Delve {
+    pub name: String,
+    pub request: String,
+    pub mode: Option<String>,
+    pub program: Option<PathBuf>,
+    pub args: Option<Vec<String>>,
+    pub env: Option<HashMap<String, String>>,
+    pub env_file: Option<PathBuf>,
+    pub cwd: Option<PathBuf>,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub build_flags: Option<String>,
+    pub substitute_path: Option<Vec<SubstitutePath>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub struct SubstitutePath {
+    pub from: String,
+    pub to: String,
+}
+
+impl Resolve for Delve {
+    fn resolve(&mut self, ctx: &ResolutionContext) {
+        if let Some(ref mut cwd) = self.cwd {
+            *cwd = ctx.resolve_pathbuf(cwd);
+        }
+        if let Some(ref mut program) = self.program {
+            *program = ctx.resolve_pathbuf(program);
+        }
+        if let Some(ref mut env) = self.env {
+            for value in env.values_mut() {
+                *value = ctx.resolve_string(value);
+            }
+        }
+        if let Some(ref mut env_file) = self.env_file {
+            *env_file = ctx.resolve_pathbuf(env_file);
+        }
+        if let Some(ref mut args) = self.args {
+            for arg in args {
+                *arg = ctx.resolve_string(arg);
+            }
+        }
+        if let Some(ref mut paths) = self.substitute_path {
+            for p in paths {
+                p.from = ctx.resolve_string(&p.from);
+                p.to = ctx.resolve_string(&p.to);
+            }
         }
     }
 }
