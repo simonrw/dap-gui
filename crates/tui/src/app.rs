@@ -1039,6 +1039,7 @@ pub(crate) mod test_helpers {
             wakeup_tx,
             vec![],
             Default::default(),
+            Default::default(),
         );
 
         f(&mut app);

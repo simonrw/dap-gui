@@ -157,13 +157,14 @@ fn render_file_browser_overflow(app: &App, frame: &mut Frame, sidebar: Rect) {
     }
 
     // Use the same styles as the selected item in the file browser
+    let theme = &app.theme;
     let base_style = Style::default()
-        .fg(Color::White)
-        .bg(Color::Rgb(50, 50, 80))
+        .fg(theme.text)
+        .bg(theme.selection_bg)
         .add_modifier(Modifier::BOLD);
     let match_style = Style::default()
-        .fg(Color::Yellow)
-        .bg(Color::Rgb(50, 50, 80))
+        .fg(theme.accent)
+        .bg(theme.selection_bg)
         .add_modifier(Modifier::BOLD);
 
     // Build spans for only the overflowing characters
