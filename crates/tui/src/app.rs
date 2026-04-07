@@ -835,6 +835,27 @@ impl App {
         let _ = std::io::stdout().flush();
     }
 
+    // ── Config CWD ────────────────────────────────────────────────────
+
+    /// Update the process working directory and `debug_root_dir` from the
+    /// currently selected configuration's `cwd` field, resetting the file
+    /// browser so it reloads from the new directory.
+    pub fn apply_config_cwd(&mut self) {
+        if let Some(cwd) = self.configs[self.selected_config_index].cwd() {
+            let normalised = debugger::utils::normalise_path(cwd);
+            let resolved = std::fs::canonicalize(normalised.as_ref())
+                .unwrap_or_else(|_| normalised.into_owned());
+            if resolved != self.debug_root_dir {
+                let _ = std::env::set_current_dir(&resolved);
+                self.debug_root_dir = resolved;
+                self.file_browser_loaded = false;
+                self.file_browser_files.clear();
+                self.file_browser_results.clear();
+                self.file_browser_cursor = 0;
+            }
+        }
+    }
+
     // ── File browser operations ──────────────────────────────────────
 
     /// Ensure file browser files are loaded (lazy).
@@ -966,6 +987,51 @@ pub(crate) mod test_helpers {
         let (bridge, _error_tx) = crate::async_bridge::AsyncBridge::dummy();
         let session = Session::new_for_test(bridge, event_rx);
         (session, event_tx)
+    }
+
+    /// Create a temporary `App` with configs that have `cwd` fields.
+    ///
+    /// Each entry is `(name, Option<cwd_path>)`. The `TempDir` backing the
+    /// state manager is kept alive for the duration of the closure.
+    pub fn with_test_app_configs_cwd(
+        entries: Vec<(String, Option<PathBuf>)>,
+        f: impl FnOnce(&mut App),
+    ) {
+        let dir = tempfile::tempdir().expect("failed to create tempdir");
+        let state_path = dir.path().join("state.json");
+        let state_manager = StateManager::new(&state_path).expect("failed to create StateManager");
+        let (wakeup_tx, _wakeup_rx) = crossbeam_channel::unbounded();
+
+        let config_names: Vec<String> = entries.iter().map(|(n, _)| n.clone()).collect();
+        let configs: Vec<LaunchConfiguration> = entries
+            .iter()
+            .map(|(name, cwd)| {
+                let mut json = serde_json::json!({
+                    "name": name,
+                    "type": "python",
+                    "request": "launch",
+                    "program": "/tmp/test.py"
+                });
+                if let Some(cwd) = cwd {
+                    json["cwd"] = serde_json::Value::String(cwd.display().to_string());
+                }
+                serde_json::from_value(json).expect("failed to create test config")
+            })
+            .collect();
+
+        let mut app = App::new(
+            configs,
+            config_names,
+            0,
+            PathBuf::from("/tmp/test"),
+            PathBuf::from("/tmp/test"),
+            state_manager,
+            wakeup_tx,
+            vec![],
+            Default::default(),
+        );
+
+        f(&mut app);
     }
 
     /// Helper to create a `ProgramState` for Paused/ScopeChange events.
@@ -1625,6 +1691,44 @@ mod tests {
         assert!(
             all.iter()
                 .any(|bp| bp.path.ends_with("b.py") && bp.line == 20)
+        );
+    }
+
+    // ── apply_config_cwd ─────────────────────────────────────────────
+
+    #[test]
+    fn apply_config_cwd_updates_debug_root_dir() {
+        let target_dir = tempfile::tempdir().expect("tempdir");
+        let target = std::fs::canonicalize(target_dir.path()).expect("canonicalize");
+        with_test_app_configs_cwd(vec![("cfg0".into(), Some(target.clone()))], |app| {
+            app.file_browser_loaded = true;
+            app.apply_config_cwd();
+            assert_eq!(app.debug_root_dir, target);
+            assert!(!app.file_browser_loaded);
+        });
+    }
+
+    #[test]
+    fn apply_config_cwd_no_change_without_cwd() {
+        with_test_app_configs_cwd(vec![("cfg0".into(), None)], |app| {
+            let original = app.debug_root_dir.clone();
+            app.file_browser_loaded = true;
+            app.apply_config_cwd();
+            assert_eq!(app.debug_root_dir, original);
+            assert!(app.file_browser_loaded);
+        });
+    }
+
+    #[test]
+    fn apply_config_cwd_no_reset_when_same_dir() {
+        with_test_app_configs_cwd(
+            vec![("cfg0".into(), Some(PathBuf::from("/tmp/test")))],
+            |app| {
+                app.file_browser_loaded = true;
+                app.apply_config_cwd();
+                // /tmp/test is the initial debug_root_dir, so no reset
+                assert!(app.file_browser_loaded);
+            },
         );
     }
 }

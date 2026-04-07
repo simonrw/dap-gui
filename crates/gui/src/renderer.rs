@@ -420,6 +420,7 @@ impl<'s> Renderer<'s> {
             let resolved = std::fs::canonicalize(normalised.as_ref())
                 .unwrap_or_else(|_| normalised.into_owned());
             if resolved != self.state.debug_root_dir {
+                let _ = std::env::set_current_dir(&resolved);
                 self.state.debug_root_dir = resolved;
                 self.state.file_picker.git_files_loaded = false;
                 self.state.file_override = None;

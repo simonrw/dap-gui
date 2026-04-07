@@ -338,11 +338,13 @@ fn handle_normal_key(app: &mut App, key: KeyEvent) {
                 } else {
                     app.selected_config_index -= 1;
                 }
+                app.apply_config_cwd();
                 return;
             }
             KeyCode::Char('l') | KeyCode::Right => {
                 app.selected_config_index =
                     (app.selected_config_index + 1) % app.config_names.len();
+                app.apply_config_cwd();
                 return;
             }
             _ => {}
@@ -914,6 +916,21 @@ mod tests {
             handle_key(app, key(KeyCode::Char('l')));
             assert_eq!(app.selected_config_index, 0); // unchanged
         });
+    }
+
+    #[test]
+    fn config_cycling_updates_debug_root_dir() {
+        let target_dir = tempfile::tempdir().expect("tempdir");
+        let target = std::fs::canonicalize(target_dir.path()).expect("canonicalize");
+        with_test_app_configs_cwd(
+            vec![("cfg0".into(), None), ("cfg1".into(), Some(target.clone()))],
+            |app| {
+                // Cycle forward to cfg1 which has a cwd
+                handle_key(app, key(KeyCode::Char('l')));
+                assert_eq!(app.selected_config_index, 1);
+                assert_eq!(app.debug_root_dir, target);
+            },
+        );
     }
 
     // ── Code view navigation ──────────────────────────────────────────
