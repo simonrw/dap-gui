@@ -4,70 +4,20 @@ use launch_configuration::{ChosenLaunchConfiguration, LaunchConfiguration, PathM
 
 #[ctor::ctor]
 fn init() {
-    // let in_ci = std::env::var("CI")
-    //     .map(|val| val == "true")
-    //     .unwrap_or(false);
-
-    // if std::io::stderr().is_terminal() || in_ci {
-    //     let _ = tracing_subscriber::fmt()
-    //         .with_env_filter(EnvFilter::from_default_env())
-    //         .try_init();
-    // } else {
-    //     let _ = tracing_subscriber::fmt()
-    //         .with_env_filter(EnvFilter::from_default_env())
-    //         .json()
-    //         .try_init();
-    // }
-
     let _ = color_eyre::install();
 }
 
-#[test]
-fn test_read_example() {
-    let path = "./testdata/vscode/localstack-ext.json";
-    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
-        launch_configuration::load_from_path(Some(&"Python: Remote Attach".to_string()), path)
-            .unwrap()
-    else {
-        panic!("specified launch configuration not found");
-    };
+// ---------------------------------------------------------------------------
+// Helper: resolve the testdata directory to an absolute path
+// ---------------------------------------------------------------------------
 
-    assert_eq!(config.name, "Python: Remote Attach");
-    assert_eq!(config.request, "attach");
+fn testdata_dir() -> std::path::PathBuf {
+    std::fs::canonicalize("./testdata/vscode").expect("testdata/vscode should exist")
 }
 
-#[test]
-fn test_read_code_workspace() {
-    let path = "./testdata/vscode/localstack.code-workspace";
-    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
-        launch_configuration::load_from_path(Some(&"Remote Attach (ext)".to_string()), path)
-            .unwrap()
-    else {
-        panic!("specified launch configuration not found");
-    };
-
-    assert_eq!(config.name, "Remote Attach (ext)");
-    assert_eq!(config.request, "attach");
-    // TODO: config.connect
-    assert_eq!(
-        config.path_mappings,
-        Some(vec![
-            PathMapping {
-                local_root: "${workspaceFolder:localstack-ext}/localstack-pro-core/localstack/pro"
-                    .to_string(),
-                remote_root:
-                    "/opt/code/localstack/.venv/lib/python3.11/site-packages/localstack/pro"
-                        .to_string(),
-            },
-            PathMapping {
-                local_root: "${workspaceFolder:localstack}/localstack-core/localstack".to_string(),
-                remote_root: "/opt/code/localstack/.venv/lib/python3.11/site-packages/localstack"
-                    .to_string()
-            }
-        ])
-    );
-    assert!(!config.just_my_code.unwrap());
-}
+// ===========================================================================
+// Existing parsing tests (reader-based — no variable resolution)
+// ===========================================================================
 
 #[test]
 fn test_malformed_json() {
@@ -220,27 +170,6 @@ fn test_jsonc_with_trailing_commas() {
 }
 
 #[test]
-fn test_workspace_config_not_found() {
-    let path = "./testdata/vscode/localstack.code-workspace";
-    let result =
-        launch_configuration::load_from_path(Some(&"Nonexistent Config".to_string()), path)
-            .unwrap();
-    assert!(matches!(result, ChosenLaunchConfiguration::NotFound));
-}
-
-#[test]
-fn test_workspace_to_be_chosen() {
-    let path = "./testdata/vscode/localstack.code-workspace";
-    let result = launch_configuration::load_from_path(None, path).unwrap();
-    match result {
-        ChosenLaunchConfiguration::ToBeChosen(names) => {
-            assert!(!names.is_empty());
-        }
-        _ => panic!("expected ToBeChosen for workspace without specified name"),
-    }
-}
-
-#[test]
 fn test_module_args_env_fields() {
     let input = br#"{
         "version": "0.2.0",
@@ -293,46 +222,6 @@ fn test_module_args_env_fields() {
 }
 
 #[test]
-fn test_workspace_module_launch_config() {
-    let path = "./testdata/vscode/localstack.code-workspace";
-    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
-        launch_configuration::load_from_path(Some(&"Run LocalStack (host mode)".to_string()), path)
-            .unwrap()
-    else {
-        panic!("specified launch configuration not found");
-    };
-
-    assert_eq!(config.name, "Run LocalStack (host mode)");
-    assert_eq!(config.request, "launch");
-    assert!(config.program.is_none());
-    assert_eq!(config.module, Some("localstack.cli.main".to_string()));
-    assert_eq!(
-        config.args,
-        Some(vec!["start".to_string(), "--host".to_string()])
-    );
-    assert!(config.env.is_some());
-    let env = config.env.unwrap();
-    assert_eq!(env.get("CONFIG_PROFILE"), Some(&"dev,test".to_string()));
-    assert_eq!(config.just_my_code, Some(false));
-}
-
-#[test]
-fn test_workspace_module_with_env_file() {
-    let path = "./testdata/vscode/localstack.code-workspace";
-    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
-        launch_configuration::load_from_path(Some(&"Run community test".to_string()), path)
-            .unwrap()
-    else {
-        panic!("specified launch configuration not found");
-    };
-
-    assert_eq!(config.name, "Run community test");
-    assert_eq!(config.module, Some("pytest".to_string()));
-    assert!(config.env_file.is_some());
-    assert!(config.args.is_some());
-}
-
-#[test]
 fn test_env_file_parsing() {
     let input = br#"{
         "version": "0.2.0",
@@ -357,5 +246,319 @@ fn test_env_file_parsing() {
             );
         }
         _ => panic!("expected Specific Debugpy"),
+    }
+}
+
+// ===========================================================================
+// Path-based loading — variable resolution
+// ===========================================================================
+
+#[test]
+fn test_read_example_resolves_workspace_folder() {
+    let path = "./testdata/vscode/localstack-ext.json";
+    let workspace_root = testdata_dir().parent().unwrap().to_path_buf();
+
+    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
+        launch_configuration::load_from_path(Some(&"Python: Remote Attach".to_string()), path)
+            .unwrap()
+    else {
+        panic!("specified launch configuration not found");
+    };
+
+    assert_eq!(config.name, "Python: Remote Attach");
+    assert_eq!(config.request, "attach");
+    assert_eq!(
+        config.path_mappings,
+        Some(vec![PathMapping {
+            local_root: format!("{}/localstack_ext", workspace_root.display()),
+            remote_root: "/opt/code/localstack/.venv/lib/python3.11/site-packages/localstack_ext"
+                .to_string(),
+        }])
+    );
+}
+
+#[test]
+fn test_workspace_named_folder_resolution_in_path_mappings() {
+    let path = "./testdata/vscode/localstack.code-workspace";
+    let workspace_dir = testdata_dir();
+
+    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
+        launch_configuration::load_from_path(Some(&"Remote Attach (ext)".to_string()), path)
+            .unwrap()
+    else {
+        panic!("specified launch configuration not found");
+    };
+
+    assert_eq!(config.name, "Remote Attach (ext)");
+    assert_eq!(config.request, "attach");
+    assert_eq!(
+        config.path_mappings,
+        Some(vec![
+            PathMapping {
+                local_root: format!(
+                    "{}/localstack-ext/localstack-pro-core/localstack/pro",
+                    workspace_dir.display()
+                ),
+                remote_root:
+                    "/opt/code/localstack/.venv/lib/python3.11/site-packages/localstack/pro"
+                        .to_string(),
+            },
+            PathMapping {
+                local_root: format!(
+                    "{}/localstack/localstack-core/localstack",
+                    workspace_dir.display()
+                ),
+                remote_root: "/opt/code/localstack/.venv/lib/python3.11/site-packages/localstack"
+                    .to_string()
+            }
+        ])
+    );
+    assert!(!config.just_my_code.unwrap());
+}
+
+#[test]
+fn test_workspace_cwd_resolved() {
+    let path = "./testdata/vscode/localstack.code-workspace";
+    let workspace_dir = testdata_dir();
+
+    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
+        launch_configuration::load_from_path(Some(&"Run LocalStack (host mode)".to_string()), path)
+            .unwrap()
+    else {
+        panic!("specified launch configuration not found");
+    };
+
+    assert_eq!(config.name, "Run LocalStack (host mode)");
+    assert_eq!(config.request, "launch");
+    assert_eq!(
+        config.cwd,
+        Some(workspace_dir.join("localstack")),
+        "cwd should be resolved to absolute path"
+    );
+}
+
+#[test]
+fn test_workspace_env_values_resolved() {
+    let path = "./testdata/vscode/localstack.code-workspace";
+    let workspace_dir = testdata_dir();
+
+    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
+        launch_configuration::load_from_path(Some(&"Run LocalStack (host mode)".to_string()), path)
+            .unwrap()
+    else {
+        panic!("specified launch configuration not found");
+    };
+
+    let env = config.env.unwrap();
+    assert_eq!(env.get("CONFIG_PROFILE"), Some(&"dev,test".to_string()));
+    assert_eq!(
+        env.get("PYTHONPATH"),
+        Some(&format!("{}/localstack", workspace_dir.display())),
+        "env PYTHONPATH should be resolved"
+    );
+}
+
+#[test]
+fn test_workspace_env_file_resolved() {
+    let path = "./testdata/vscode/localstack.code-workspace";
+    let workspace_dir = testdata_dir();
+
+    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
+        launch_configuration::load_from_path(Some(&"Run community test".to_string()), path)
+            .unwrap()
+    else {
+        panic!("specified launch configuration not found");
+    };
+
+    assert_eq!(config.name, "Run community test");
+    assert_eq!(
+        config.env_file,
+        Some(workspace_dir.join("localstack").join(".env")),
+        "envFile should be resolved to absolute path"
+    );
+    assert_eq!(
+        config.cwd,
+        Some(workspace_dir.join("localstack")),
+        "cwd should be resolved to absolute path"
+    );
+}
+
+#[test]
+fn test_workspace_module_launch_config() {
+    let path = "./testdata/vscode/localstack.code-workspace";
+
+    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
+        launch_configuration::load_from_path(Some(&"Run LocalStack (host mode)".to_string()), path)
+            .unwrap()
+    else {
+        panic!("specified launch configuration not found");
+    };
+
+    assert_eq!(config.request, "launch");
+    assert!(config.program.is_none());
+    assert_eq!(config.module, Some("localstack.cli.main".to_string()));
+    assert_eq!(
+        config.args,
+        Some(vec!["start".to_string(), "--host".to_string()])
+    );
+    assert_eq!(config.just_my_code, Some(false));
+}
+
+#[test]
+fn test_workspace_config_not_found() {
+    let path = "./testdata/vscode/localstack.code-workspace";
+    let result =
+        launch_configuration::load_from_path(Some(&"Nonexistent Config".to_string()), path)
+            .unwrap();
+    assert!(matches!(result, ChosenLaunchConfiguration::NotFound));
+}
+
+#[test]
+fn test_workspace_to_be_chosen() {
+    let path = "./testdata/vscode/localstack.code-workspace";
+    let result = launch_configuration::load_from_path(None, path).unwrap();
+    match result {
+        ChosenLaunchConfiguration::ToBeChosen(names) => {
+            assert!(!names.is_empty());
+        }
+        _ => panic!("expected ToBeChosen for workspace without specified name"),
+    }
+}
+
+// ===========================================================================
+// launch.json ${workspaceFolder} resolution
+// ===========================================================================
+
+#[test]
+fn test_launch_json_workspace_folder_in_program() {
+    let path = "./testdata/vscode/sample-project/.vscode/launch.json";
+    let workspace_root =
+        std::fs::canonicalize("./testdata/vscode/sample-project").expect("testdata should exist");
+
+    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
+        launch_configuration::load_from_path(Some(&"Launch App".to_string()), path).unwrap()
+    else {
+        panic!("specified launch configuration not found");
+    };
+
+    assert_eq!(
+        config.program,
+        Some(workspace_root.join("main.py")),
+        "program should be resolved"
+    );
+    assert_eq!(
+        config.cwd,
+        Some(workspace_root.clone()),
+        "cwd should be resolved"
+    );
+    let env = config.env.unwrap();
+    assert_eq!(
+        env.get("PYTHONPATH"),
+        Some(&format!("{}/src", workspace_root.display())),
+        "env PYTHONPATH should be resolved"
+    );
+}
+
+// ===========================================================================
+// ${env:VARNAME} resolution
+// ===========================================================================
+
+#[test]
+fn test_env_var_resolution() {
+    // SAFETY: this test is not run in parallel with others that use this var
+    unsafe {
+        std::env::set_var("DAP_TEST_CUSTOM_VAR", "hello_from_env");
+    }
+
+    let path = "./testdata/vscode/sample-project/.vscode/launch.json";
+
+    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
+        launch_configuration::load_from_path(Some(&"With Env Var".to_string()), path).unwrap()
+    else {
+        panic!("specified launch configuration not found");
+    };
+
+    let env = config.env.unwrap();
+    assert_eq!(
+        env.get("CUSTOM"),
+        Some(&"hello_from_env".to_string()),
+        "${{env:DAP_TEST_CUSTOM_VAR}} should be resolved"
+    );
+
+    // Clean up
+    unsafe {
+        std::env::remove_var("DAP_TEST_CUSTOM_VAR");
+    }
+}
+
+// ===========================================================================
+// Edge cases
+// ===========================================================================
+
+#[test]
+fn test_command_variable_left_as_is() {
+    let input = br#"{
+        "version": "0.2.0",
+        "configurations": [
+            {
+                "name": "With command",
+                "type": "debugpy",
+                "request": "launch",
+                "program": "${command:python.interpreterPath}"
+            }
+        ]
+    }"# as &[u8];
+
+    let ChosenLaunchConfiguration::Specific(LaunchConfiguration::Debugpy(config)) =
+        launch_configuration::load(Some(&"With command".to_string()), input).unwrap()
+    else {
+        panic!("expected Debugpy");
+    };
+
+    assert_eq!(
+        config.program,
+        Some(std::path::PathBuf::from(
+            "${command:python.interpreterPath}"
+        )),
+        "unsupported variables should be left as-is"
+    );
+}
+
+#[test]
+fn test_load_all_from_workspace() {
+    let path = "./testdata/vscode/localstack.code-workspace";
+    let configs = launch_configuration::load_all_from_path(path).unwrap();
+    assert_eq!(configs.len(), 6);
+
+    // All configs should have resolved paths (no raw ${workspaceFolder:...})
+    for config in &configs {
+        if let LaunchConfiguration::Debugpy(d) = config {
+            if let Some(ref cwd) = d.cwd {
+                assert!(
+                    !cwd.display().to_string().contains("${workspaceFolder"),
+                    "cwd should be resolved: {}",
+                    cwd.display()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_load_all_from_launch_json() {
+    let path = "./testdata/vscode/sample-project/.vscode/launch.json";
+    let configs = launch_configuration::load_all_from_path(path).unwrap();
+    assert_eq!(configs.len(), 2);
+
+    for config in &configs {
+        if let LaunchConfiguration::Debugpy(d) = config {
+            if let Some(ref cwd) = d.cwd {
+                assert!(
+                    !cwd.display().to_string().contains("${workspaceFolder}"),
+                    "cwd should be resolved: {}",
+                    cwd.display()
+                );
+            }
+        }
     }
 }
