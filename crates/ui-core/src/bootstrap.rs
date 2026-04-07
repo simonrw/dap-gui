@@ -44,6 +44,20 @@ pub struct Args {
     /// working directory.
     #[clap(short, long)]
     pub breakpoints: Vec<String>,
+
+    /// Log level for project crates (external crates always log at warn).
+    ///
+    /// Controls the verbosity of log output from this project's crates.
+    /// The RUST_LOG environment variable takes precedence if set.
+    #[clap(long, default_value = "info", value_parser = ["trace", "debug", "info", "warn", "error"])]
+    pub log_level: String,
+
+    /// Directory for log files.
+    ///
+    /// When omitted, logs are written to the platform data directory
+    /// (e.g. ~/.local/share/dapgui/ on Linux).
+    #[clap(long)]
+    pub log_path: Option<PathBuf>,
 }
 
 /// The result of bootstrapping the application.
