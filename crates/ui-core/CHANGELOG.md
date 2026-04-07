@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1](https://github.com/simonrw/dap-gui/compare/dap-gui-ui-core-v0.1.0...dap-gui-ui-core-v0.1.1) - 2026-04-07
+
+### Added
+
+- add automatic dark/light theme switching based on system preference ([#397](https://github.com/simonrw/dap-gui/pull/397))
+- add log rotation, non-blocking writes, and CLI log flags ([#398](https://github.com/simonrw/dap-gui/pull/398))
+- use launch config cwd and show file browser overflow ([#396](https://github.com/simonrw/dap-gui/pull/396))
+- add configurable keybindings with TOML config file ([#393](https://github.com/simonrw/dap-gui/pull/393))
+
 ## [0.1.0](https://github.com/simonrw/dap-gui/releases/tag/dap-gui-ui-core-v0.1.0) - 2026-04-05
 
 ### Added
