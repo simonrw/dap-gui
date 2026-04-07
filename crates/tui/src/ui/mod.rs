@@ -45,6 +45,7 @@ pub fn border_style(app: &App, pane: Focus) -> Style {
 pub fn render(app: &mut App, frame: &mut Frame) {
     let size = frame.area();
 
+    let mut sidebar_area = None;
     if app.zen_mode {
         // Zen mode: code view fills everything except the status bar
         let outer = Layout::default()
@@ -85,6 +86,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             ])
             .split(outer[1]);
 
+        sidebar_area = Some(middle[0]);
         render_sidebar(app, frame, middle[0]);
 
         // Code view needs &mut App for scroll/search state updates
@@ -98,6 +100,14 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     }
 
     // Overlays (rendered last so they draw on top)
+    if let Some(sb) = sidebar_area {
+        if app.mode == AppMode::NoSession
+            && app.focus == Focus::CallStack
+            && !app.file_browser_results.is_empty()
+        {
+            render_file_browser_overflow(app, frame, sb);
+        }
+    }
     if app.file_picker.open {
         file_picker::render(app, frame);
     }
@@ -129,6 +139,66 @@ fn render_sidebar(app: &mut App, frame: &mut Frame, area: Rect) {
         breakpoints::render(app, frame, chunks[1]);
         threads::render(app, frame, chunks[2]);
     }
+}
+
+/// Render the overflow portion of the selected file browser entry's path.
+///
+/// When a filename is too long for the sidebar, the clipped tail is drawn
+/// just past the sidebar border using the same styles as the selected row,
+/// so it looks like the text overflowed the panel.
+fn render_file_browser_overflow(app: &App, frame: &mut Frame, sidebar: Rect) {
+    use ratatui::text::{Line, Span};
+    use ratatui::widgets::{Clear, Paragraph};
+
+    let result = &app.file_browser_results[app.file_browser_cursor];
+    let path_str = result.file.relative_path.to_string_lossy();
+
+    // Inner width = sidebar width - 2 (borders) - 2 (indicator prefix "▸ ")
+    let visible_width = sidebar.width.saturating_sub(4) as usize;
+    if path_str.len() <= visible_width {
+        return;
+    }
+
+    // The file list starts after: border (1) + search input (1) + separator (1) = 3 rows
+    let list_start_y = sidebar.y + 3;
+    let tooltip_y = list_start_y + app.file_browser_cursor as u16;
+    if tooltip_y >= sidebar.y + sidebar.height {
+        return;
+    }
+
+    // Use the same styles as the selected item in the file browser
+    let base_style = Style::default()
+        .fg(Color::White)
+        .bg(Color::Rgb(50, 50, 80))
+        .add_modifier(Modifier::BOLD);
+    let match_style = Style::default()
+        .fg(Color::Yellow)
+        .bg(Color::Rgb(50, 50, 80))
+        .add_modifier(Modifier::BOLD);
+
+    // Build spans for only the overflowing characters
+    let mut spans = Vec::new();
+    let mut char_pos = 0;
+    for (ci, ch) in path_str.char_indices() {
+        if char_pos >= visible_width {
+            let style = if result.matched_indices.contains(&ci) {
+                match_style
+            } else {
+                base_style
+            };
+            spans.push(Span::styled(ch.to_string(), style));
+        }
+        char_pos += 1;
+    }
+    spans.push(Span::styled(" ", base_style));
+
+    // Overlap the sidebar's right border so there's no visual gap
+    let tooltip_x = sidebar.x + sidebar.width - 1;
+    let overflow_len = (spans.len() as u16).min(frame.area().width.saturating_sub(tooltip_x));
+    let area = Rect::new(tooltip_x, tooltip_y, overflow_len, 1);
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
 /// Render the bottom tabbed panel (variables / output / REPL).
