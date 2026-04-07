@@ -131,7 +131,11 @@ impl Theme {
 /// Detect the current system theme preference.
 pub fn detect_theme_mode() -> ThemeMode {
     match dark_light::detect() {
-        dark_light::Mode::Light => ThemeMode::Light,
-        dark_light::Mode::Dark | dark_light::Mode::Default => ThemeMode::Dark,
+        Ok(dark_light::Mode::Light) => ThemeMode::Light,
+        Ok(dark_light::Mode::Dark) | Ok(dark_light::Mode::Unspecified) => ThemeMode::Dark,
+        Err(e) => {
+            tracing::warn!(error = %e, "could not detect system theme, defaulting to dark");
+            ThemeMode::Dark
+        }
     }
 }

@@ -103,17 +103,21 @@ impl EventHandler {
 
         // Spawn a separate thread for theme detection so the blocking D-Bus
         // call does not interfere with terminal event polling.
+        tracing::warn!(?theme_preference, "read theme preference");
         let theme_thread = if theme_preference == config::ThemePreference::Auto {
             let theme_tx = tx.clone();
             Some(
                 std::thread::Builder::new()
                     .name("tui-theme-watcher".into())
                     .spawn(move || {
+                        tracing::warn!("spawning theme watcher thread");
                         let mut current = initial_mode;
                         loop {
                             std::thread::sleep(Duration::from_secs(2));
                             let detected = crate::theme::detect_theme_mode();
+                            tracing::warn!(?detected, "detected current theme");
                             if detected != current {
+                                tracing::warn!(?current, ?detected, "switching themes");
                                 current = detected;
                                 if theme_tx.send(AppEvent::ThemeChanged(detected)).is_err() {
                                     break;

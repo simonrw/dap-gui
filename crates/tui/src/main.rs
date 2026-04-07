@@ -59,6 +59,7 @@ fn main() -> eyre::Result<()> {
         config::ThemePreference::Light => theme::ThemeMode::Light,
     };
 
+    tracing::warn!(?initial_theme, "got initial theme");
     let mut app = App::new(
         boot.configs,
         boot.config_names,
