@@ -3,7 +3,7 @@ name: Release binaries
 on:
   push:
     tags:
-      - "v*"
+      - "dap-tui-v*"
 
 permissions:
   contents: write
