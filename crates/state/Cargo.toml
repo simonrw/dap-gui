@@ -1,6 +1,6 @@
 [package]
 name = "dap-gui-state"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 
 [lib]
@@ -12,7 +12,7 @@ name = "state"
 serde.workspace = true
 serde_json.workspace = true
 eyre.workspace = true
-debugger = { path = "../debugger", version = "0.1.0", package = "dap-gui-debugger" }
+debugger = { path = "../debugger", version = "0.1.1", package = "dap-gui-debugger" }
 dirs.workspace = true
 tracing.workspace = true
 

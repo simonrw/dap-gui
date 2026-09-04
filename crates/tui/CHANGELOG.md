@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/simonrw/dap-gui/compare/dap-tui-v0.1.1...dap-tui-v0.1.2) - 2026-09-04
+
+### Fixed
+
+- resolve all clippy warnings across workspace
+
 ## [0.1.1](https://github.com/simonrw/dap-gui/compare/dap-tui-v0.1.0...dap-tui-v0.1.1) - 2026-04-07
 
 ### Added
