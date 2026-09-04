@@ -1,5 +1,3 @@
-use std::f32;
-
 use eframe::egui::{self, TextEdit, Visuals};
 
 enum Position {
