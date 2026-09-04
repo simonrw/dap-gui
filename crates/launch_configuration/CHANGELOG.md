@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1](https://github.com/simonrw/dap-gui/compare/dap-gui-launch-configuration-v0.1.0...dap-gui-launch-configuration-v0.1.1) - 2026-09-04
+
+### Added
+
+- resolve VS Code variable placeholders in launch configurations ([#399](https://github.com/simonrw/dap-gui/pull/399))
+
+### Fixed
+
+- resolve all clippy warnings across workspace
+
 ## [0.1.0](https://github.com/simonrw/dap-gui/releases/tag/dap-gui-launch-configuration-v0.1.0) - 2026-04-05
 
 ### Fixed

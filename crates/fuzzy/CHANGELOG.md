@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1](https://github.com/simonrw/dap-gui/compare/dap-gui-fuzzy-v0.1.0...dap-gui-fuzzy-v0.1.1) - 2026-09-04
+
+### Fixed
+
+- resolve all clippy warnings across workspace
+
 ## [0.1.0](https://github.com/simonrw/dap-gui/releases/tag/dap-gui-fuzzy-v0.1.0) - 2026-04-05
 
 ### Fixed
