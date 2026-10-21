@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/simonrw/dap-gui/compare/dap-gui-egui-v0.1.2...dap-gui-egui-v0.1.3) - 2026-10-21
+
+### Other
+
+- update Cargo.lock dependencies
+
 ## [0.1.2](https://github.com/simonrw/dap-gui/compare/dap-gui-egui-v0.1.1...dap-gui-egui-v0.1.2) - 2026-09-04
 
 ### Fixed
